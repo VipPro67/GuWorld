@@ -162,7 +162,7 @@ export default function WikiPagination({
                 <button
                   key={opt}
                   onClick={() => onPageSizeChange(opt)}
-                  className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all cursor-pointer ${
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                     isActive
                       ? "bg-indigo-600/90 text-white shadow-xs"
                       : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
@@ -221,7 +221,7 @@ export default function WikiPagination({
                 <button
                   key={`page-${page}`}
                   onClick={() => handlePageSelect(page)}
-                  className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-mono font-semibold transition-all cursor-pointer ${
+                  className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-mono font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                     isCurrent
                       ? "bg-indigo-600 text-white border border-indigo-400/50 shadow-sm shadow-indigo-600/30 scale-105"
                       : "bg-zinc-950/70 border border-zinc-800/80 text-zinc-300 hover:text-white hover:border-indigo-500/30 hover:bg-zinc-900"
@@ -272,7 +272,7 @@ export default function WikiPagination({
             />
             <button
               type="submit"
-              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-indigo-600/80 border border-zinc-800 hover:border-indigo-500 text-zinc-300 hover:text-white text-xs font-mono transition-all flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-indigo-600/80 border border-zinc-800 hover:border-indigo-500 text-zinc-300 hover:text-white text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1 cursor-pointer"
             >
               <span>Đi</span>
               <ArrowRight className="w-3 h-3" />

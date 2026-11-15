@@ -100,7 +100,7 @@ export const DungeonView: React.FC = () => {
           {!activeInstanceSession && (
             <button
               onClick={() => setView("dashboard")}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-850 hover:bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 text-xs font-mono font-medium transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-850 hover:bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 text-xs font-mono font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               Trở Về
@@ -111,7 +111,7 @@ export const DungeonView: React.FC = () => {
 
       {/* ADVENTURE IN PROGRESS VIEW */}
       {activeInstanceSession && activeInstanceTemplate && currentStage ? (
-        <div className={`border rounded-3xl p-6 shadow-2xl backdrop-blur-md transition-all duration-500 relative overflow-hidden flex flex-col gap-6 ${
+        <div className={`border rounded-3xl p-6 shadow-2xl backdrop-blur-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-500 relative overflow-hidden flex flex-col gap-6 ${
           isDreamRealm
             ? "bg-purple-950/20 border-purple-900/40 shadow-[0_0_50px_rgba(168,85,247,0.1)]"
             : "bg-red-950/20 border-red-900/40 shadow-[0_0_50px_rgba(239,68,68,0.1)]"
@@ -168,7 +168,7 @@ export const DungeonView: React.FC = () => {
                   key={idx}
                   onClick={() => actionInstance(idx)}
                   disabled={actionLoading}
-                  className={`w-full text-left p-4 rounded-2xl border text-sm transition-all duration-300 cursor-pointer flex flex-col gap-1 ${
+                  className={`w-full text-left p-4 rounded-2xl border text-sm transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 cursor-pointer flex flex-col gap-1 ${
                     isDreamRealm
                       ? "bg-purple-950/10 hover:bg-purple-950/40 border-purple-900/30 hover:border-purple-600/50 text-purple-100"
                       : "bg-red-950/10 hover:bg-red-950/40 border-red-900/30 hover:border-red-600/50 text-red-100"
@@ -209,7 +209,7 @@ export const DungeonView: React.FC = () => {
                 <GameCard
                   key={dg.id}
                   variant={isDream ? "danger" : "default"}
-                  className={`border rounded-3xl p-6 flex flex-col justify-between gap-5 transition-all duration-350 hover:-translate-y-1 hover:border-zinc-800 ${
+                  className={`border rounded-3xl p-6 flex flex-col justify-between gap-5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-350 hover:-translate-y-1 hover:border-zinc-800 ${
                     isDream
                       ? "hover:shadow-[0_0_30px_rgba(168,85,247,0.08)]"
                       : "hover:shadow-[0_0_30px_rgba(239,68,68,0.08)]"
@@ -281,7 +281,7 @@ export const DungeonView: React.FC = () => {
                   <button
                     onClick={() => enterInstance(dg.id)}
                     disabled={actionLoading}
-                    className={`w-full py-2.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md ${
+                    className={`w-full py-2.5 rounded-xl text-xs font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-1.5 shadow-md ${
                       isDream
                         ? "bg-purple-600 hover:bg-purple-500 border border-purple-500/20 text-white"
                         : "bg-red-600 hover:bg-red-500 border border-red-500/20 text-white"

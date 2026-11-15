@@ -8,6 +8,7 @@ import { translatePath } from "@/lib/translate";
 import { GamePanel, GameButton, GameTabs, GameCard, GameInput, GameSelect } from "@/components/ui";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { getItemIconUrl } from "@/lib/item-icons";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import { getGuIconUrl } from "@/lib/gu-icons";
 import { getGuRankColor } from "@/lib/gu-frames";
 // UI migrated to shared components
@@ -66,6 +67,11 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
 
   // Selection states for Modals
   const [selectedBuyItem, setSelectedBuyItem] = useState<ShopItem | null>(null);
+  const { dialogRef: purchaseDialogRef, onKeyDown: purchaseDialogKeyDown } = useAccessibleDialog<HTMLDivElement>(
+    () => setSelectedBuyItem(null),
+    Boolean(selectedBuyItem),
+    selectedBuyItem?.id
+  );
   const [buyQuantity, setBuyQuantity] = useState(1);
 
 
@@ -531,7 +537,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
               <button
                 key={tab}
                 onClick={() => setShopTab(tab)}
-                className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-all cursor-pointer ${
+                className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                   shopTab === tab
                     ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                     : "text-zinc-500 hover:text-zinc-300"
@@ -572,7 +578,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
               <button
                 key={tab}
                 onClick={() => setSellTab(tab)}
-                className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-all cursor-pointer ${
+                className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                   sellTab === tab
                     ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                     : "text-zinc-500 hover:text-zinc-300"
@@ -623,8 +629,10 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
             />
             {sellSearch && (
               <button
+                type="button"
                 onClick={() => setSellSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                aria-label="Xóa nội dung tìm kiếm"
+                className="absolute right-1 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center text-zinc-500 hover:text-zinc-300 transition-colors"
               >
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -749,12 +757,13 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                     </span>
                     <button
                       type="button"
+                      aria-label={`Bỏ ${selectedItem.name} khỏi danh sách bán`}
                       onClick={() => setSelectedSellItems(prev => {
                         const next = { ...prev };
                         delete next[itemKey];
                         return next;
                       })}
-                      className="text-zinc-600 hover:text-rose-455 transition-colors cursor-pointer"
+                      className="flex min-h-11 min-w-11 items-center justify-center text-zinc-600 hover:text-rose-455 transition-colors cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -798,7 +807,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                 type="button"
                 onClick={handleConfirmBulkSell}
                 disabled={actionLoading || Object.keys(selectedSellItems).length === 0}
-                className="px-5 py-2 text-xs font-mono font-bold rounded-xl bg-rose-600 hover:bg-rose-500 text-zinc-950 cursor-pointer shadow-lg active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                className="px-5 py-2 text-xs font-mono font-bold rounded-xl bg-rose-600 hover:bg-rose-500 text-zinc-950 cursor-pointer shadow-lg active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
               >
                 {actionLoading ? "Đang xử lý..." : "Xác Nhận Bán"}
               </button>
@@ -839,7 +848,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                   <div
                     key={`${item.id}-${item.rank || 0}`}
                     onClick={() => handleOpenBuyModal(item)}
-                    className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
+                    className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
                   >
                     <div className="relative aspect-square w-full rounded-xl bg-black/40 border border-zinc-800/60 overflow-hidden flex items-center justify-center p-2 mb-2">
                       {item.rank ? (
@@ -880,7 +889,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                             e.stopPropagation();
                             handleOpenBuyModal(item);
                           }}
-                          className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                             canAfford
                               ? "bg-amber-600 hover:bg-amber-500 text-zinc-950"
                               : "bg-zinc-900 border border-zinc-850 text-zinc-500"
@@ -913,7 +922,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                 return (
                   <div
                     key={`${item.id}-${item.rank || 0}`}
-                    className={`bg-zinc-950/50 border rounded-2xl p-4 flex flex-col justify-between hover:border-zinc-800 hover:bg-zinc-950/80 transition-all group ${rankColors.border}`}
+                    className={`bg-zinc-950/50 border rounded-2xl p-4 flex flex-col justify-between hover:border-zinc-800 hover:bg-zinc-950/80 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] group ${rankColors.border}`}
                   >
                     <div className="space-y-2 mb-3">
                       <div className="flex justify-between items-start">
@@ -971,7 +980,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                         type="button"
                         disabled={actionLoading}
                         onClick={() => handleOpenBuyModal(item)}
-                        className={`py-1.5 px-4 text-xs font-bold rounded-xl flex items-center gap-1 transition-all cursor-pointer ${
+                        className={`py-1.5 px-4 text-xs font-bold rounded-xl flex items-center gap-1 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                           canAfford
                             ? "bg-amber-600 hover:bg-amber-500 text-zinc-950 active:scale-[0.98]"
                             : "bg-zinc-900 border border-zinc-850 text-zinc-500"
@@ -1013,7 +1022,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                 <div
                   key={key}
                   onClick={() => toggleSelectItem(item)}
-                  className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer hover:-translate-y-1 ${
+                  className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 cursor-pointer hover:-translate-y-1 ${
                     isSelected
                       ? "border-rose-500 bg-rose-500/10 shadow-lg shadow-rose-950/40"
                       : `${rankColors.border} ${rankColors.bgGradient} hover:border-rose-950/50`
@@ -1027,11 +1036,13 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                     {/* Checkbox badge */}
                     <button
                       type="button"
+                      aria-label={`${isSelected ? "Bỏ chọn" : "Chọn"} ${item.name}`}
+                      aria-pressed={isSelected}
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleSelectItem(item);
                       }}
-                      className={`absolute top-1 right-1 w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
+                      className={`absolute top-0 right-0 min-h-11 min-w-11 rounded-lg border flex items-center justify-center transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                         isSelected
                           ? "bg-rose-600 border-rose-500 text-zinc-950"
                           : "bg-zinc-900/80 border-zinc-800 hover:border-rose-500/30 text-transparent"
@@ -1092,7 +1103,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                 <div
                   key={key}
                   onClick={() => toggleSelectItem(item)}
-                  className={`bg-zinc-950/30 border rounded-2xl p-4 flex flex-col justify-between hover:bg-zinc-950/60 transition-all group relative cursor-pointer ${
+                  className={`bg-zinc-950/30 border rounded-2xl p-4 flex flex-col justify-between hover:bg-zinc-950/60 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] group relative cursor-pointer ${
                     isSelected
                       ? "border-rose-500/50 bg-rose-500/5 shadow-md shadow-rose-950/20"
                       : "border-zinc-900/80 hover:border-rose-950/50"
@@ -1114,11 +1125,13 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                     {/* Selection Checkbox */}
                     <button
                       type="button"
+                      aria-label={`${isSelected ? "Bỏ chọn" : "Chọn"} ${item.name}`}
+                      aria-pressed={isSelected}
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleSelectItem(item);
                       }}
-                      className={`absolute top-4 right-4 w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
+                      className={`absolute top-2 right-2 min-h-11 min-w-11 rounded-lg border flex items-center justify-center transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                         isSelected
                           ? "bg-rose-600 border-rose-500 text-zinc-950"
                           : "bg-zinc-900 border-zinc-800 hover:border-rose-500/30 text-transparent"
@@ -1155,7 +1168,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                         <button
                           type="button"
                           onClick={() => updateQuantity(key, selectedItem.quantityToSell - 1)}
-                          className="w-7 h-7 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-zinc-400 font-bold transition-all text-xs"
+                          className="w-7 h-7 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg text-zinc-400 font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-xs"
                         >
                           -
                         </button>
@@ -1170,14 +1183,14 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                         <button
                           type="button"
                           onClick={() => updateQuantity(key, selectedItem.quantityToSell + 1)}
-                          className="w-7 h-7 flex items-center justify-center bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 rounded-lg text-zinc-400 font-bold transition-all text-xs"
+                          className="w-7 h-7 flex items-center justify-center bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 rounded-lg text-zinc-400 font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-xs"
                         >
                           +
                         </button>
                         <button
                           type="button"
                           onClick={() => updateQuantity(key, item.owned)}
-                          className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg text-[10px] font-mono text-rose-400 transition-all font-semibold"
+                          className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg text-[10px] font-mono text-rose-400 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-semibold"
                         >
                           Max
                         </button>
@@ -1189,7 +1202,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                           e.stopPropagation();
                           toggleSelectItem(item);
                         }}
-                        className="py-1.5 px-4 text-xs font-bold rounded-xl flex items-center gap-1 transition-all cursor-pointer bg-rose-900/20 hover:bg-rose-900/40 border border-rose-900/30 text-rose-300 active:scale-[0.98]"
+                        className="py-1.5 px-4 text-xs font-bold rounded-xl flex items-center gap-1 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer bg-rose-900/20 hover:bg-rose-900/40 border border-rose-900/30 text-rose-300 active:scale-[0.98]"
                       >
                         <ArrowLeftRight className="w-3.5 h-3.5" />
                         <span>Chọn bán</span>
@@ -1206,11 +1219,12 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
       {/* Buy Quantity Modal */}
       {selectedBuyItem && createPortal(
         <div className="mmo-paper-theme fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in" onClick={() => setSelectedBuyItem(null)}>
-          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full space-y-4 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div ref={purchaseDialogRef} role="dialog" aria-modal="true" aria-label={`Mua ${selectedBuyItem.name}`} tabIndex={-1} onKeyDown={purchaseDialogKeyDown} className="max-h-[90dvh] overflow-y-auto overscroll-contain bg-zinc-950 border border-zinc-800 rounded-3xl p-6 max-w-sm w-full space-y-4 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={() => setSelectedBuyItem(null)}
-              className="absolute top-4 right-4 p-1.5 text-zinc-500 hover:text-zinc-200 rounded-full hover:bg-zinc-900 transition-colors cursor-pointer"
+              aria-label={`Đóng mua ${selectedBuyItem.name}`}
+              className="absolute top-4 right-4 flex min-h-11 min-w-11 items-center justify-center text-zinc-500 hover:text-zinc-200 rounded-full hover:bg-zinc-900 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1345,7 +1359,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                           return selectedBuyItem.stock > 0 ? Math.min(next, selectedBuyItem.stock) : next;
                         });
                       }}
-                      className="flex-1 py-1 text-[11px] font-mono text-zinc-400 bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-700 rounded-lg transition-all cursor-pointer"
+                      className="flex-1 py-1 text-[11px] font-mono text-zinc-400 bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-850 hover:border-zinc-700 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                     >
                       +{step}
                     </button>
@@ -1357,7 +1371,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                       const max = selectedBuyItem.stock > 0 ? Math.min(affordable, selectedBuyItem.stock) : affordable;
                       setBuyQuantity(Math.max(1, max));
                     }}
-                    className="flex-1 py-1 text-[11px] font-mono text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 rounded-lg transition-all cursor-pointer font-semibold"
+                    className="flex-1 py-1 text-[11px] font-mono text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-semibold"
                   >
                     Tối đa
                   </button>
@@ -1396,7 +1410,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                 type="button"
                 disabled={actionLoading}
                 onClick={() => setSelectedBuyItem(null)}
-                className="py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:bg-zinc-900 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer"
+                className="py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:bg-zinc-900 font-semibold text-xs active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
               >
                 Hủy Bỏ
               </button>
@@ -1404,7 +1418,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                 type="button"
                 disabled={actionLoading || !!successMessage}
                 onClick={handleConfirmPurchase}
-                className="py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold text-xs active:scale-[0.98] transition-all cursor-pointer"
+                className="py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold text-xs active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
               >
                 Xác Nhận Mua
               </button>

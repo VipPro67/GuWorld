@@ -133,7 +133,7 @@ export const MerchantTradeView: React.FC<MerchantTradeViewProps> = ({ player, ac
                 <button
                   key={m.id}
                   onClick={() => setSelectedID(m.id)}
-                  className={`px-3 py-1.5 text-xs font-mono rounded-lg border transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 text-xs font-mono rounded-lg border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                     selected?.id === m.id ? "bg-amber-500/10 text-amber-400 border-amber-500/30" : "text-zinc-400 border-zinc-800 hover:text-zinc-200"
                   }`}
                 >

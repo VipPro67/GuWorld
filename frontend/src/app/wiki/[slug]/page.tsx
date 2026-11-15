@@ -112,7 +112,7 @@ function WikiPageContent({ page }: { page: WikiPage }) {
                 <Link
                   key={idx}
                   href={`/wiki/${card.targetId}`}
-                  className="p-4 bg-[var(--surface)]/80 border border-[var(--border)] hover:border-violet-500/20 hover:bg-[var(--bg-card)]/20 rounded-2xl group transition-all duration-300 flex items-center justify-between"
+                  className="p-4 bg-[var(--surface)]/80 border border-[var(--border)] hover:border-violet-500/20 hover:bg-[var(--bg-card)]/20 rounded-2xl group transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 flex items-center justify-between"
                 >
                   <div className="space-y-1">
                     <h4 className="text-xs font-bold font-serif text-[var(--text-primary)] group-hover:text-indigo-400 transition-colors">
@@ -122,7 +122,7 @@ function WikiPageContent({ page }: { page: WikiPage }) {
                       {card.description}
                     </p>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-[var(--text-muted)] group-hover:text-indigo-400 group-hover:translate-x-1 transition-all shrink-0" />
+                  <ArrowRight className="w-4 h-4 text-[var(--text-muted)] group-hover:text-indigo-400 group-hover:translate-x-1 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shrink-0" />
                 </Link>
               ))}
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import {
   Compass,
@@ -30,12 +30,13 @@ export const SpatialRealmsModal: React.FC<SpatialRealmsModalProps> = ({ isOpen, 
   const spatialLoading = useGameStore((state) => state.spatialLoading);
   const player = useGameStore((state) => state.player);
   const addToast = useGameStore((state) => state.addToast);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const isModalOpen = isOpen !== undefined ? isOpen : spatialDirectoryOpen;
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (onClose) onClose();
     setSpatialDirectoryOpen(false);
-  };
+  }, [onClose, setSpatialDirectoryOpen]);
 
   const [filterScope, setFilterScope] = useState<string>("ALL");
   const [search, setSearch] = useState<string>("");
@@ -45,6 +46,45 @@ export const SpatialRealmsModal: React.FC<SpatialRealmsModalProps> = ({ isOpen, 
       void fetchSpatialRealms();
     }
   }, [isModalOpen, fetchSpatialRealms]);
+
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const getControls = () => dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+    );
+    const frame = requestAnimationFrame(() => (getControls()[0] || dialog).focus());
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        handleClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = getControls();
+      if (!controls.length) {
+        event.preventDefault();
+        dialog.focus();
+      } else if (event.shiftKey && document.activeElement === controls[0]) {
+        event.preventDefault();
+        controls[controls.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) {
+        event.preventDefault();
+        controls[0].focus();
+      }
+    };
+    dialog.addEventListener("keydown", onKeyDown);
+    return () => {
+      cancelAnimationFrame(frame);
+      dialog.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [isModalOpen, handleClose]);
 
   if (!isModalOpen) {
     return null;
@@ -86,12 +126,14 @@ export const SpatialRealmsModal: React.FC<SpatialRealmsModalProps> = ({ isOpen, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 border border-amber-500/50 rounded-3xl p-6 shadow-[0_0_50px_rgba(245,158,11,0.25)] text-left">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="spatial-realms-title" tabIndex={-1} className="relative max-h-[90dvh] w-full max-w-3xl overflow-y-auto overscroll-contain rounded-3xl border border-amber-500/50 bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 p-6 text-left shadow-[0_0_50px_rgba(245,158,11,0.25)]">
         {/* Close Button */}
         <button
+          type="button"
           onClick={handleClose}
-          className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60 rounded-full transition-all"
+          aria-label="Đóng danh mục bí cảnh"
+          className="absolute right-4 top-4 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full p-2 text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
         >
           <X className="w-5 h-5" />
         </button>
@@ -103,7 +145,7 @@ export const SpatialRealmsModal: React.FC<SpatialRealmsModalProps> = ({ isOpen, 
               <Compass className="w-6 h-6 animate-spin-slow" />
             </div>
             <div>
-              <h2 className="text-xl font-bold font-serif text-amber-100 tracking-wide">
+              <h2 id="spatial-realms-title" className="text-xl font-bold font-serif text-amber-100 tracking-wide">
                 Bí Cảnh Không Gian & Truyền Thừa
               </h2>
               <p className="text-xs text-amber-400/80">
@@ -113,9 +155,11 @@ export const SpatialRealmsModal: React.FC<SpatialRealmsModalProps> = ({ isOpen, 
           </div>
 
           <button
+            type="button"
             onClick={() => fetchSpatialRealms()}
             disabled={spatialLoading}
-            className="p-2 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-xl transition-all disabled:opacity-50"
+            aria-label="Làm mới danh sách bí cảnh"
+            className="p-2 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] disabled:opacity-50"
             title="Làm mới danh sách"
           >
             <RefreshCw className={`w-4 h-4 ${spatialLoading ? "animate-spin" : ""}`} />
@@ -127,9 +171,10 @@ export const SpatialRealmsModal: React.FC<SpatialRealmsModalProps> = ({ isOpen, 
           <div className="flex items-center gap-1.5 bg-zinc-900/60 p-1 rounded-xl border border-zinc-800 text-xs">
             {["ALL", "SHARED", "PARTY", "SOLO"].map((sc) => (
               <button
+                type="button"
                 key={sc}
                 onClick={() => setFilterScope(sc)}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+                className={`min-h-11 px-3 py-1 rounded-lg font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                   filterScope === sc
                     ? "bg-amber-500 text-zinc-950 shadow-md"
                     : "text-zinc-400 hover:text-zinc-200"
@@ -148,10 +193,13 @@ export const SpatialRealmsModal: React.FC<SpatialRealmsModalProps> = ({ isOpen, 
 
           <input
             type="text"
+            name="search"
+            aria-label="Tìm bí cảnh"
+            autoComplete="off"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm kiếm bí cảnh..."
-            className="px-3 py-1.5 text-xs bg-zinc-900/60 border border-zinc-800 rounded-xl text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-500/50 w-full sm:w-56"
+            placeholder="Tìm kiếm bí cảnh…"
+            className="min-h-11 w-full rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 sm:w-56"
           />
         </div>
 
@@ -174,7 +222,7 @@ export const SpatialRealmsModal: React.FC<SpatialRealmsModalProps> = ({ isOpen, 
               return (
                 <div
                   key={realm.template_id}
-                  className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-amber-500/40 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                  className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-amber-500/40 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                 >
                   <div className="space-y-1.5 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -243,7 +291,7 @@ export const SpatialRealmsModal: React.FC<SpatialRealmsModalProps> = ({ isOpen, 
                   <button
                     onClick={() => handleEnter(realm)}
                     disabled={spatialLoading}
-                    className={`w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 disabled:opacity-50 ${
+                    className={`w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shadow-md active:scale-95 disabled:opacity-50 ${
                       isAtPortal
                         ? "bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-zinc-950 shadow-[0_0_15px_rgba(245,158,11,0.4)]"
                         : "bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-zinc-700"

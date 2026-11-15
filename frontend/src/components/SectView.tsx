@@ -5,6 +5,7 @@ import { translatePath, parsePaths } from "@/lib/translate";
 import { getItemIconUrl } from "@/lib/item-icons";
 import { getGuIconUrl } from "@/lib/gu-icons";
 import { getGuRankColor } from "@/lib/gu-frames";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import {
   Shield,
   Activity,
@@ -326,6 +327,14 @@ export const SectView: React.FC = () => {
   const [defendPlayerId, setDefendPlayerId] = useState("");
   const [defendMonsterId, setDefendMonsterId] = useState("");
   const [defendMonsterRank, setDefendMonsterRank] = useState(1);
+  const sectDialogOpen = Boolean(inspectedVaultItem || showDefendModal || selectedSectId);
+  const sectDialogKey = inspectedVaultItem ? `vault-${inspectedVaultItem.id}` : showDefendModal ? "defend" : selectedSectId ?? "";
+  const closeSectDialog = () => {
+    if (inspectedVaultItem) setInspectedVaultItem(null);
+    else if (showDefendModal) setShowDefendModal(false);
+    else setSelectedSectId(null);
+  };
+  const { dialogRef: sectDialogRef, onKeyDown: sectDialogKeyDown } = useAccessibleDialog<HTMLDivElement>(closeSectDialog, sectDialogOpen, sectDialogKey);
 
   const defendMemberOptions = useMemo(() => {
     return sectMembers
@@ -759,6 +768,7 @@ export const SectView: React.FC = () => {
           </div>
           <div className="w-full sm:w-48">
             <select
+              aria-label="Lọc thành viên theo vực giới"
               value={selectedRegion}
               onChange={(e) => setSelectedRegion(e.target.value)}
               className="w-full bg-zinc-950 border border-zinc-900 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-500/50 cursor-pointer"
@@ -780,7 +790,7 @@ export const SectView: React.FC = () => {
                 key={sect.id}
                 onClick={() => setSelectedSectId(sect.id)}
                 className={`group bg-zinc-950/40 hover:bg-zinc-950/80 border ${selectedSectId === sect.id ? "border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.15)]" : "border-zinc-900 hover:border-zinc-800"
-                  } rounded-3xl p-5 flex flex-col justify-between transition-all duration-300 cursor-pointer backdrop-blur-md`}
+                  } rounded-3xl p-5 flex flex-col justify-between transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 cursor-pointer backdrop-blur-md`}
               >
                 <div>
                   <div className="flex justify-between items-start mb-4">
@@ -866,7 +876,13 @@ export const SectView: React.FC = () => {
             >
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-2xl bg-zinc-950 border border-zinc-900 rounded-3xl p-6 shadow-[0_0_30px_rgba(59,130,246,0.2)] flex flex-col gap-6 animate-scale-up cursor-default relative max-h-[90dvh] overflow-y-auto"
+                ref={sectDialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label={`Thông tin ${sect.name}`}
+                tabIndex={-1}
+                onKeyDown={sectDialogKeyDown}
+                className="w-full max-w-2xl bg-zinc-950 border border-zinc-900 rounded-3xl p-6 shadow-[0_0_30px_rgba(59,130,246,0.2)] flex flex-col gap-6 animate-scale-up cursor-default relative max-h-[90dvh] overflow-y-auto overscroll-contain"
               >
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -z-10" />
 
@@ -883,7 +899,8 @@ export const SectView: React.FC = () => {
                   </div>
                   <button
                     onClick={() => setSelectedSectId(null)}
-                    className="p-1.5 rounded-lg bg-zinc-900/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors border border-zinc-900/60 cursor-pointer"
+                    aria-label={`Đóng thông tin ${sect.name}`}
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-zinc-900/60 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors border border-zinc-900/60 cursor-pointer"
                     title="Đóng"
                   >
                     <X className="w-4 h-4" />
@@ -951,7 +968,7 @@ export const SectView: React.FC = () => {
                         }
                       }}
                       disabled={actionLoading}
-                      className="px-6 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 border border-transparent text-white rounded-xl font-semibold shadow-lg shadow-red-500/20 hover:shadow-red-500/35 transition-all text-sm cursor-pointer"
+                      className="px-6 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 border border-transparent text-white rounded-xl font-semibold shadow-lg shadow-red-500/20 hover:shadow-red-500/35 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-sm cursor-pointer"
                     >
                       {actionLoading ? "Đang hủy đơn..." : "Hủy Đơn Xin"}
                     </button>
@@ -962,7 +979,7 @@ export const SectView: React.FC = () => {
                         if (ok) setSelectedSectId(null);
                       }}
                       disabled={actionLoading || mySectStatus?.has_pending_join}
-                      className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 border border-transparent text-white rounded-xl font-semibold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/35 transition-all text-sm cursor-pointer"
+                      className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 border border-transparent text-white rounded-xl font-semibold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/35 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-sm cursor-pointer"
                     >
                       {actionLoading
                         ? "Đang gia nhập..."
@@ -1016,7 +1033,7 @@ export const SectView: React.FC = () => {
               return (
                 <button
                   onClick={() => setShowCreateForm(true)}
-                  className="py-2.5 px-6 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all self-start cursor-pointer"
+                  className="py-2.5 px-6 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] self-start cursor-pointer"
                 >
                   Khai Sáng Thế Lực Mới
                 </button>
@@ -1071,7 +1088,7 @@ export const SectView: React.FC = () => {
                   <button
                     onClick={handleCreateSect}
                     disabled={actionLoading || isPlayerInHub || !createSectName.trim() || !createSectDesc.trim()}
-                    className="py-2 px-4 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 disabled:opacity-50 text-white rounded-xl font-semibold text-xs shadow-md transition-all cursor-pointer"
+                    className="py-2 px-4 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 disabled:opacity-50 text-white rounded-xl font-semibold text-xs shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                   >
                     Xác Nhận Lập Phái (-30,000 Đá)
                   </button>
@@ -1259,7 +1276,7 @@ export const SectView: React.FC = () => {
                   }
                 }}
                 disabled={actionLoading}
-                className="w-full md:w-auto px-5 py-2.5 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white font-serif font-bold text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 border border-amber-400/30"
+                className="w-full md:w-auto px-5 py-2.5 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white font-serif font-bold text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-2 border border-amber-400/30"
               >
                 <Crown className="w-4 h-4 text-yellow-200" />
                 Tiếp Quản Chưởng Môn
@@ -1410,7 +1427,7 @@ export const SectView: React.FC = () => {
                   <button
                     onClick={promoteSectRank}
                     disabled={!canPromote || actionLoading || mySectStatus?.has_pending_promotion}
-                    className="sm:col-span-2 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 border border-transparent disabled:opacity-50 text-white rounded-2xl font-serif font-bold text-sm shadow-lg shadow-blue-500/10 hover:shadow-blue-500/25 transition-all cursor-pointer"
+                    className="sm:col-span-2 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 border border-transparent disabled:opacity-50 text-white rounded-2xl font-serif font-bold text-sm shadow-lg shadow-blue-500/10 hover:shadow-blue-500/25 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                   >
                     {actionLoading
                       ? "Đang tiến hành khảo hạch..."
@@ -1443,7 +1460,7 @@ export const SectView: React.FC = () => {
                   }
                 }}
                 disabled={actionLoading}
-                className="w-full sm:w-auto px-4 py-2 border border-red-500/30 hover:bg-red-950/20 text-red-400 hover:text-red-300 font-semibold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 justify-center"
+                className="w-full sm:w-auto px-4 py-2 border border-red-500/30 hover:bg-red-950/20 text-red-400 hover:text-red-300 font-semibold text-xs rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center gap-1.5 justify-center"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 Rời Tông Môn
@@ -1529,7 +1546,7 @@ export const SectView: React.FC = () => {
                   }
                 }}
                 disabled={!mySectStatus?.member || actionLoading}
-                className={`w-full py-2.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer ${mySectStatus?.member?.is_defending ? "animate-pulse" : ""}`}
+                className={`w-full py-2.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${mySectStatus?.member?.is_defending ? "animate-pulse" : ""}`}
               >
                 {mySectStatus?.member?.is_defending ? "Tắt Trấn Thủ" : "Bật Trấn Thủ"}
               </button>
@@ -1655,22 +1672,22 @@ export const SectView: React.FC = () => {
           {/* Defend Modal */}
           {showDefendModal && (
             <div className="fixed inset-0 z-50 h-[100dvh] flex items-center justify-center p-4 pt-[calc(env(safe-area-inset-top)+1rem)] pb-[calc(env(safe-area-inset-bottom)+1rem)] bg-zinc-950/80 backdrop-blur-sm">
-              <div className="w-full max-w-md max-h-full overflow-y-auto bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
+              <div ref={sectDialogRef} role="dialog" aria-modal="true" aria-label="Bố trí phòng thủ Tông Môn" tabIndex={-1} onKeyDown={sectDialogKeyDown} className="w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain bg-zinc-950 border border-zinc-900 rounded-2xl p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-zinc-100 font-serif">Bố Trí Phòng Thủ Tông Môn</h3>
-                  <button onClick={() => setShowDefendModal(false)} className="p-1 hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
+                  <button type="button" onClick={() => setShowDefendModal(false)} aria-label="Đóng bố trí phòng thủ" className="flex min-h-11 min-w-11 items-center justify-center hover:bg-zinc-900 rounded-lg cursor-pointer"><X className="w-4 h-4 text-zinc-500" /></button>
                 </div>
 
                 <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 w-fit">
                   <button
                     onClick={() => { setDefendType("member"); fetchSectMembers(); }}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${defendType === "member" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${defendType === "member" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
                   >
                     Đệ Tử
                   </button>
                   <button
                     onClick={() => setDefendType("beast")}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${defendType === "beast" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${defendType === "beast" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
                   >
                     Thần Thú
                   </button>
@@ -1734,7 +1751,7 @@ export const SectView: React.FC = () => {
                     );
                     if (ok) setShowDefendModal(false);
                   }}
-                  className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-all cursor-pointer"
+                  className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-xs shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                 >
                   Xác Nhận Bố Trí
                 </button>
@@ -1830,7 +1847,7 @@ export const SectView: React.FC = () => {
                           await completeSectMission(am.id);
                         }}
                         disabled={!isReadyToComplete || actionLoading}
-                        className="flex-1 sm:flex-none px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 text-white rounded-xl font-semibold text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        className="flex-1 sm:flex-none px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-zinc-900 disabled:to-zinc-950 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-50 text-white rounded-xl font-semibold text-xs shadow-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <CheckCircle className="w-4 h-4" />
                         Nộp Nhiệm Vụ
@@ -1880,7 +1897,7 @@ export const SectView: React.FC = () => {
                     <div
                       key={mission.id}
                       className={`bg-zinc-900/20 border ${rankTooLow ? "border-zinc-950 opacity-60" : "border-zinc-900 hover:border-zinc-800"
-                        } rounded-2xl p-4 flex flex-col justify-between gap-4 transition-all duration-300`}
+                        } rounded-2xl p-4 flex flex-col justify-between gap-4 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300`}
                     >
                       <div>
                         <div className="flex justify-between items-start mb-2">
@@ -1970,21 +1987,21 @@ export const SectView: React.FC = () => {
             <div className="flex flex-wrap bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 self-start">
               <button
                 onClick={() => setVaultTab("gu")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${vaultTab === "gu" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${vaultTab === "gu" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
                   }`}
               >
                 Cổ Trùng
               </button>
               <button
                 onClick={() => setVaultTab("material")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${vaultTab === "material" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${vaultTab === "material" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
                   }`}
               >
                 Linh Tài
               </button>
               <button
                 onClick={() => setVaultTab("recipe")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${vaultTab === "recipe" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${vaultTab === "recipe" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
                   }`}
               >
                 Cổ Phương
@@ -2098,7 +2115,7 @@ export const SectView: React.FC = () => {
                             hungerRate: spec?.hunger_rate,
                             maxHunger: spec?.max_hunger || 100,
                           })}
-                          className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
+                          className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
                         >
                           <div className="relative aspect-square w-full rounded-xl bg-black/40 border border-zinc-800/60 overflow-hidden flex items-center justify-center p-2 mb-2">
                             <span className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase border ${rankColors.badge}`}>
@@ -2149,7 +2166,7 @@ export const SectView: React.FC = () => {
                                     maxHunger: spec?.max_hunger || 100,
                                   });
                                 }}
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                                   canAfford && !outOfStock
                                     ? "bg-blue-600/30 text-blue-300 hover:bg-blue-600 hover:text-white border border-blue-500/40"
                                     : "bg-zinc-900 text-zinc-500 border border-zinc-800"
@@ -2186,7 +2203,7 @@ export const SectView: React.FC = () => {
                       return (
                         <div
                           key={uKey}
-                          className={`bg-zinc-900/20 border hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300 ${rankColors.border}`}
+                          className={`bg-zinc-900/20 border hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${rankColors.border}`}
                         >
                           <div className="flex items-start gap-3 min-w-0">
                             <div className="w-12 h-12 rounded-xl bg-zinc-950/60 object-contain p-1 border border-zinc-800 shrink-0 flex items-center justify-center">
@@ -2289,7 +2306,7 @@ export const SectView: React.FC = () => {
                             stock: qty,
                             owned: ownedCount,
                           })}
-                          className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
+                          className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
                         >
                           <div className="relative aspect-square w-full rounded-xl bg-black/40 border border-zinc-800/60 overflow-hidden flex items-center justify-center p-2 mb-2">
                             <span className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase border ${rankColors.badge}`}>
@@ -2337,7 +2354,7 @@ export const SectView: React.FC = () => {
                                     owned: ownedCount,
                                   });
                                 }}
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                                   canAfford && qty > 0
                                     ? "bg-blue-600/30 text-blue-300 hover:bg-blue-600 hover:text-white border border-blue-500/40"
                                     : "bg-zinc-900 text-zinc-500 border border-zinc-800"
@@ -2368,7 +2385,7 @@ export const SectView: React.FC = () => {
                       return (
                         <div
                           key={matId}
-                          className={`bg-zinc-900/20 border hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300 ${rankColors.border}`}
+                          className={`bg-zinc-900/20 border hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${rankColors.border}`}
                         >
                           <div className="flex items-start gap-3 min-w-0">
                             <img
@@ -2471,7 +2488,7 @@ export const SectView: React.FC = () => {
                             owned: isUnlocked ? 1 : 0,
                             completionRate: vaultRecipe.completion_rate,
                           })}
-                          className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
+                          className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
                         >
                           <div className="relative aspect-square w-full rounded-xl bg-black/40 border border-zinc-800/60 overflow-hidden flex items-center justify-center p-2 mb-2">
                             <span className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase border ${rankColors.badge}`}>
@@ -2510,7 +2527,7 @@ export const SectView: React.FC = () => {
                                   e.stopPropagation();
                                   await buyFromSectVault("recipe", recipeId);
                                 }}
-                                className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                                   !isUnlocked && canAfford
                                     ? "bg-blue-600/30 text-blue-300 hover:bg-blue-600 hover:text-white border border-blue-500/40"
                                     : "bg-zinc-900 text-zinc-500 border border-zinc-800"
@@ -2545,7 +2562,7 @@ export const SectView: React.FC = () => {
                       return (
                         <div
                           key={recipeId}
-                          className={`bg-zinc-900/20 border hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-all duration-300 ${rankColors.border}`}
+                          className={`bg-zinc-900/20 border hover:border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-4 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${rankColors.border}`}
                         >
                           <div className="flex items-start gap-3 min-w-0">
                             <div className="w-10 h-10 rounded-xl bg-zinc-950/60 p-1 border border-zinc-800 shrink-0 flex items-center justify-center">
@@ -2619,13 +2636,20 @@ export const SectView: React.FC = () => {
                 onClick={() => setInspectedVaultItem(null)}
               >
                 <div
-                  className="bg-zinc-950 border border-blue-500/40 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl relative"
+                  ref={sectDialogRef}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={`Thông tin ${inspectedVaultItem.name}`}
+                  tabIndex={-1}
+                  onKeyDown={sectDialogKeyDown}
+                  className="max-h-[90dvh] overflow-y-auto overscroll-contain bg-zinc-950 border border-blue-500/40 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl relative"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
                     type="button"
                     onClick={() => setInspectedVaultItem(null)}
-                    className="absolute top-4 right-4 p-1.5 text-zinc-500 hover:text-zinc-200 rounded-full hover:bg-zinc-900 transition-colors cursor-pointer"
+                    aria-label={`Đóng thông tin ${inspectedVaultItem.name}`}
+                    className="absolute top-4 right-4 flex min-h-11 min-w-11 items-center justify-center text-zinc-500 hover:text-zinc-200 rounded-full hover:bg-zinc-900 transition-colors cursor-pointer"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -2696,7 +2720,7 @@ export const SectView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setInspectedVaultItem(null)}
-                      className="py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:bg-zinc-900 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer"
+                      className="py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:bg-zinc-900 font-semibold text-xs active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                     >
                       Đóng
                     </button>
@@ -2718,7 +2742,7 @@ export const SectView: React.FC = () => {
                         }
                         setInspectedVaultItem(null);
                       }}
-                      className="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs active:scale-[0.98] transition-all cursor-pointer shadow-lg flex items-center justify-center gap-1.5"
+                      className="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shadow-lg flex items-center justify-center gap-1.5"
                     >
                       <Coins className="w-3.5 h-3.5" />
                       {inspectedVaultItem.type === "recipe" && inspectedVaultItem.owned > 0
@@ -2781,28 +2805,28 @@ export const SectView: React.FC = () => {
             <div className="flex bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 self-start sm:self-auto">
               <button
                 onClick={() => setDonateType("stones")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${donateType === "stones" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${donateType === "stones" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
                   }`}
               >
                 Nguyên Thạch
               </button>
               <button
                 onClick={() => setDonateType("materials")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${donateType === "materials" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${donateType === "materials" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
                   }`}
               >
                 Linh Tài
               </button>
               <button
                 onClick={() => setDonateType("gu")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${donateType === "gu" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${donateType === "gu" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
                   }`}
               >
                 Cổ Trùng
               </button>
               <button
                 onClick={() => setDonateType("recipes")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${donateType === "recipes" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${donateType === "recipes" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
                   }`}
               >
                 Bí Phương
@@ -2835,7 +2859,7 @@ export const SectView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setDonateStones(player.primeval_stones)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-800/30 px-3 py-1.5 rounded-lg transition-all font-semibold font-mono"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-800/30 px-3 py-1.5 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-semibold font-mono"
                   >
                     TỐI ĐA
                   </button>
@@ -2848,7 +2872,7 @@ export const SectView: React.FC = () => {
                       key={preset}
                       type="button"
                       onClick={() => setDonateStones(Math.min(player.primeval_stones, preset))}
-                      className="py-1.5 text-[10px] font-mono text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-all"
+                      className="py-1.5 text-[10px] font-mono text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
                     >
                       +{preset.toLocaleString()}
                     </button>
@@ -2869,7 +2893,7 @@ export const SectView: React.FC = () => {
                   await donateSectStones(donateStones);
                 }}
                 disabled={player.primeval_stones <= 0 || actionLoading}
-                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 tracking-wide"
+                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold text-sm shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-2 tracking-wide"
               >
                 <Gift className="w-4 h-4" />
                 DÂNG NỘP LINH THẠCH (Nhận +{donateStones.toLocaleString()} Pts)
@@ -3066,7 +3090,7 @@ export const SectView: React.FC = () => {
                           <div
                             key={matId}
                             onClick={toggleSelect}
-                            className={`bg-zinc-950/40 border rounded-xl p-3 flex flex-col justify-between gap-3.5 transition-all cursor-pointer select-none ${
+                            className={`bg-zinc-950/40 border rounded-xl p-3 flex flex-col justify-between gap-3.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer select-none ${
                               isSelected
                                 ? "border-blue-600/50 bg-blue-900/5 shadow-md shadow-blue-950/10"
                                 : "border-zinc-900 hover:border-zinc-800"
@@ -3107,7 +3131,7 @@ export const SectView: React.FC = () => {
                                   <button
                                     type="button"
                                     onClick={() => updateAmount(selectedItem.amountToDonate - 1)}
-                                    className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-all text-[10px]"
+                                    className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-[10px]"
                                   >
                                     -
                                   </button>
@@ -3122,14 +3146,14 @@ export const SectView: React.FC = () => {
                                   <button
                                     type="button"
                                     onClick={() => updateAmount(selectedItem.amountToDonate + 1)}
-                                    className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-all text-[10px]"
+                                    className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-[10px]"
                                   >
                                     +
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => updateAmount(qty)}
-                                    className="ml-1 px-1.5 py-0.5 bg-blue-950 text-blue-400 border border-blue-900/30 rounded text-[9px] font-mono transition-all font-semibold"
+                                    className="ml-1 px-1.5 py-0.5 bg-blue-950 text-blue-400 border border-blue-900/30 rounded text-[9px] font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-semibold"
                                   >
                                     Max
                                   </button>
@@ -3185,7 +3209,7 @@ export const SectView: React.FC = () => {
                             if (ok) setSelectedDonateMaterials({});
                           }}
                           disabled={actionLoading}
-                          className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                          className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-1.5"
                         >
                           <Gift className="w-4 h-4" />
                           QUYÊN GÓP HÀNG LOẠT
@@ -3307,7 +3331,7 @@ export const SectView: React.FC = () => {
                                 return next;
                               });
                             }}
-                            className={`text-left p-3 rounded-xl border text-xs font-mono flex justify-between items-center transition-all cursor-pointer ${
+                            className={`text-left p-3 rounded-xl border text-xs font-mono flex justify-between items-center transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                               isSelected
                                 ? "bg-pink-950/20 border-pink-500/40 text-pink-300 shadow-md shadow-pink-950/15"
                                 : "bg-zinc-950 border-zinc-900 hover:border-zinc-850 text-zinc-300"
@@ -3391,7 +3415,7 @@ export const SectView: React.FC = () => {
                             if (ok) setSelectedDonateRecipes({});
                           }}
                           disabled={actionLoading}
-                          className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                          className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-1.5"
                         >
                           <Gift className="w-4 h-4" />
                           HIẾN TẾ BÍ PHƯƠNG
@@ -3627,7 +3651,7 @@ export const SectView: React.FC = () => {
                           <div
                             key={key}
                             onClick={toggleSelect}
-                            className={`bg-zinc-950/40 border rounded-xl p-3 flex flex-col justify-between gap-3.5 transition-all cursor-pointer select-none ${
+                            className={`bg-zinc-950/40 border rounded-xl p-3 flex flex-col justify-between gap-3.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer select-none ${
                               isSelected
                                 ? "border-blue-600/50 bg-blue-900/5 shadow-md shadow-blue-950/10"
                                 : "border-zinc-900 hover:border-zinc-800"
@@ -3663,7 +3687,7 @@ export const SectView: React.FC = () => {
                                   <button
                                     type="button"
                                     onClick={() => updateAmount(selectedItem.amountToDonate - 1)}
-                                    className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-all text-[10px]"
+                                    className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-[10px]"
                                   >
                                     -
                                   </button>
@@ -3678,14 +3702,14 @@ export const SectView: React.FC = () => {
                                   <button
                                     type="button"
                                     onClick={() => updateAmount(selectedItem.amountToDonate + 1)}
-                                    className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-all text-[10px]"
+                                    className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-[10px]"
                                   >
                                     +
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => updateAmount(g.instances.length)}
-                                    className="ml-1 px-1.5 py-0.5 bg-blue-950 text-blue-400 border border-blue-900/30 rounded text-[9px] font-mono transition-all font-semibold"
+                                    className="ml-1 px-1.5 py-0.5 bg-blue-950 text-blue-400 border border-blue-900/30 rounded text-[9px] font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-semibold"
                                   >
                                     Max
                                   </button>
@@ -3746,7 +3770,7 @@ export const SectView: React.FC = () => {
                             if (ok) setSelectedDonateGus({});
                           }}
                           disabled={actionLoading}
-                          className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                          className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-1.5"
                         >
                           <Gift className="w-4 h-4" />
                           HIẾN TẾ HÀNG LOẠT
@@ -3791,14 +3815,17 @@ export const SectView: React.FC = () => {
                     />
                   </button>
                   <span className="w-px h-4 bg-zinc-800 mx-1" />
-                  <span className="text-[11px] text-zinc-300 font-semibold" title="Khi bật, mọi thăng cấp đều cần Trưởng Lão/Chưởng Môn duyệt">Duyệt Lên Cấp:</span>
+                  <span id="sect-promotion-approval-label" className="text-[11px] text-zinc-300 font-semibold" title="Khi bật, mọi thăng cấp đều cần Trưởng Lão/Chưởng Môn duyệt">Duyệt Lên Cấp:</span>
                   <button
                     type="button"
+                    role="switch"
+                    aria-checked={!!mySectStatus?.sect?.require_promotion_approval}
+                    aria-labelledby="sect-promotion-approval-label"
                     onClick={async () => {
                       await toggleSectPromotionApproval(!mySectStatus?.sect?.require_promotion_approval);
                     }}
                     disabled={actionLoading}
-                    className={`w-9 h-5 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-300 ${mySectStatus?.sect?.require_promotion_approval ? "bg-emerald-600" : "bg-zinc-800"
+                    className={`min-h-11 min-w-11 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-300 ${mySectStatus?.sect?.require_promotion_approval ? "bg-emerald-600" : "bg-zinc-800"
                       }`}
                   >
                     <div
@@ -3813,21 +3840,21 @@ export const SectView: React.FC = () => {
             <div className="flex flex-wrap bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/60 self-start sm:self-auto gap-1">
               <button
                 onClick={() => setMgmtTab("members")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${mgmtTab === "members" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${mgmtTab === "members" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
                   }`}
               >
                 Đệ Tử Danh Sách
               </button>
               <button
                 onClick={() => setMgmtTab("missions")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${mgmtTab === "missions" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${mgmtTab === "missions" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
                   }`}
               >
                 Tạo Nhiệm Vụ
               </button>
               <button
                 onClick={() => setMgmtTab("stock")}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${mgmtTab === "stock" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${mgmtTab === "stock" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
                   }`}
               >
                 Nhập Kho & Tăng Cấp
@@ -3835,7 +3862,7 @@ export const SectView: React.FC = () => {
               {(mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO" || mySectStatus?.member?.member_rank === "HO_PHAP") && (
                 <button
                   onClick={() => setMgmtTab("requests")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer relative ${mgmtTab === "requests" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer relative ${mgmtTab === "requests" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
                     }`}
                 >
                   Duyệt Yêu Cầu
@@ -3849,7 +3876,7 @@ export const SectView: React.FC = () => {
               {(mySectStatus?.member?.member_rank === "CHUONG_MON" || mySectStatus?.member?.member_rank === "TRUONG_LAO" || mySectStatus?.member?.member_rank === "HO_PHAP") && (
                 <button
                   onClick={() => setMgmtTab("salary")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${mgmtTab === "salary" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${mgmtTab === "salary" ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-zinc-200"
                     }`}
                 >
                   Phát Lương
@@ -3858,7 +3885,7 @@ export const SectView: React.FC = () => {
               {mySectStatus?.member?.member_rank === "CHUONG_MON" && (
                 <button
                   onClick={() => setMgmtTab("relocate")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${mgmtTab === "relocate" ? "bg-amber-900/60 border border-amber-600/50 text-amber-200" : "text-zinc-400 hover:text-zinc-200"
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center gap-1.5 ${mgmtTab === "relocate" ? "bg-amber-900/60 border border-amber-600/50 text-amber-200" : "text-zinc-400 hover:text-zinc-200"
                     }`}
                 >
                   <Navigation className="w-3.5 h-3.5 text-amber-400" />
@@ -3876,7 +3903,8 @@ export const SectView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => fetchSectMembers()}
-                  className="p-1 rounded bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors cursor-pointer"
+                  aria-label="Làm mới danh sách đệ tử"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                 </button>
@@ -3945,7 +3973,7 @@ export const SectView: React.FC = () => {
                                 }
                               }}
                               disabled={actionLoading}
-                              className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white font-serif font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                              className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white font-serif font-bold text-xs rounded-xl shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center gap-1.5"
                             >
                               <Crown className="w-3.5 h-3.5" />
                               Tiếp Quản Chưởng Môn
@@ -3986,7 +4014,7 @@ export const SectView: React.FC = () => {
                                     await kickMember(mInfo.player_id);
                                   }
                                 }}
-                                className="px-2.5 py-1 bg-red-950/40 hover:bg-red-900/20 text-red-400 border border-red-500/20 rounded-xl transition-all cursor-pointer font-semibold"
+                                className="px-2.5 py-1 bg-red-950/40 hover:bg-red-900/20 text-red-400 border border-red-500/20 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-semibold"
                               >
                                 Trục Xuất
                               </button>
@@ -4016,7 +4044,8 @@ export const SectView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => fetchJoinRequests()}
-                    className="p-1 rounded bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors cursor-pointer text-zinc-400 hover:text-zinc-200"
+                    aria-label="Làm mới yêu cầu gia nhập"
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors cursor-pointer text-zinc-400 hover:text-zinc-200"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                   </button>
@@ -4058,7 +4087,7 @@ export const SectView: React.FC = () => {
                               await actionJoinRequest(reqInfo.id, "approve");
                             }}
                             disabled={actionLoading}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all cursor-pointer font-semibold text-[11px]"
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-semibold text-[11px]"
                           >
                             Đồng Ý
                           </button>
@@ -4068,7 +4097,7 @@ export const SectView: React.FC = () => {
                               await actionJoinRequest(reqInfo.id, "reject");
                             }}
                             disabled={actionLoading}
-                            className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/20 text-red-400 border border-red-500/20 rounded-xl transition-all cursor-pointer font-semibold text-[11px]"
+                            className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/20 text-red-400 border border-red-500/20 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-semibold text-[11px]"
                           >
                             Từ Chối
                           </button>
@@ -4091,7 +4120,8 @@ export const SectView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => fetchPromotionRequests()}
-                    className="p-1 rounded bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors cursor-pointer text-zinc-400 hover:text-zinc-200"
+                    aria-label="Làm mới yêu cầu thăng cấp"
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors cursor-pointer text-zinc-400 hover:text-zinc-200"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                   </button>
@@ -4137,7 +4167,7 @@ export const SectView: React.FC = () => {
                               await actionPromotionRequest(reqInfo.id, "approve");
                             }}
                             disabled={actionLoading}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all cursor-pointer font-semibold text-[11px]"
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-semibold text-[11px]"
                           >
                             Duyệt Cho Lên
                           </button>
@@ -4147,7 +4177,7 @@ export const SectView: React.FC = () => {
                               await actionPromotionRequest(reqInfo.id, "reject");
                             }}
                             disabled={actionLoading}
-                            className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/20 text-red-400 border border-red-500/20 rounded-xl transition-all cursor-pointer font-semibold text-[11px]"
+                            className="px-3 py-1.5 bg-red-950/40 hover:bg-red-900/20 text-red-400 border border-red-500/20 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-semibold text-[11px]"
                           >
                             Bác Bỏ
                           </button>
@@ -4235,7 +4265,7 @@ export const SectView: React.FC = () => {
                     await paySectSalary();
                   }}
                   disabled={actionLoading}
-                  className="w-full py-3 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-400 rounded-xl font-semibold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-400 rounded-xl font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {actionLoading ? "Đang phát lương..." : "Xác Nhận Phát Lương"}
                 </button>
@@ -4352,7 +4382,7 @@ export const SectView: React.FC = () => {
               <button
                 type="submit"
                 disabled={actionLoading}
-                className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white rounded-xl font-serif font-bold text-sm shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Plus className="w-4 h-4" />
                 Phát Hành Nhiệm Vụ Môn Phái
@@ -4512,7 +4542,8 @@ export const SectView: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => setStockSearch("")}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-0.5 cursor-pointer"
+                                aria-label="Xóa nội dung tìm kiếm"
+                                className="absolute right-1 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center text-zinc-500 hover:text-zinc-300 cursor-pointer"
                               >
                                 <X className="w-3.5 h-3.5" />
                               </button>
@@ -4545,7 +4576,7 @@ export const SectView: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setStockOnlyAvailable(!stockOnlyAvailable)}
-                              className={`px-2.5 py-1.5 rounded-xl border text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                              className={`px-2.5 py-1.5 rounded-xl border text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1.5 cursor-pointer select-none ${
                                 stockOnlyAvailable
                                   ? "bg-cyan-950/40 border-cyan-500/40 text-cyan-300 font-semibold"
                                   : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-zinc-200"
@@ -4563,7 +4594,7 @@ export const SectView: React.FC = () => {
                               type="button"
                               onClick={handleToggleSelectAllSearch}
                               disabled={selectableItems.length === 0}
-                              className={`sm:ml-auto px-3 py-1.5 rounded-xl border text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                              className={`sm:ml-auto px-3 py-1.5 rounded-xl border text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                                 allSearchSelected
                                   ? "bg-amber-950/40 border-amber-500/40 text-amber-300 hover:bg-amber-900/40"
                                   : "bg-cyan-600/20 border-cyan-500/40 text-cyan-300 hover:bg-cyan-600/30"
@@ -4620,7 +4651,7 @@ export const SectView: React.FC = () => {
                                 <div
                                   key={id}
                                   onClick={locked ? undefined : toggleSelect}
-                                  className={`bg-zinc-950/40 border rounded-xl p-3 flex flex-col justify-between gap-3.5 transition-all ${
+                                  className={`bg-zinc-950/40 border rounded-xl p-3 flex flex-col justify-between gap-3.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                                     locked ? "opacity-50 cursor-not-allowed" : "cursor-pointer select-none"
                                   } ${
                                     isSelected
@@ -4655,7 +4686,7 @@ export const SectView: React.FC = () => {
                                         <button
                                           type="button"
                                           onClick={() => updateQty(sel.quantity - 1)}
-                                          className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-all text-[10px]"
+                                          className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-[10px]"
                                         >
                                           -
                                         </button>
@@ -4669,7 +4700,7 @@ export const SectView: React.FC = () => {
                                         <button
                                           type="button"
                                           onClick={() => updateQty(sel.quantity + 1)}
-                                          className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-all text-[10px]"
+                                          className="w-5 h-5 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-400 font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-[10px]"
                                         >
                                           +
                                         </button>
@@ -4749,7 +4780,7 @@ export const SectView: React.FC = () => {
                                   if (ok) setStockSelections({});
                                 }}
                                 disabled={!canAfford || actionLoading}
-                                className="w-full py-3 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                                className="w-full py-3 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 disabled:opacity-50 text-white rounded-xl font-semibold text-sm shadow-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-1.5"
                               >
                                 <Package className="w-4 h-4" />
                                 NHẬP KHO HÀNG LOẠT
@@ -4935,7 +4966,7 @@ export const SectView: React.FC = () => {
                       }
                     }}
                     disabled={!relocationEstimate.can_relocate || actionLoading}
-                    className="w-full py-3.5 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-serif font-bold text-sm shadow-lg shadow-amber-950/40 transition-all cursor-pointer flex items-center justify-center gap-2 mt-2"
+                    className="w-full py-3.5 bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 hover:from-amber-500 hover:to-yellow-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-serif font-bold text-sm shadow-lg shadow-amber-950/40 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-2 mt-2"
                   >
                     <Navigation className="w-4 h-4 text-amber-200" />
                     TIẾN HÀNH ĐẠI ĐIỂN DI DỜI SƠN MÔN

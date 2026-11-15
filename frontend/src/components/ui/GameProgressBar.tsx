@@ -117,7 +117,7 @@ export const GameProgressBar = forwardRef<HTMLDivElement, GameProgressBarProps>(
         >
           <div
             className={[
-              "h-full transition-all duration-500 ease-out",
+              "h-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-500 ease-out",
               barColor,
               barRounded,
               striped && "bg-[linear-gradient(45deg,rgba(255,255,255,.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,.15)_50%,rgba(255,255,255,.15)_75%,transparent_75%,transparent)] bg-[size:1rem_1rem]",
@@ -187,7 +187,7 @@ export const GameCircularProgress = ({
           cy={size / 2}
         />
         <circle
-          className={`transition-all duration-500 ease-out ${strokeColor}`}
+          className={`transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-500 ease-out ${strokeColor}`}
           strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           strokeDashoffset={offset}
@@ -239,7 +239,7 @@ export const GameStepProgress = ({
             <div key={step.label} className="flex items-start gap-3">
               <div
                 className={[
-                  "flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all duration-300",
+                  "flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300",
                   isCompleted
                     ? "bg-brand border-brand text-white"
                     : isCurrent

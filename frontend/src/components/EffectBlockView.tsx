@@ -553,7 +553,7 @@ export const EffectBlockItem: React.FC<{ block: EffectBlock; index?: number }> =
           >
             <span className="opacity-80 text-[9px]">{icon}</span>
             <span>{text}</span>
-            {metadata.length > 0 && <span className="text-zinc-500">· {metadata.join(" · ")}</span>}
+            {metadata.length > 0 && <span className="text-zinc-400">· {metadata.join(" · ")}</span>}
           </span>
         );
       })}

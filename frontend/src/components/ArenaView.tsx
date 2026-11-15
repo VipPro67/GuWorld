@@ -129,7 +129,7 @@ Tải lại
 <GameCard
                  key={row.player_id}
                  variant={isMe ? "selected" : "default"}
-                 className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-2xl transition-all duration-300 ${
+                 className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border rounded-2xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${
                    isMe
                      ? "bg-amber-955/10 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.05)]"
                      : "bg-zinc-950/40 border-zinc-900 hover:border-zinc-800/80 hover:bg-zinc-950/60"

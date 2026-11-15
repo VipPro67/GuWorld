@@ -49,7 +49,7 @@ export const PremiumWallet: React.FC<PremiumWalletProps> = ({ compact = false, o
 
   if (!wallet) {
     return (
-      <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-500">
+      <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-400">
         <span>{error ? error : "Đang tải ví..."}</span>
         {error && (
           <button

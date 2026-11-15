@@ -39,7 +39,7 @@ function SectionTitle({ icon, children }: { icon: React.ReactNode; children: Rea
 
 function Table({ columns, rows }: { columns: string[]; rows: React.ReactNode[][] }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-[var(--border)]">
+    <div role="group" aria-label={`Bảng: ${columns.join(", ")}`} tabIndex={0} className="overflow-x-auto rounded-xl border border-[var(--border)]">
       <table className="w-full text-left text-xs">
         <thead className="bg-zinc-950 text-[10px] uppercase tracking-wider text-[var(--text-secondary)] font-mono">
           <tr>

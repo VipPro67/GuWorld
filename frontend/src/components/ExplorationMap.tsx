@@ -376,6 +376,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
             <Eye className="w-4 h-4 text-emerald-400 shrink-0" />
             <span className="text-zinc-400 font-serif hidden sm:inline">Tầm nhìn:</span>
             <select
+              aria-label="Chọn kích thước lưới bản đồ"
               value={radius}
               onChange={(e) => handleRadiusChange(Number(e.target.value))}
               className="bg-zinc-950 border border-zinc-700/60 rounded-lg px-2 py-1 text-emerald-400 font-mono text-xs font-semibold focus:outline-none cursor-pointer"
@@ -389,20 +390,20 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
 
           <button
             onClick={() => setView("dashboard")}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700/60 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all font-serif text-xs font-semibold cursor-pointer shadow-lg"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-700/60 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif text-xs font-semibold cursor-pointer shadow-lg"
           >
             <span>⬅ Sảnh</span>
           </button>
           <button
             onClick={() => setShowAtlas(true)}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all font-serif text-xs font-semibold shadow-lg shadow-amber-950/20 cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif text-xs font-semibold shadow-lg shadow-amber-950/20 cursor-pointer"
           >
             <MapIcon className="w-3.5 h-3.5" />
             <span>Đại Vực</span>
           </button>
           <button
             onClick={() => setShowBuildTeleport(true)}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 transition-all font-serif text-xs font-semibold shadow-lg shadow-sky-950/20 cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif text-xs font-semibold shadow-lg shadow-sky-950/20 cursor-pointer"
             title="Bố trí Truyền Tống Trận (Trận Đạo)"
           >
             <Waypoints className="w-3.5 h-3.5 text-sky-300" />
@@ -411,7 +412,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
           {standingOnTeleport && (
             <button
               onClick={() => setShowDirectoryModal(true)}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25 transition-all font-serif text-xs font-semibold shadow-lg shadow-emerald-950/20 cursor-pointer animate-pulse"
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif text-xs font-semibold shadow-lg shadow-emerald-950/20 cursor-pointer animate-pulse"
               title="Đang đứng trên Truyền Tống Trận - Nhấp để dịch chuyển"
             >
               <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
@@ -447,7 +448,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       <div className="relative bg-zinc-950/90 border border-zinc-900 rounded-3xl p-2 sm:p-3 shadow-2xl overflow-hidden flex flex-col items-center justify-center">
         {gridData ? (
           <div
-            className={`grid gap-px w-full ${maxContainerWidth} aspect-square transition-all duration-300`}
+            className={`grid gap-px w-full ${maxContainerWidth} aspect-square transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300`}
             style={{
               gridTemplateColumns: `repeat(${diameter}, minmax(0, 1fr))`,
               gridTemplateRows: `repeat(${diameter}, minmax(0, 1fr))`,
@@ -472,12 +473,29 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
               const merchantMarker = markersOnCell.find((marker) => marker.kind === "merchant");
               const resourcePoint = markersOnCell.find((marker) => marker.kind === "resource_point");
               const markerTitle = markersOnCell.map((marker) => marker.name).join(", ");
+              const isCellInteractive = !isOutOfBounds && (
+                isMovable || isPlayerCell || otherPlayersOnCell.length > 0 || markersOnCell.length > 0 || cellData.cell_type !== "Empty"
+              );
+              const cellAccessibleName = isOutOfBounds
+                ? "Hư vô (Ngoại biên bản đồ)"
+                : `Tọa độ: (${x}, ${y})${isPlayerCell ? " [Vị trí của bạn]" : ""}${
+                    cellData.cell_type !== "Empty" ? ` | ${getEntityName(cellData.cell_type, cellData.content)}` : ""
+                  }${markerTitle ? ` | ${markerTitle}` : ""}${otherPlayersOnCell.length > 0 ? ` | Cổ sư: ${otherPlayersOnCell.map((p) => p.username).join(", ")}` : ""}${dropOnCell ? " | Chiến lợi phẩm" : ""}`;
 
               return (
                 <div
                   key={`${x},${y}`}
-                  onClick={() => handleCellClick(x, y, isMovable, cellData, portalMarker || teleportMarker || merchantMarker || primaryMarker, resourcePoint?.id)}
-                  className={`aspect-square rounded-md border flex flex-col justify-center items-center relative transition-all duration-200 ${
+                  role={isCellInteractive ? "button" : undefined}
+                  tabIndex={isCellInteractive ? 0 : undefined}
+                  aria-label={isCellInteractive ? cellAccessibleName : undefined}
+                  onClick={isCellInteractive ? () => handleCellClick(x, y, isMovable, cellData, portalMarker || teleportMarker || merchantMarker || primaryMarker, resourcePoint?.id) : undefined}
+                  onKeyDown={isCellInteractive ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      void handleCellClick(x, y, isMovable, cellData, portalMarker || teleportMarker || merchantMarker || primaryMarker, resourcePoint?.id);
+                    }
+                  } : undefined}
+                  className={`aspect-square rounded-md border flex flex-col justify-center items-center relative transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 ${
                     isPlayerCell
                       ? "bg-emerald-500/25 border-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.35)] z-20"
                     : isMovable
@@ -486,13 +504,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                       ? "bg-zinc-950 border-zinc-900/30 opacity-20 cursor-not-allowed"
                       : "bg-zinc-950/60 border-zinc-800/60 opacity-40 cursor-default"
                   }`}
-                  title={
-                    isOutOfBounds
-                      ? "Hư vô (Ngoại biên bản đồ)"
-                      : `Tọa độ: (${x}, ${y})${isPlayerCell ? " [Vị trí của bạn]" : ""}${
-                          cellData.cell_type !== "Empty" ? ` | ${getEntityName(cellData.cell_type, cellData.content)}` : ""
-                        }${markerTitle ? ` | ${markerTitle}` : ""}${otherPlayersOnCell.length > 0 ? ` | Cổ sư: ${otherPlayersOnCell.map((p) => p.username).join(", ")}` : ""}${dropOnCell ? " | Chiến lợi phẩm" : ""}`
-                  }
+                  title={cellAccessibleName}
                 >
                   <div className="w-full h-full flex items-center justify-center gap-1 relative z-10 pb-3">
                     {isPlayerCell && (

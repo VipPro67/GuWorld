@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Player, GuSpec, ItemSpec, useGameStore, ConceiveCandidate, ConceiveResult } from "@/store/useGameStore";
 import { pathLabels, translatePath } from "@/lib/translate";
 import { getItemIconUrl } from "@/lib/item-icons";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import { 
   Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Brain, 
   Search, ShieldAlert, ArrowRight, Skull, Dna, Info, Flame 
@@ -46,6 +47,11 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
   // Action & Modal State
   const [isConceiving, setIsConceiving] = useState<boolean>(false);
   const [resultModal, setResultModal] = useState<ConceiveResult | null>(null);
+  const { dialogRef: resultDialogRef, onKeyDown: resultDialogKeyDown } = useAccessibleDialog<HTMLDivElement>(
+    () => setResultModal(null),
+    Boolean(resultModal),
+    resultModal?.status
+  );
 
   // Load Candidates
   const loadCandidates = useCallback(async () => {
@@ -313,7 +319,7 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
                   <div
                     key={`${c.id}_${c.rank}`}
                     onClick={() => setSelectedCandidate(c)}
-                    className={`p-2.5 rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                    className={`p-2.5 rounded-lg border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-between gap-3 ${
                       isSelected
                         ? "bg-indigo-950/40 border-indigo-500/80 shadow-sm shadow-indigo-500/20"
                         : "bg-neutral-950/40 border-neutral-800/80 hover:bg-neutral-800/40 hover:border-neutral-700"
@@ -499,7 +505,7 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
 
                     <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-indigo-500 via-emerald-500 to-amber-400 transition-all duration-300"
+                        className="h-full bg-gradient-to-r from-indigo-500 via-emerald-500 to-amber-400 transition-[width] duration-300"
                         style={{ width: `${forecast.accuracyPercent}%` }}
                       />
                     </div>
@@ -543,7 +549,7 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
               <button
                 onClick={handleConceive}
                 disabled={isConceiving}
-                className="w-full py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-semibold rounded-xl text-xs sm:text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-semibold rounded-xl text-xs sm:text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isConceiving ? (
                   <>
@@ -572,8 +578,8 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
 
       {/* Result Pop-up Modal */}
       {resultModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className={`w-full max-w-md p-5 rounded-2xl border bg-neutral-900 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 ${
+        <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-black/70 p-4 backdrop-blur-sm">
+          <div ref={resultDialogRef} role="dialog" aria-modal="true" aria-label="Kết quả hợp luyện" tabIndex={-1} onKeyDown={resultDialogKeyDown} className={`max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain p-5 rounded-2xl border bg-neutral-900 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 ${
             resultModal.status === "BACKLASH"
               ? "border-rose-500/80 shadow-rose-950/50"
               : resultModal.is_instant_100
@@ -583,8 +589,10 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
               : "border-emerald-500 shadow-emerald-950/50"
           }`}>
             <button
+              type="button"
               onClick={() => setResultModal(null)}
-              className="absolute top-4 right-4 text-neutral-400 hover:text-white"
+              aria-label="Đóng kết quả hợp luyện"
+              className="absolute top-4 right-4 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800 hover:text-white"
             >
               <X className="w-5 h-5" />
             </button>
@@ -661,7 +669,7 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
 
                 <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden">
                   <div
-                    className={`h-full transition-all duration-500 ${
+                    className={`h-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-500 ${
                       resultModal.completion_rate >= 100 ? "bg-amber-400" : "bg-emerald-500"
                     }`}
                     style={{ width: `${resultModal.completion_rate}%` }}
@@ -674,7 +682,7 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
             <div className="mt-5 flex items-center justify-end gap-3">
               <button
                 onClick={() => setResultModal(null)}
-                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-medium rounded-xl transition-all"
+                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-medium rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
               >
                 Tiếp Tục Khai Sáng
               </button>
@@ -686,7 +694,7 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
                     setResultModal(null);
                     onSelectRecipeForRefine(recId);
                   }}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/30"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shadow-md shadow-indigo-600/30"
                 >
                   <span>Đi Đến Lò Luyện</span>
                   <ArrowRight className="w-3.5 h-3.5" />

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { Player, GuSpec, ItemSpec, GuInstance, useGameStore, guSpecFor } from "@/store/useGameStore";
 import { Flower2, Wine, Gem, ShieldAlert, Sparkles, HelpCircle, Search, Shield, Zap, ChevronDown, ChevronUp, Lock, Unlock, BookOpen, Copy, Check, LayoutGrid, List, X, ExternalLink } from "lucide-react";
@@ -13,6 +13,7 @@ import { KillerMovesPanel } from "@/components/KillerMovesPanel";
 import { getItemIconUrl } from "@/lib/item-icons";
 import { getGuRankColor } from "@/lib/gu-frames";
 import { getGuIconUrl } from "@/lib/gu-icons";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
 interface GuInventoryProps {
   player: Player;
@@ -125,9 +126,49 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [useMultipleGuGroupKey, setUseMultipleGuGroupKey] = useState<string | null>(null);
   const [useMultipleGuQty, setUseMultipleGuQty] = useState<number>(1);
   const [portalGuId, setPortalGuId] = useState<string | null>(null);
+  const portalDialogRef = useRef<HTMLElement>(null);
   const [portalMode, setPortalMode] = useState<"random" | "coordinates">("coordinates");
   const [portalX, setPortalX] = useState(String(player.x ?? 0));
   const [portalY, setPortalY] = useState(String(player.y ?? 0));
+
+  useEffect(() => {
+    if (!portalGuId) return;
+    const dialog = portalDialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const getControls = () => dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+    );
+    const frame = requestAnimationFrame(() => (getControls()[0] || dialog).focus());
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setPortalGuId(null);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = getControls();
+      if (!controls.length) {
+        event.preventDefault();
+        dialog.focus();
+      } else if (event.shiftKey && document.activeElement === controls[0]) {
+        event.preventDefault();
+        controls[controls.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) {
+        event.preventDefault();
+        controls[0].focus();
+      }
+    };
+    dialog.addEventListener("keydown", onKeyDown);
+    return () => {
+      cancelAnimationFrame(frame);
+      dialog.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [portalGuId]);
 
   const [feedingId, setFeedingId] = useState<string | null>(null);
   const [feedingGroupGuId, setFeedingGroupGuId] = useState<string | null>(null);
@@ -147,6 +188,15 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [inspectedGroupKey, setInspectedGroupKey] = useState<string | null>(null);
   const [inspectedMaterialKey, setInspectedMaterialKey] = useState<string | null>(null);
+  const closeInspectedEntry = () => {
+    if (inspectedMaterialKey) setInspectedMaterialKey(null);
+    else setInspectedGroupKey(null);
+  };
+  const { dialogRef: inspectedDialogRef, onKeyDown: inspectedDialogKeyDown } = useAccessibleDialog<HTMLDivElement>(
+    closeInspectedEntry,
+    Boolean(inspectedGroupKey || inspectedMaterialKey),
+    inspectedMaterialKey ?? inspectedGroupKey
+  );
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTab, setSelectedTab] = useState<"gu" | "material" | "killer-moves">(initialTab);
@@ -711,7 +761,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
         <div className="grid grid-cols-2 gap-2 bg-zinc-950/80 p-1.5 rounded-2xl border border-zinc-900">
           <button
             onClick={() => setSelectedTab("gu")}
-            className={`flex items-center justify-center gap-2 text-xs min-h-11 py-2 rounded-xl font-mono font-semibold transition-all ${selectedTab === "gu"
+            className={`flex items-center justify-center gap-2 text-xs min-h-11 py-2 rounded-xl font-mono font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${selectedTab === "gu"
                 ? "bg-gradient-to-r from-amber-500/15 to-orange-500/5 text-amber-300 border border-amber-500/30 shadow-inner"
                 : "text-zinc-500 hover:text-zinc-300"
               }`}
@@ -720,7 +770,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
           </button>
           <button
             onClick={() => setSelectedTab("material")}
-            className={`flex items-center justify-center gap-2 text-xs min-h-11 py-2 rounded-xl font-mono font-semibold transition-all ${selectedTab === "material"
+            className={`flex items-center justify-center gap-2 text-xs min-h-11 py-2 rounded-xl font-mono font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${selectedTab === "material"
                 ? "bg-gradient-to-r from-sky-500/15 to-cyan-500/5 text-sky-300 border border-sky-500/30 shadow-inner"
                 : "text-zinc-500 hover:text-zinc-300"
               }`}
@@ -729,7 +779,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
           </button>
           <button
             onClick={() => setSelectedTab("killer-moves")}
-            className={`flex-1 text-xs py-1.5 rounded-lg font-mono font-medium transition-all ${selectedTab === "killer-moves"
+            className={`flex-1 text-xs py-1.5 rounded-lg font-mono font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${selectedTab === "killer-moves"
                 ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                 : "text-zinc-500 hover:text-zinc-300"
               }`}
@@ -798,7 +848,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               <button
                 type="button"
                 onClick={() => handleSubTabChange("equipped")}
-                className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-center gap-2 cursor-pointer ${
                   guSubTab === "equipped"
                     ? "bg-emerald-950/40 text-emerald-400 border border-emerald-500/30 font-bold shadow-sm"
                     : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40"
@@ -814,7 +864,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               <button
                 type="button"
                 onClick={() => handleSubTabChange("rest")}
-                className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                className={`flex-1 text-xs py-2 rounded-lg font-mono font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-center gap-2 cursor-pointer ${
                   guSubTab === "rest"
                     ? "bg-amber-950/40 text-amber-400 border border-amber-500/30 font-bold shadow-sm"
                     : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40"
@@ -837,14 +887,14 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest block font-bold">Kho vật phẩm</span>
-              <span className="text-[10px] text-zinc-600">{visibleMaterials.length} loại · {totalMaterialCount} món</span>
+              <span className="text-[10px] text-zinc-400">{visibleMaterials.length} loại · {totalMaterialCount} món</span>
             </div>
             {/* View Mode Toggle */}
             <div className="flex items-center gap-0.5 rounded-xl border border-zinc-800 bg-zinc-950/70 p-0.5">
               <button
                 type="button"
                 onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded-lg text-xs font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                className={`p-1.5 rounded-lg text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1 cursor-pointer ${
                   viewMode === "grid"
                     ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-300"
@@ -857,7 +907,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
               <button
                 type="button"
                 onClick={() => setViewMode("list")}
-                className={`p-1.5 rounded-lg text-xs font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                className={`p-1.5 rounded-lg text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1 cursor-pointer ${
                   viewMode === "list"
                     ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-300"
@@ -920,7 +970,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                   <div
                     key={key}
                     onClick={() => setInspectedMaterialKey(key)}
-                    className={`aspect-square rounded-2xl border flex flex-col items-center justify-center relative p-1 cursor-pointer select-none group hover:-translate-y-0.5 hover:shadow-lg transition-all ${rarityBorder}`}
+                    className={`aspect-square rounded-2xl border flex flex-col items-center justify-center relative p-1 cursor-pointer select-none group hover:-translate-y-0.5 hover:shadow-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${rarityBorder}`}
                   >
                     <div className="absolute top-1 left-1.5 flex items-center gap-0.5">
                       <span className="text-[8px] font-mono font-bold text-zinc-400">
@@ -1027,7 +1077,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                           type="button"
                           onClick={handleUseMultipleItem}
                           disabled={actionLoading}
-                          className="text-[9px] font-bold py-1 px-2 bg-emerald-600 text-white hover:bg-emerald-500 rounded font-mono transition-all cursor-pointer shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                          className="text-[9px] font-bold py-1 px-2 bg-emerald-600 text-white hover:bg-emerald-500 rounded font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shadow-[0_0_8px_rgba(16,185,129,0.2)]"
                         >
                           Xác nhận
                         </button>
@@ -1061,7 +1111,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                 <button
                   type="button"
                   onClick={() => setViewMode("grid")}
-                  className={`p-1.5 rounded-lg text-xs font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                  className={`p-1.5 rounded-lg text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1 cursor-pointer ${
                     viewMode === "grid"
                       ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
                       : "text-zinc-500 hover:text-zinc-300"
@@ -1074,7 +1124,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                 <button
                   type="button"
                   onClick={() => setViewMode("list")}
-                  className={`p-1.5 rounded-lg text-xs font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                  className={`p-1.5 rounded-lg text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1 cursor-pointer ${
                     viewMode === "list"
                       ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
                       : "text-zinc-500 hover:text-zinc-300"
@@ -1105,7 +1155,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                       type="button"
                       disabled={selectedEligibleCount === 0 || droppingId === "batch"}
                       onClick={handleBatchDrop}
-                      className={`text-[10px] font-bold py-1 px-3 rounded-lg font-mono transition-all ${
+                      className={`text-[10px] font-bold py-1 px-3 rounded-lg font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                         selectedEligibleCount > 0
                           ? "bg-rose-600 text-white hover:bg-rose-500 cursor-pointer shadow-[0_0_8px_rgba(239,68,68,0.2)]"
                           : "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
@@ -1122,7 +1172,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         setSelectedGuIds({});
                         setIsBatchMode(false);
                       }}
-                      className="text-[10px] font-medium py-1 px-2.5 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-lg font-mono transition-all cursor-pointer"
+                      className="text-[10px] font-medium py-1 px-2.5 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-lg font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                     >
                       Hủy
                     </button>
@@ -1134,7 +1184,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         type="button"
                         disabled={actionLoading || feedingAll}
                         onClick={handleFeedAllClick}
-                        className="text-[10px] font-bold py-1 px-2.5 bg-emerald-950/20 text-emerald-400 border border-emerald-900 hover:bg-emerald-950/40 rounded-lg font-mono transition-all cursor-pointer disabled:opacity-50"
+                        className="text-[10px] font-bold py-1 px-2.5 bg-emerald-950/20 text-emerald-400 border border-emerald-900 hover:bg-emerald-950/40 rounded-lg font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer disabled:opacity-50"
                       >
                         {feedingAll ? "🌱 Đang Cho Ăn..." : "🌱 Cho Ăn Tất Cả"}
                       </button>
@@ -1144,7 +1194,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         type="button"
                         disabled={actionLoading || unequippingAll || equippedBugCount === 0}
                         onClick={handleUnequipAllClick}
-                        className="text-[10px] font-bold py-1 px-2.5 bg-amber-950/20 text-amber-400 border border-amber-900 hover:bg-amber-950/40 rounded-lg font-mono transition-all cursor-pointer disabled:opacity-50"
+                        className="text-[10px] font-bold py-1 px-2.5 bg-amber-950/20 text-amber-400 border border-amber-900 hover:bg-amber-950/40 rounded-lg font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer disabled:opacity-50"
                       >
                         {unequippingAll ? "🛡️ Đang Tháo..." : "🛡️ Tháo Tất Cả"}
                       </button>
@@ -1156,7 +1206,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         onClick={async () => {
                           await useGameStore.getState().depositAllHealthyGus();
                         }}
-                        className="text-[10px] font-bold py-1 px-2.5 bg-amber-950/20 text-amber-400 border border-amber-900 hover:bg-amber-950/40 rounded-lg font-mono transition-all cursor-pointer disabled:opacity-50"
+                        className="text-[10px] font-bold py-1 px-2.5 bg-amber-950/20 text-amber-400 border border-amber-900 hover:bg-amber-950/40 rounded-lg font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer disabled:opacity-50"
                         title="Chuyển tất cả phàm cổ lành lặn không trang bị vào đàn nuôi dưỡng Tiên Khiếu"
                       >
                         📥 Thả Vào Đàn
@@ -1168,7 +1218,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         onClick={() => {
                           setIsBatchMode(true);
                         }}
-                        className="text-[10px] font-bold py-1 px-2.5 bg-rose-950/20 text-rose-400 border border-rose-900 hover:bg-rose-950/40 rounded-lg font-mono transition-all cursor-pointer"
+                        className="text-[10px] font-bold py-1 px-2.5 bg-rose-950/20 text-rose-400 border border-rose-900 hover:bg-rose-950/40 rounded-lg font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                       >
                         🗑️ Thả Hàng Loạt
                       </button>
@@ -1239,7 +1289,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                         setInspectedGroupKey(group.groupKey);
                       }
                     }}
-                    className={`group relative aspect-square w-full rounded-2xl border-2 p-1.5 flex flex-col items-center justify-center transition-all cursor-pointer select-none overflow-hidden ${
+                    className={`group relative aspect-square w-full rounded-2xl border-2 p-1.5 flex flex-col items-center justify-center transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer select-none overflow-hidden ${
                       isSelected
                         ? "border-amber-400 ring-2 ring-amber-400/90 bg-amber-950/40 shadow-[0_0_18px_rgba(251,191,36,0.5)] scale-[1.04]"
                         : isCriticallyDamaged
@@ -1337,7 +1387,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                           title={`Độ no: ${Math.round(minHunger)}/${maxHunger} (${Math.round(hungerPercent)}%)`}
                         >
                           <div
-                            className={`h-full rounded-full transition-all duration-300 ${
+                            className={`h-full rounded-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${
                               hungerPercent < 20
                                 ? "bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)] animate-pulse"
                                 : hungerPercent < 50
@@ -1356,7 +1406,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                           title={`Độ bền: ${Math.round(minDurability)}/100`}
                         >
                           <div
-                            className={`h-full rounded-full transition-all duration-300 ${
+                            className={`h-full rounded-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${
                               minDurability < 20
                                 ? "bg-rose-600 animate-pulse shadow-[0_0_6px_rgba(225,29,72,0.8)]"
                                 : minDurability < 50
@@ -1473,7 +1523,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                     return (
                       <div
                         key={groupKey}
-                        className={`p-3 sm:p-5 rounded-2xl border transition-all ${cardStyle}`}
+                        className={`p-3 sm:p-5 rounded-2xl border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${cardStyle}`}
                       >
                         {/* Summary Header */}
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -1579,7 +1629,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                       <span className="text-[10px] text-zinc-400 font-mono font-medium">Độ no:</span>
                                       <div className="w-16 sm:w-24 h-2 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
                                         <div
-                                          className={`h-full rounded-full transition-all duration-300 ${
+                                          className={`h-full rounded-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${
                                             hungerPercent < 20
                                               ? "bg-rose-500 animate-pulse"
                                               : hungerPercent < 50
@@ -1638,7 +1688,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                   : availableResource
                                     ? `Cho ăn tất cả con đang đói. Mỗi lần cần: ${availableResource.cost} ${availableResource.label} (Sở hữu: ${Math.floor(availableResource.balance)})`
                                     : `Cho ăn tất cả con đang đói. Cần: ${foodName} (Sở hữu: ${availableFood})`}
-                                className={`text-[9px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1 transition-all cursor-pointer font-mono ${
+                                className={`text-[9px] font-bold py-1.5 px-3 rounded-xl flex items-center gap-1 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-mono ${
                                   canFeedGroup
                                     ? "bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.96] shadow-[0_0_8px_rgba(16,185,129,0.2)]"
                                     : "bg-zinc-900 text-zinc-650 border border-zinc-850"
@@ -1656,7 +1706,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                   setUseMultipleGuGroupKey(groupKey);
                                   setUseMultipleGuQty(1);
                                 }}
-                                className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-amber-950/20 text-amber-400 border border-amber-900 hover:bg-amber-950/40 font-mono transition-all cursor-pointer"
+                                className="text-[9px] font-bold py-1.5 px-3 rounded-xl bg-amber-950/20 text-amber-400 border border-amber-900 hover:bg-amber-950/40 font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                               >
                                 ✨ Sử dụng nhiều
                               </button>
@@ -1772,7 +1822,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                               <button
                                 type="button"
                                 onClick={() => toggleGroupExpand(groupKey)}
-                                className="text-[9px] py-1.5 px-3 bg-zinc-900 hover:bg-zinc-850 text-zinc-350 hover:text-zinc-150 border border-zinc-800 rounded-xl font-mono transition-all flex items-center gap-1 cursor-pointer"
+                                className="text-[9px] py-1.5 px-3 bg-zinc-900 hover:bg-zinc-850 text-zinc-350 hover:text-zinc-150 border border-zinc-800 rounded-xl font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1 cursor-pointer"
                               >
                                 <span>{isExpanded ? "Thu gọn" : "Chi tiết"}</span>
                                 {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1836,7 +1886,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                 type="button"
                                 onClick={() => handleUseMultipleGus(groupKey, instances)}
                                 disabled={actionLoading || usingGuId === "batch"}
-                                className="text-[9px] font-bold py-1 px-2.5 bg-amber-600 text-white hover:bg-amber-500 rounded font-mono transition-all cursor-pointer shadow-[0_0_8px_rgba(245,158,11,0.2)]"
+                                className="text-[9px] font-bold py-1 px-2.5 bg-amber-600 text-white hover:bg-amber-500 rounded font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shadow-[0_0_8px_rgba(245,158,11,0.2)]"
                               >
                                 {usingGuId === "batch" ? "Đang sử dụng..." : "Xác nhận"}
                               </button>
@@ -1898,7 +1948,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                         setTimeout(() => setCopiedId(null), 2000);
                                         useGameStore.getState().addToast(`Đã copy ID Cổ trùng: ${gu.instance_id}`, "success");
                                       }}
-                                      className="text-[10px] font-mono text-zinc-400 hover:text-amber-400 bg-zinc-900 hover:bg-amber-950/40 px-1.5 py-0.5 rounded border border-zinc-850 hover:border-amber-500/50 cursor-pointer active:scale-95 transition-all inline-flex items-center gap-1 group/id"
+                                      className="text-[10px] font-mono text-zinc-400 hover:text-amber-400 bg-zinc-900 hover:bg-amber-950/40 px-1.5 py-0.5 rounded border border-zinc-850 hover:border-amber-500/50 cursor-pointer active:scale-95 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] inline-flex items-center gap-1 group/id"
                                       title={`Click để copy full ID: ${gu.instance_id}`}
                                     >
                                       {copiedId === gu.instance_id ? (
@@ -1951,7 +2001,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                         <span className="text-[9px] text-zinc-500 font-mono">Độ no:</span>
                                         <div className="w-16 h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-850">
                                           <div
-                                            className={`h-full rounded-full transition-all duration-300 ${
+                                            className={`h-full rounded-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${
                                               hungerPercent < 20
                                                 ? "bg-rose-500 animate-pulse"
                                                 : hungerPercent < 50
@@ -1986,7 +2036,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                           }
                                           handleFeedClick(gu.instance_id);
                                         }}
-                                        className={`text-[9px] font-bold py-1 px-2.5 rounded font-mono transition-all cursor-pointer ${
+                                        className={`text-[9px] font-bold py-1 px-2.5 rounded font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                                           canFeedIndividual
                                             ? "bg-emerald-950/40 text-emerald-400 border border-emerald-900/40 hover:bg-emerald-950/60"
                                             : "bg-zinc-900/40 text-zinc-600 border border-zinc-900/60"
@@ -2119,7 +2169,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                         type="button"
                                         disabled={actionLoading || settingVitalId === gu.instance_id || gu.rank > player.rank}
                                         onClick={() => handleSetVital(gu.instance_id, spec.name)}
-                                        className={`text-[9px] py-1 px-2.5 rounded font-mono font-bold transition-all cursor-pointer ${
+                                        className={`text-[9px] py-1 px-2.5 rounded font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                                           gu.rank > player.rank
                                             ? "bg-zinc-950/20 text-zinc-600 border border-zinc-950/40 cursor-not-allowed opacity-50"
                                             : "bg-amber-950/30 text-amber-400 border border-amber-900/40 hover:bg-amber-950/50"
@@ -2139,7 +2189,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                               type="button"
                                               disabled={actionLoading || statusUpdatingId === gu.instance_id}
                                               onClick={() => handleStatusUpdate(gu.instance_id, "SLEEPING")}
-                                              className="text-[9px] font-bold py-1 px-2.5 bg-zinc-950/50 text-amber-500 border border-zinc-900 hover:bg-zinc-900 rounded font-mono transition-all cursor-pointer"
+                                              className="text-[9px] font-bold py-1 px-2.5 bg-zinc-950/50 text-amber-500 border border-zinc-900 hover:bg-zinc-900 rounded font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                                             >
                                               {statusUpdatingId === gu.instance_id ? "..." : "💤 Ngủ"}
                                             </button>
@@ -2147,7 +2197,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                               type="button"
                                               disabled={actionLoading || statusUpdatingId === gu.instance_id}
                                               onClick={() => handleStatusUpdate(gu.instance_id, "SEALED")}
-                                              className="text-[9px] font-bold py-1 px-2.5 bg-zinc-950/50 text-cyan-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono transition-all cursor-pointer"
+                                              className="text-[9px] font-bold py-1 px-2.5 bg-zinc-950/50 text-cyan-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                                             >
                                               {statusUpdatingId === gu.instance_id ? "..." : "🔒 Phong Ấn"}
                                             </button>
@@ -2159,7 +2209,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                               type="button"
                                               disabled={actionLoading || statusUpdatingId === gu.instance_id}
                                               onClick={() => handleStatusUpdate(gu.instance_id, "ACTIVE")}
-                                              className="text-[9px] font-bold py-1 px-2.5 bg-zinc-950/50 text-emerald-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono transition-all cursor-pointer"
+                                              className="text-[9px] font-bold py-1 px-2.5 bg-zinc-950/50 text-emerald-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                                             >
                                               {statusUpdatingId === gu.instance_id ? "..." : "☀️ Tỉnh"}
                                             </button>
@@ -2167,7 +2217,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                               type="button"
                                               disabled={actionLoading || statusUpdatingId === gu.instance_id}
                                               onClick={() => handleStatusUpdate(gu.instance_id, "SEALED")}
-                                              className="text-[9px] font-bold py-1 px-2.5 bg-zinc-950/50 text-cyan-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono transition-all cursor-pointer"
+                                              className="text-[9px] font-bold py-1 px-2.5 bg-zinc-950/50 text-cyan-400 border border-zinc-900 hover:bg-zinc-900 rounded font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                                             >
                                               {statusUpdatingId === gu.instance_id ? "..." : "🔒 Phong Ấn"}
                                             </button>
@@ -2180,7 +2230,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                     <button
                                       type="button"
                                       onClick={() => setDetailOpen(prev => ({...prev, [gu.instance_id]: !prev[gu.instance_id]}))}
-                                      className="text-[9px] font-bold py-1 px-2 bg-zinc-950/50 text-zinc-400 border border-zinc-800 hover:bg-zinc-900 hover:text-zinc-300 rounded font-mono transition-all cursor-pointer"
+                                      className="text-[9px] font-bold py-1 px-2 bg-zinc-950/50 text-zinc-400 border border-zinc-800 hover:bg-zinc-900 hover:text-zinc-300 rounded font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                                       title="Xem chi tiết"
                                     >
                                       {detailOpen[gu.instance_id] ? "▲" : "▼"}
@@ -2351,7 +2401,13 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
             onClick={() => setInspectedGroupKey(null)}
           >
             <div
-              className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-zinc-950 border border-amber-500/35 rounded-3xl p-4 sm:p-6 shadow-[0_0_40px_rgba(245,158,11,0.2)] text-left space-y-4"
+              ref={inspectedDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Thông tin ${spec.name}`}
+              tabIndex={-1}
+              onKeyDown={inspectedDialogKeyDown}
+              className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto overscroll-contain bg-zinc-950 border border-amber-500/35 rounded-3xl p-4 sm:p-6 shadow-[0_0_40px_rgba(245,158,11,0.2)] text-left space-y-4"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -2411,7 +2467,8 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                 <button
                   type="button"
                   onClick={() => setInspectedGroupKey(null)}
-                  className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  aria-label={`Đóng thông tin ${spec.name}`}
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
                   title="Đóng"
                 >
                   <X className="w-4 h-4" />
@@ -2440,7 +2497,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                     </div>
                     <div className="h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
                       <div
-                        className={`h-full rounded-full transition-all duration-300 ${
+                        className={`h-full rounded-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${
                           (singleGu ? singleGu.hunger : minHunger) / spec.max_hunger < 0.2
                             ? "bg-rose-500 animate-pulse"
                             : (singleGu ? singleGu.hunger : minHunger) / spec.max_hunger < 0.5
@@ -2474,7 +2531,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                       </div>
                       <div className="h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
                         <div
-                          className={`h-full rounded-full transition-all duration-300 ${
+                          className={`h-full rounded-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${
                             isFullyRefined
                               ? "bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]"
                               : "bg-gradient-to-r from-purple-500 to-pink-500"
@@ -2509,7 +2566,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                       </div>
                       <div className="h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
                         <div
-                          className={`h-full rounded-full transition-all duration-300 ${
+                          className={`h-full rounded-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${
                             currentDur < 20 || isDamagedState
                               ? "bg-rose-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.6)]"
                               : currentDur < 50
@@ -2589,7 +2646,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                             }
                             handleFeedClick(singleGu.instance_id);
                           }}
-                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                             canFeedIndividual
                               ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.3)] active:scale-95 cursor-pointer"
                               : "bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed opacity-60"
@@ -2612,7 +2669,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                               setSubjugatingId(null);
                             }
                           }}
-                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                             canVitalSuppress
                               ? "bg-gradient-to-r from-purple-700 to-amber-600 hover:from-purple-600 hover:to-amber-500 text-white shadow-[0_0_12px_rgba(245,158,11,0.4)]"
                               : player.current_mana >= subjugateManaCost
@@ -2642,7 +2699,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                               setNourishingId(null);
                             }
                           }}
-                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                             player.current_mana >= nourishManaCost
                               ? "bg-cyan-700 hover:bg-cyan-600 text-white shadow-[0_0_10px_rgba(6,182,212,0.3)]"
                               : "bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed opacity-60"
@@ -2670,7 +2727,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                               setRepairingId(null);
                             }
                           }}
-                          className="py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-rose-700 hover:bg-rose-600 text-white shadow-[0_0_12px_rgba(244,63,94,0.4)]"
+                          className="py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer bg-rose-700 hover:bg-rose-600 text-white shadow-[0_0_12px_rgba(244,63,94,0.4)]"
                           title={`Tu bổ Cổ trùng trọng thương về 50.0 độ bền (Tốn ${repairManaCost} Chân Nguyên)`}
                         >
                           {repairingId === singleGu.instance_id
@@ -2697,7 +2754,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                             }
                             handleEquipClick(singleGu.instance_id, !singleGu.equipped);
                           }}
-                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                             singleGu.equipped
                               ? "bg-amber-950/40 text-amber-300 border border-amber-500/40 hover:bg-amber-900/50"
                               : isUnrefined || isDamaged
@@ -2743,7 +2800,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                               ? "Cần tu bổ trước"
                               : ""
                           }
-                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          className={`py-2 px-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-1.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                             singleGu.rank > player.rank || isUnrefined || isDamaged
                               ? "bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed opacity-50"
                               : "bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_10px_rgba(245,158,11,0.3)]"
@@ -2759,7 +2816,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                           type="button"
                           disabled={actionLoading || usingGuId === singleGu.instance_id || !canAct}
                           onClick={() => handleUseGu(singleGu.instance_id)}
-                          className="py-2 px-3 rounded-xl font-mono text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-[0_0_10px_rgba(245,158,11,0.3)]"
+                          className="py-2 px-3 rounded-xl font-mono text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white flex items-center justify-center gap-1.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shadow-[0_0_10px_rgba(245,158,11,0.3)]"
                         >
                           {usingGuId === singleGu.instance_id ? "..." : "✨ Sử Dụng"}
                         </button>
@@ -2771,7 +2828,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                           type="button"
                           disabled={actionLoading || !canAct || usingGuId === singleGu.instance_id}
                           onClick={() => handleUseSupportGu(singleGu.instance_id)}
-                          className="py-2 px-3 rounded-xl font-mono text-xs font-bold bg-emerald-700 hover:bg-emerald-600 text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          className="py-2 px-3 rounded-xl font-mono text-xs font-bold bg-emerald-700 hover:bg-emerald-600 text-white flex items-center justify-center gap-1.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                         >
                           {usingGuId === singleGu.instance_id ? "..." : "🌿 Dùng Hồi Máu"}
                         </button>
@@ -2792,7 +2849,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                               setDroppingId(null);
                             }
                           }}
-                          className="py-2 px-3 rounded-xl font-mono text-xs font-bold bg-rose-950/40 text-rose-300 border border-rose-900/60 hover:bg-rose-900/50 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          className="py-2 px-3 rounded-xl font-mono text-xs font-bold bg-rose-950/40 text-rose-300 border border-rose-900/60 hover:bg-rose-900/50 flex items-center justify-center gap-1.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                         >
                           {droppingId === singleGu.instance_id ? "..." : "🗑️ Thả Cổ"}
                         </button>
@@ -2825,7 +2882,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                             }
                             handleFeedGroupClick(inspectedGroup.guId, spec.rank);
                           }}
-                          className={`py-1.5 px-3 rounded-xl font-mono text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                          className={`py-1.5 px-3 rounded-xl font-mono text-xs font-bold flex items-center gap-1.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                             canFeedGroup
                               ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.3)]"
                               : "bg-zinc-900 text-zinc-600 border border-zinc-800 cursor-not-allowed opacity-60"
@@ -2848,7 +2905,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                 const target = eligible[0];
                                 if (target) void handleUseGu(target.instance_id);
                               }}
-                              className="py-1.5 px-3 rounded-xl font-mono text-xs font-bold flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_10px_rgba(245,158,11,0.3)] transition-all cursor-pointer disabled:opacity-50"
+                              className="py-1.5 px-3 rounded-xl font-mono text-xs font-bold flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_10px_rgba(245,158,11,0.3)] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer disabled:opacity-50"
                             >
                               {usingGuId && instances.some((g) => g.instance_id === usingGuId) ? "..." : "✨ Dùng 1 Con"}
                             </button>
@@ -2861,7 +2918,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                   );
                                   setUseMultipleGuQty(eligible.length);
                                 }}
-                                className="py-1.5 px-3 rounded-xl font-mono text-xs font-bold flex items-center gap-1.5 bg-amber-950/40 text-amber-300 border border-amber-600/40 hover:bg-amber-900/50 transition-all cursor-pointer"
+                                className="py-1.5 px-3 rounded-xl font-mono text-xs font-bold flex items-center gap-1.5 bg-amber-950/40 text-amber-300 border border-amber-600/40 hover:bg-amber-900/50 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                               >
                                 ✨ Dùng Nhiều
                               </button>
@@ -2898,7 +2955,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                           type="button"
                           onClick={() => handleUseMultipleGus(inspectedGroup.groupKey, instances)}
                           disabled={actionLoading || usingGuId === "batch"}
-                          className="text-[10px] font-bold py-1 px-3 bg-amber-600 text-white hover:bg-amber-500 rounded font-mono transition-all cursor-pointer shadow-[0_0_8px_rgba(245,158,11,0.2)]"
+                          className="text-[10px] font-bold py-1 px-3 bg-amber-600 text-white hover:bg-amber-500 rounded font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shadow-[0_0_8px_rgba(245,158,11,0.2)]"
                         >
                           {usingGuId === "batch" ? "Đang sử dụng..." : "Xác nhận"}
                         </button>
@@ -2950,7 +3007,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                 type="button"
                                 disabled={actionLoading || usingGuId === gu.instance_id}
                                 onClick={() => handleUseGu(gu.instance_id)}
-                                className="py-1 px-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-mono text-[10px] font-bold shadow-[0_0_8px_rgba(245,158,11,0.3)] transition-all cursor-pointer disabled:opacity-50"
+                                className="py-1 px-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-mono text-[10px] font-bold shadow-[0_0_8px_rgba(245,158,11,0.3)] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer disabled:opacity-50"
                               >
                                 {usingGuId === gu.instance_id ? "..." : "Sử Dụng"}
                               </button>
@@ -3053,13 +3110,20 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
             onClick={() => setInspectedMaterialKey(null)}
           >
             <div
-              className="relative w-full max-w-md bg-zinc-950 border border-sky-500/35 rounded-3xl p-5 sm:p-6 shadow-[0_0_40px_rgba(14,165,233,0.2)] text-left space-y-4"
+              ref={inspectedDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Thông tin ${spec.name}`}
+              tabIndex={-1}
+              onKeyDown={inspectedDialogKeyDown}
+              className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain bg-zinc-950 border border-sky-500/35 rounded-3xl p-5 sm:p-6 shadow-[0_0_40px_rgba(14,165,233,0.2)] text-left space-y-4"
               onClick={(e) => e.stopPropagation()}
             >
               <button
                 type="button"
                 onClick={() => setInspectedMaterialKey(null)}
-                className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 p-1.5 rounded-xl hover:bg-zinc-900 cursor-pointer"
+                aria-label={`Đóng thông tin ${spec.name}`}
+                className="absolute top-4 right-4 flex min-h-11 min-w-11 items-center justify-center text-zinc-500 hover:text-zinc-200 rounded-xl hover:bg-zinc-900 cursor-pointer"
                 title="Đóng"
               >
                 <X className="w-5 h-5" />
@@ -3122,7 +3186,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                           if (qty <= 1) setInspectedMaterialKey(null);
                         }}
                         disabled={actionLoading || isUsing}
-                        className={`py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs transition-all shadow-md active:scale-98 cursor-pointer disabled:opacity-50 ${qty === 1 || !onUseItems ? "col-span-2" : ""}`}
+                        className={`py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shadow-md active:scale-98 cursor-pointer disabled:opacity-50 ${qty === 1 || !onUseItems ? "col-span-2" : ""}`}
                       >
                         {isUsing ? "Đang Dùng..." : "Sử Dụng 1"}
                       </button>
@@ -3136,7 +3200,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                           setUseMultipleItemQty(1);
                         }}
                         disabled={actionLoading}
-                        className="py-2.5 px-3 rounded-xl bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/40 text-amber-300 font-mono font-bold text-xs transition-all cursor-pointer"
+                        className="py-2.5 px-3 rounded-xl bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/40 text-amber-300 font-mono font-bold text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                       >
                         {useMultipleItemId === key ? "Đóng Chọn SL" : "Dùng Nhiều..."}
                       </button>
@@ -3169,7 +3233,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                           if (qty <= useMultipleItemQty) setInspectedMaterialKey(null);
                         }}
                         disabled={actionLoading}
-                        className="text-xs font-bold py-1 px-3 bg-emerald-600 text-white hover:bg-emerald-500 rounded-lg font-mono transition-all cursor-pointer shadow-md"
+                        className="text-xs font-bold py-1 px-3 bg-emerald-600 text-white hover:bg-emerald-500 rounded-lg font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shadow-md"
                       >
                         Xác Nhận
                       </button>
@@ -3194,21 +3258,21 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
         const canCoordinates = hasCapability(spec.effects, "PORTAL_CREATE");
         const range = portalRange(spec.effects, instance.rank);
         return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPortalGuId(null); }}>
-            <section role="dialog" aria-modal="true" aria-labelledby="gu-portal-title" className="w-full max-w-md rounded-xl border border-amber-700/60 bg-zinc-950 p-5 text-zinc-100 shadow-2xl">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center overscroll-contain bg-black/75 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPortalGuId(null); }}>
+            <section ref={portalDialogRef} role="dialog" aria-modal="true" aria-labelledby="gu-portal-title" tabIndex={-1} className="max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-xl border border-amber-700/60 bg-zinc-950 p-5 text-zinc-100 shadow-2xl">
               <h2 id="gu-portal-title" className="text-lg font-semibold text-amber-200">Dịch chuyển bằng {spec.name}</h2>
               <p className="mt-1 text-sm text-zinc-400">Vị trí hiện tại: ({player.x}, {player.y}) · {range > 0 ? `Tầm tối đa ${range} ô` : "Không giới hạn tầm"}</p>
               {canRandom && canCoordinates && <div className="mt-4 grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => setPortalMode("random")} className={`rounded-lg border px-3 py-2 text-sm ${portalMode === "random" ? "border-cyan-400 bg-cyan-950/60 text-cyan-200" : "border-zinc-700 text-zinc-300"}`}>Ngẫu nhiên</button>
-                <button type="button" onClick={() => setPortalMode("coordinates")} className={`rounded-lg border px-3 py-2 text-sm ${portalMode === "coordinates" ? "border-cyan-400 bg-cyan-950/60 text-cyan-200" : "border-zinc-700 text-zinc-300"}`}>Chọn tọa độ</button>
+                <button type="button" aria-pressed={portalMode === "random"} onClick={() => setPortalMode("random")} className={`min-h-11 rounded-lg border px-3 py-2 text-sm ${portalMode === "random" ? "border-cyan-400 bg-cyan-950/60 text-cyan-200" : "border-zinc-700 text-zinc-300"}`}>Ngẫu nhiên</button>
+                <button type="button" aria-pressed={portalMode === "coordinates"} onClick={() => setPortalMode("coordinates")} className={`min-h-11 rounded-lg border px-3 py-2 text-sm ${portalMode === "coordinates" ? "border-cyan-400 bg-cyan-950/60 text-cyan-200" : "border-zinc-700 text-zinc-300"}`}>Chọn tọa độ</button>
               </div>}
               {portalMode === "coordinates" && canCoordinates ? <div className="mt-4 grid grid-cols-2 gap-3">
                 <label className="text-xs text-zinc-400">Tọa độ X<input type="number" min="0" max="14999" value={portalX} onChange={(e) => setPortalX(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white" /></label>
                 <label className="text-xs text-zinc-400">Tọa độ Y<input type="number" min="0" max="9999" value={portalY} onChange={(e) => setPortalY(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm text-white" /></label>
               </div> : <p className="mt-4 rounded-lg bg-zinc-900 p-3 text-sm text-zinc-300">Cổ sẽ đưa đạo hữu đến một vị trí ngẫu nhiên hợp lệ.</p>}
               <div className="mt-5 flex justify-end gap-2">
-                <button type="button" onClick={() => setPortalGuId(null)} className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300">Hủy</button>
-                <button type="button" disabled={actionLoading || usingGuId === portalGuId || (portalMode === "coordinates" && (!Number.isInteger(Number(portalX)) || !Number.isInteger(Number(portalY)) || Number(portalX) < 0 || Number(portalX) >= 15000 || Number(portalY) < 0 || Number(portalY) >= 10000))} onClick={() => void confirmPortalTravel()} className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{usingGuId === portalGuId ? "Đang dịch chuyển…" : "Dịch chuyển"}</button>
+                <button type="button" onClick={() => setPortalGuId(null)} className="min-h-11 rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300">Hủy</button>
+                <button type="button" disabled={actionLoading || usingGuId === portalGuId || (portalMode === "coordinates" && (!Number.isInteger(Number(portalX)) || !Number.isInteger(Number(portalY)) || Number(portalX) < 0 || Number(portalX) >= 15000 || Number(portalY) < 0 || Number(portalY) >= 10000))} onClick={() => void confirmPortalTravel()} className="min-h-11 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{usingGuId === portalGuId ? "Đang dịch chuyển…" : "Dịch chuyển"}</button>
               </div>
             </section>
           </div>

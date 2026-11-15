@@ -195,7 +195,7 @@ export const LeaderboardView: React.FC = () => {
             <button
               key={cat.id}
               onClick={() => handleCategoryChange(cat.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold font-mono border transition-all cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold font-mono border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shrink-0 ${
                 isActive
                   ? `bg-${cat.color}-950/40 border-${cat.color}-500/50 text-${cat.color}-400`
                   : "bg-zinc-950/40 border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
@@ -224,7 +224,7 @@ export const LeaderboardView: React.FC = () => {
             return (
               <div
                 key={entry.player_id}
-                className={`flex items-center justify-between p-4 border rounded-2xl transition-all duration-300 ${
+                className={`flex items-center justify-between p-4 border rounded-2xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${
                   isMe
                     ? "bg-amber-950/10 border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.05)]"
                     : "bg-zinc-950/40 border-zinc-900 hover:border-zinc-800/80 hover:bg-zinc-950/60"

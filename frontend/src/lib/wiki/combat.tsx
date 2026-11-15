@@ -270,11 +270,11 @@ export const combatPages: WikiPage[] = [
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             Mỗi hiệp (turn), các nhân vật (hoặc quái vật) hành động tuần tự theo chỉ số <strong>Tốc độ (Speed)</strong>. Đơn vị có tốc độ cao hơn sẽ ra đòn trước, cho phép áp dụng khống chế hoặc khiên bảo hộ kịp thời.
           </p>
-          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs space-y-2 text-[var(--text-secondary)]">
+          <ul className="list-disc list-inside p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs space-y-2 text-[var(--text-secondary)]">
             <li>🎯 <strong>Thứ tự lượt:</strong> Xác định tự động vào đầu mỗi hiệp dựa trên tốc độ thực tế (bao gồm buff/debuff).</li>
             <li>⚡ <strong>Chân Nguyên:</strong> Mỗi Cổ trùng hoặc Sát chiêu khi kích hoạt tiêu hao Chân Nguyên tương ứng. Nếu Chân Nguyên không đủ, đòn đánh sẽ suy yếu hoặc chỉ dùng đòn đánh thường.</li>
             <li>🌪️ <strong>Sát chiêu phối hợp:</strong> Kích hoạt các hiệu ứng diện rộng (AoE), hàng ngang (Row) hoặc đơn thể theo công thức sát chiêu đã phối ngũ.</li>
-          </div>
+          </ul>
         </div>
 
         <div className="space-y-4">
@@ -282,12 +282,12 @@ export const combatPages: WikiPage[] = [
           <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
             Các hiệu ứng được kích hoạt chuẩn xác theo từng giai đoạn trong hiệp đấu:
           </p>
-          <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs space-y-2 text-[var(--text-secondary)]">
+          <ul className="list-disc list-inside p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs space-y-2 text-[var(--text-secondary)]">
             <li>🏁 <strong>ON_BATTLE_START:</strong> Kích hoạt khi vừa bước vào trận (khiên mở màn, bùa chúc phúc).</li>
             <li>🔄 <strong>ON_TURN_START:</strong> Kích hoạt ở đầu mỗi lượt của bản thân (hồi phục Chân Nguyên, độc tố phát tác).</li>
             <li>💥 <strong>ON_ACTION / ON_CAST:</strong> Kích hoạt khi thực hiện công kích hoặc thi triển sát chiêu.</li>
             <li>🛡️ <strong>POST_ACTION:</strong> Phản đòn, hút máu, hoặc tích tụ hộ thuẫn sau khi công kích.</li>
-          </div>
+          </ul>
         </div>
 
         <div className="space-y-4">

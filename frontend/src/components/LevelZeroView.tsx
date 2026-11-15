@@ -131,21 +131,22 @@ export const LevelZeroView: React.FC<LevelZeroViewProps> = ({ onComplete }) => {
         </p>
       </div>
 
-      <div className="flex items-center justify-center gap-1.5 mb-6">
+      <div role="group" aria-label="Chọn bước hướng dẫn" className="mx-auto mb-6 flex max-w-[220px] flex-wrap items-center justify-center gap-1">
         {STEPS.map((_, i) => (
           <button
             key={i}
             type="button"
             aria-label={`Bước ${i + 1}`}
+            aria-current={i === step ? "step" : undefined}
             onClick={() => setStep(i)}
-            className={`h-1.5 rounded-full transition-all ${
-              i === step ? "w-8 bg-amber-400" : "w-3 bg-zinc-800"
-            }`}
-          />
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
+          >
+            <span aria-hidden="true" className={`h-1.5 rounded-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${i === step ? "w-8 bg-amber-400" : "w-3 bg-zinc-800"}`} />
+          </button>
         ))}
       </div>
 
-      <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/20 text-zinc-200 min-h-[190px]">
+      <div aria-live="polite" className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/20 text-zinc-200 min-h-[190px]">
         <div className="flex items-center gap-2 mb-3">
           <CurrentIcon className="w-5 h-5 text-amber-400" />
           <h3 className="font-serif font-bold text-amber-300">{STEPS[step].heading}</h3>
@@ -158,7 +159,7 @@ export const LevelZeroView: React.FC<LevelZeroViewProps> = ({ onComplete }) => {
           type="button"
           onClick={() => setStep((s) => Math.max(0, s - 1))}
           disabled={step === 0}
-          className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-30 cursor-pointer disabled:cursor-default"
+          className="inline-flex min-h-11 items-center gap-1 px-3 py-2 rounded-xl text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-30 cursor-pointer disabled:cursor-default"
         >
           <ChevronLeft className="w-4 h-4" /> Trước
         </button>
@@ -167,7 +168,7 @@ export const LevelZeroView: React.FC<LevelZeroViewProps> = ({ onComplete }) => {
           <button
             type="button"
             onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
-            className="inline-flex items-center gap-1 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 text-zinc-950 text-xs font-bold tracking-wide hover:from-amber-500 hover:to-yellow-500 cursor-pointer"
+            className="inline-flex min-h-11 items-center gap-1 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 text-zinc-950 text-xs font-bold tracking-wide hover:from-amber-500 hover:to-yellow-500 cursor-pointer"
           >
             Tiếp <ChevronRight className="w-4 h-4" />
           </button>
@@ -176,7 +177,7 @@ export const LevelZeroView: React.FC<LevelZeroViewProps> = ({ onComplete }) => {
             type="button"
             onClick={handleFinish}
             disabled={isFinishing}
-            className="inline-flex items-center gap-1 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-zinc-950 text-xs font-bold tracking-wide hover:from-emerald-500 hover:to-teal-500 cursor-pointer disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-1 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-zinc-950 text-xs font-bold tracking-wide hover:from-emerald-500 hover:to-teal-500 cursor-pointer disabled:opacity-50"
           >
             <Sparkles className="w-4 h-4" />
             {isFinishing ? "Đang thức tỉnh..." : "Thức Tỉnh Không Khiếu"}

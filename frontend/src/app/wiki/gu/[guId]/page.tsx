@@ -102,7 +102,7 @@ function GuStatBar({ label, value, max }: { label: string; value: number; max: n
       <span className="w-24 text-[var(--text-secondary)] font-mono shrink-0">{label}</span>
       <div className="flex-1 h-2 rounded-full bg-[var(--bg-card)] overflow-hidden">
         <div
-          className="h-full rounded-full bg-emerald-600/60 transition-all"
+          className="h-full rounded-full bg-emerald-600/60 transition-[width]"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -238,13 +238,13 @@ function GuPageContent({ gu, itemMap }: { gu: GuDictionaryItem; itemMap: Record<
                     <Link
                       key={food}
                       href={`/wiki?tab=items&search=${encodeURIComponent(foodName)}`}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/25 hover:bg-rose-900/40 text-xs text-rose-300 hover:text-rose-200 font-mono border border-rose-500/20 hover:border-rose-400/40 transition-all cursor-pointer shadow-sm group"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/25 hover:bg-rose-900/40 text-xs text-rose-300 hover:text-rose-200 font-mono border border-rose-500/20 hover:border-rose-400/40 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shadow-sm group"
                       title={item ? `${item.name} (${item.item_type || "Vật phẩm"})` : food}
                     >
                       <span className="group-hover:scale-110 transition-transform">🍖</span>
                       <span className="font-semibold">{foodName}</span>
                       {item && item.rank && item.rank > 0 && (
-                        <span className="text-[10px] text-rose-400/70 font-normal ml-0.5">
+                        <span className="text-[10px] text-rose-300 font-normal ml-0.5">
                           · Cấp {item.rank}
                         </span>
                       )}
@@ -260,7 +260,7 @@ function GuPageContent({ gu, itemMap }: { gu: GuDictionaryItem; itemMap: Record<
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
             <Link
               href={`/wiki?tab=recipes&search=${encodeURIComponent(gu.name)}`}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-950/20 hover:bg-amber-900/30 text-xs text-amber-300 hover:text-amber-200 font-mono border border-amber-500/20 hover:border-amber-400/40 transition-all"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-950/20 hover:bg-amber-900/30 text-xs text-amber-300 hover:text-amber-200 font-mono border border-amber-500/20 hover:border-amber-400/40 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
             >
               <span>📜</span>
               <span>Tìm Cổ phương luyện {gu.name}</span>

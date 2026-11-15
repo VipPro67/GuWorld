@@ -388,7 +388,7 @@ export function GuHousePanel() {
                     </div>
                     <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
                       <div
-                        className={`h-full transition-all ${
+                        className={`h-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                           house.current_durability < 40 ? "bg-red-500" : "bg-emerald-500"
                         }`}
                         style={{ width: `${house.current_durability}%` }}

@@ -79,7 +79,7 @@ const baseClasses = [
   "inline-flex items-center justify-center gap-1.5",
   "font-semibold font-serif",
   "rounded-lg",
-  "transition-all duration-200",
+  "transition-[color,background-color,border-color,box-shadow,transform,filter] duration-200",
   "cursor-pointer",
   "active:scale-[0.98]",
   "focus:outline-none focus:ring-2 focus:ring-brand/50 focus:ring-offset-2 focus:ring-offset-bg-primary",

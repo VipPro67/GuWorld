@@ -177,7 +177,7 @@ function TeamCombatant({
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-black/70">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-amber-600 via-amber-400 to-yellow-300 transition-all duration-500"
+              className="h-full rounded-full bg-gradient-to-r from-amber-600 via-amber-400 to-yellow-300 transition-[width] duration-500"
               style={{ width: `${formHpPercent}%` }}
             />
           </div>
@@ -189,14 +189,14 @@ function TeamCombatant({
         <span className="font-mono text-zinc-200"><Num value={Math.round(hp)} /><span className="text-zinc-600"> / </span><Num value={Math.round(maxHP)} /></span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-black/70">
-        <div className="h-full rounded-full bg-gradient-to-r from-rose-700 via-rose-500 to-rose-300 transition-all duration-500" style={{ width: `${hpPercent}%` }} />
+        <div className="h-full rounded-full bg-gradient-to-r from-rose-700 via-rose-500 to-rose-300 transition-[width] duration-500" style={{ width: `${hpPercent}%` }} />
       </div>
       <div className="mb-1.5 mt-3 flex items-center justify-between text-[11px] text-zinc-500">
         <span className="flex items-center gap-1.5"><Zap className="h-3.5 w-3.5 text-sky-400" /> Chân nguyên</span>
         <span className="font-mono text-zinc-300"><Num value={Math.round(mana)} /><span className="text-zinc-700"> / </span><Num value={Math.round(maxMana)} /></span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-black/70">
-        <div className="h-full rounded-full bg-gradient-to-r from-sky-700 to-cyan-300 transition-all duration-500" style={{ width: `${manaPercent}%` }} />
+        <div className="h-full rounded-full bg-gradient-to-r from-sky-700 to-cyan-300 transition-[width] duration-500" style={{ width: `${manaPercent}%` }} />
       </div>
     </button>
   );

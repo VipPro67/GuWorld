@@ -33,7 +33,7 @@ const inputBaseClasses = [
   "text-text-primary",
   "placeholder:text-zinc-600",
   "rounded-xl",
-  "transition-all duration-200",
+  "transition-[color,background-color,border-color,box-shadow] duration-200",
   "focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand focus:ring-offset-0",
   "disabled:opacity-50 disabled:cursor-not-allowed",
   "hover:border-zinc-700",
@@ -192,7 +192,7 @@ export const GameTextarea = forwardRef<HTMLTextAreaElement, GameTextareaProps>(
             "text-text-primary",
             "placeholder:text-zinc-600",
             "rounded-xl",
-            "transition-all duration-200",
+            "transition-[color,background-color,border-color,box-shadow] duration-200",
             "focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand focus:ring-offset-0",
             "disabled:opacity-50 disabled:cursor-not-allowed",
             "hover:border-zinc-700",
@@ -288,7 +288,7 @@ export const GameSelect = forwardRef<HTMLSelectElement, GameSelectProps>(
             "border border-zinc-800",
             "text-text-primary",
             "rounded-xl",
-            "transition-all duration-200",
+            "transition-[color,background-color,border-color,box-shadow] duration-200",
             "focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand focus:ring-offset-0",
             "disabled:opacity-50 disabled:cursor-not-allowed",
             "hover:border-zinc-700",
@@ -413,7 +413,7 @@ export const GameRadioGroup = ({
             key={opt.value}
             className={[
               "flex items-center gap-2 cursor-pointer",
-              "p-3 rounded-xl border transition-all",
+              "p-3 rounded-xl border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]",
               "bg-zinc-900/50",
               value === opt.value
                 ? "border-brand/50 bg-brand-dim/30"

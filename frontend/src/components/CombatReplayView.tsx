@@ -13,6 +13,7 @@ import { FormattedText } from "./FormattedText";
 import { translateMastery, masteryKeyForPoints } from "@/lib/translate";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 import { MonsterSprite } from "@/components/MonsterSprite";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
 export interface StatModSource {
   key: string;
@@ -762,6 +763,11 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
     c.maxHp > 0 ? Math.max(0, Math.min(100, (c.hp / c.maxHp) * 100)) : 0;
 
   const [detailCombatant, setDetailCombatant] = React.useState<CombatantState | null>(null);
+  const { dialogRef: detailDialogRef, onKeyDown: detailDialogKeyDown } = useAccessibleDialog<HTMLDivElement>(
+    () => setDetailCombatant(null),
+    Boolean(detailCombatant),
+    detailCombatant?.id
+  );
   const [isVitalStatsExpanded, setIsVitalStatsExpanded] = React.useState(false);
   const [isDaoMarksExpanded, setIsDaoMarksExpanded] = React.useState(false);
   const [isPathMasteriesExpanded, setIsPathMasteriesExpanded] = React.useState(false);
@@ -796,7 +802,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               : isAlly
                 ? `border-emerald-800/50 bg-gradient-to-b from-emerald-950/30 to-zinc-950/90 shadow-sm ${borderGlow}`
                 : `border-rose-800/50 bg-gradient-to-b from-rose-950/30 to-zinc-950/90 shadow-sm ${borderGlow}`
-        } aspect-square min-w-0 overflow-hidden flex flex-col items-center gap-1 p-1.5 sm:p-2 relative text-left transition-all ${c ? "cursor-pointer hover:brightness-125 hover:border-zinc-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400" : "cursor-default"}`}
+        } aspect-square min-w-0 overflow-hidden flex flex-col items-center gap-1 p-1.5 sm:p-2 relative text-left transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${c ? "cursor-pointer hover:brightness-125 hover:border-zinc-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400" : "cursor-default"}`}
       >
         {c ? (
           <>
@@ -827,7 +833,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                 <span className="truncate text-zinc-200 font-bold"><Num value={Math.round(c.hp)} /> / <Num value={Math.round(c.maxHp)} /></span>
               </div>
               <div className="w-full h-2 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
-                <div className={`h-full rounded-full transition-all duration-300 ${c.hp <= 0 ? "bg-zinc-700" : isAlly ? "bg-gradient-to-r from-emerald-600 to-emerald-400" : "bg-gradient-to-r from-rose-600 to-rose-400"}`} style={{ width: `${pct}%` }} />
+                <div className={`h-full rounded-full transition-[width] duration-300 ${c.hp <= 0 ? "bg-zinc-700" : isAlly ? "bg-gradient-to-r from-emerald-600 to-emerald-400" : "bg-gradient-to-r from-rose-600 to-rose-400"}`} style={{ width: `${pct}%` }} />
               </div>
               <div className="mt-1 flex items-center justify-around gap-0.5 text-[7px] sm:text-[8px] font-mono text-zinc-400" aria-label="Chỉ số chiến đấu hiện tại">
                 <span title={`Công hiện tại: ${Math.round(c.damage)}`} className="text-rose-300">⚔ <Num value={Math.round(c.damage)} /></span>
@@ -874,7 +880,13 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
         onClick={() => setDetailCombatant(null)}
       >
         <div
-          className={`bg-zinc-900 border ${isAlly ? 'border-emerald-800/50' : 'border-rose-800/50'} rounded-2xl p-5 shadow-2xl max-h-full max-w-sm w-full mx-4 overflow-y-auto`}
+          ref={detailDialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Thông tin ${c.name}`}
+          tabIndex={-1}
+          onKeyDown={detailDialogKeyDown}
+          className={`bg-zinc-900 border ${isAlly ? 'border-emerald-800/50' : 'border-rose-800/50'} rounded-2xl p-5 shadow-2xl max-h-[90dvh] max-w-sm w-full mx-4 overflow-y-auto overscroll-contain`}
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-3">
@@ -891,8 +903,10 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               <h3 className={`text-base font-bold ${isAlly ? 'text-emerald-300' : 'text-rose-300'}`}>{c.name}</h3>
             </div>
             <button
+              type="button"
               onClick={() => setDetailCombatant(null)}
-              className="text-zinc-600 hover:text-zinc-300 text-lg leading-none"
+              aria-label={`Đóng thông tin ${c.name}`}
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-800 hover:text-zinc-300 text-lg leading-none"
             >
               ✕
             </button>
@@ -1144,7 +1158,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             <button
               key={s}
               onClick={() => setSpeed(s)}
-              className={`px-2 py-1 rounded text-xs font-bold transition-all ${speed === s ? 'bg-cyan-900/50 text-cyan-300 border border-cyan-800' : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700'}`}
+              className={`px-2 py-1 rounded text-xs font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${speed === s ? 'bg-cyan-900/50 text-cyan-300 border border-cyan-800' : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700'}`}
             >
               {s}x
             </button>
@@ -1158,7 +1172,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           </button>
           <button
             onClick={handleTogglePlay}
-            className={`px-3 py-1 rounded text-xs font-bold transition-all ${state.isPlaying ? 'bg-amber-900/50 text-amber-300 border border-amber-800' : 'bg-purple-900/50 text-purple-300 border border-purple-800 hover:bg-purple-800/50'}`}
+            className={`px-3 py-1 rounded text-xs font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${state.isPlaying ? 'bg-amber-900/50 text-amber-300 border border-amber-800' : 'bg-purple-900/50 text-purple-300 border border-purple-800 hover:bg-purple-800/50'}`}
           >
             {state.isPlaying ? <Pause className="w-3.5 h-3.5 inline" /> : <Play className="w-3.5 h-3.5 inline" />}
             {state.isPlaying ? ' Tạm dừng' : isCompleted ? ' Phát lại' : ' Phát'}
@@ -1180,7 +1194,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           </div>
           <div className="h-3 w-full bg-zinc-900 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all"
+              className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-[width]"
               style={{ width: `${state.apertureMaxHp > 0 ? Math.max(0, Math.min(100, (state.apertureHp / state.apertureMaxHp) * 100)) : 0}%` }}
             />
           </div>
@@ -1265,7 +1279,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
       {isCompleted && (
         <button
           onClick={onBack}
-          className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold py-3 rounded-xl transition-all"
+          className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold py-3 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
         >
           Trở Về
         </button>
@@ -1408,7 +1422,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             return (
               <div
                 key={idx}
-                className={`flex items-start gap-2 px-2 py-1.5 rounded-lg transition-all ${isCurrent ? 'bg-zinc-800/40 border border-zinc-700/50' : 'hover:bg-zinc-900/30'}`}
+                className={`flex items-start gap-2 px-2 py-1.5 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${isCurrent ? 'bg-zinc-800/40 border border-zinc-700/50' : 'hover:bg-zinc-900/30'}`}
               >
                 <span className={`mt-0.5 shrink-0 ${baseColor}`}>
                   {actionIcon(log.action)}

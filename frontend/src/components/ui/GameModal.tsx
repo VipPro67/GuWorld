@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback, forwardRef, useId } from "react";
+import React, { useEffect, useRef, forwardRef, useImperativeHandle, useId } from "react";
 import { createPortal } from "react-dom";
 import { GameButton } from "./GameButton";
 import { GameDisclosure } from "./GameDisclosure";
@@ -81,34 +81,55 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
     ref
   ) => {
     const titleId = useId();
-    const handleKeyDown = useCallback(
-      (e: KeyboardEvent) => {
-        if (e.key === "Escape" && closeOnEscape) {
-          onClose();
-        }
-      },
-      [closeOnEscape, onClose]
-    );
+    const modalRef = useRef<HTMLDivElement>(null);
+    const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+    useImperativeHandle(ref, () => modalRef.current as HTMLDivElement, [open]);
 
     useEffect(() => {
-      if (open) {
-        document.addEventListener("keydown", handleKeyDown);
-        if (activeGameModalCount === 0) {
-          bodyOverflowBeforeGameModal = document.body.style.overflow;
-        }
-        activeGameModalCount += 1;
-        document.body.style.overflow = "hidden";
-      }
+      if (!open) return;
+      previouslyFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (activeGameModalCount === 0) bodyOverflowBeforeGameModal = document.body.style.overflow;
+      activeGameModalCount += 1;
+      document.body.style.overflow = "hidden";
+      const frame = requestAnimationFrame(() => {
+        const firstControl = modalRef.current?.querySelector<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        (firstControl || modalRef.current)?.focus();
+      });
       return () => {
-        document.removeEventListener("keydown", handleKeyDown);
-        if (open) {
-          activeGameModalCount = Math.max(0, activeGameModalCount - 1);
-          if (activeGameModalCount === 0) {
-            document.body.style.overflow = bodyOverflowBeforeGameModal;
-          }
-        }
+        cancelAnimationFrame(frame);
+        activeGameModalCount = Math.max(0, activeGameModalCount - 1);
+        if (activeGameModalCount === 0) document.body.style.overflow = bodyOverflowBeforeGameModal;
+        if (previouslyFocusedRef.current?.isConnected) previouslyFocusedRef.current.focus();
       };
-    }, [open, handleKeyDown]);
+    }, [open]);
+
+    const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Escape" && closeOnEscape) {
+        event.stopPropagation();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = modalRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (!controls?.length) {
+        event.preventDefault();
+        modalRef.current?.focus();
+        return;
+      }
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
 
     if (!open) return null;
 
@@ -118,6 +139,8 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : "Hộp thoại"}
+        onKeyDown={handleDialogKeyDown}
       >
         <div
           className="absolute inset-0 bg-zinc-950/65 backdrop-blur-[2px] transition-opacity"
@@ -125,7 +148,8 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
           aria-hidden="true"
         />
         <div
-          ref={ref}
+          ref={modalRef}
+          tabIndex={-1}
           className={[
             "relative w-full animate-in fade-in zoom-in-95 duration-200",
             "mmo-game-modal bg-surface",
@@ -160,7 +184,7 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
                 <button
                   type="button"
                   onClick={onClose}
-                  className="relative z-[1] flex-shrink-0 p-1.5 rounded-xl text-text-muted hover:text-text-primary hover:bg-zinc-900/50 transition-colors"
+                  className="relative z-[1] flex min-h-11 min-w-11 flex-shrink-0 items-center justify-center p-1.5 rounded-xl text-text-muted hover:text-text-primary hover:bg-zinc-900/50 transition-colors"
                   aria-label="Đóng"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -317,7 +317,7 @@ export function TradeAssetPickerModal({
               setActiveTab("material");
               setSelectedMatId(null);
             }}
-            className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+            className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
               activeTab === "material"
                 ? `${themeText} ${themeBorder} ${themeBg}`
                 : "text-zinc-500 border-transparent hover:text-zinc-300"
@@ -336,7 +336,7 @@ export function TradeAssetPickerModal({
               setActiveTab("gu");
               setSelectedMatId(null);
             }}
-            className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+            className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
               activeTab === "gu"
                 ? `${themeText} ${themeBorder} ${themeBg}`
                 : "text-zinc-500 border-transparent hover:text-zinc-300"
@@ -355,7 +355,7 @@ export function TradeAssetPickerModal({
               setActiveTab("recipe");
               setSelectedMatId(null);
             }}
-            className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+            className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
               activeTab === "recipe"
                 ? `${themeText} ${themeBorder} ${themeBg}`
                 : "text-zinc-500 border-transparent hover:text-zinc-300"
@@ -390,7 +390,8 @@ export function TradeAssetPickerModal({
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                aria-label="Xóa nội dung tìm kiếm"
+                className="absolute right-1 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center text-zinc-500 hover:text-zinc-300"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -457,7 +458,7 @@ export function TradeAssetPickerModal({
                           setMatQuantity(1);
                         }
                       }}
-                      className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                      className={`flex items-center justify-between p-2.5 rounded-xl border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                         isSelected
                           ? `${themeBg} border-${themeBorder} ring-1 ${themeRing}`
                           : isDisabled
@@ -531,7 +532,7 @@ export function TradeAssetPickerModal({
                   return (
                     <div
                       key={isOfferMode ? (g as { instanceId: string }).instanceId : g.guId}
-                      className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                      className={`flex items-center justify-between p-2.5 rounded-xl border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                         isAdded
                           ? "bg-zinc-950/50 border-zinc-900 opacity-60"
                           : "bg-zinc-900/60 border-zinc-800/80 hover:bg-zinc-850 hover:border-zinc-700"
@@ -604,7 +605,7 @@ export function TradeAssetPickerModal({
                   return (
                     <div
                       key={r.recipeId}
-                      className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                      className={`flex items-center justify-between p-2.5 rounded-xl border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                         isAdded
                           ? "bg-zinc-950/50 border-zinc-900 opacity-60"
                           : "bg-zinc-900/60 border-zinc-800/80 hover:bg-zinc-850 hover:border-zinc-700"
@@ -679,7 +680,8 @@ export function TradeAssetPickerModal({
               <button
                 type="button"
                 onClick={() => setMatQuantity((q) => Math.max(1, q - 1))}
-                className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 flex items-center justify-center text-zinc-300"
+                aria-label="Giảm số lượng vật phẩm"
+                className="min-h-11 min-w-11 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 flex items-center justify-center text-zinc-300"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
@@ -697,7 +699,8 @@ export function TradeAssetPickerModal({
                   const maxAvail = isOffer && "avail" in activeMat ? (activeMat as { avail: number }).avail : 999999;
                   setMatQuantity((q) => Math.min(maxAvail, q + 1));
                 }}
-                className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 flex items-center justify-center text-zinc-300"
+                aria-label="Tăng số lượng vật phẩm"
+                className="min-h-11 min-w-11 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 flex items-center justify-center text-zinc-300"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>

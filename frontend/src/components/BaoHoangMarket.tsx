@@ -28,6 +28,7 @@ import { GamePanel, GameTabs, GameButton, GameCard, GameInput, GameBadge, Search
 import { TradeAssetPickerModal, type AssetTab } from "./TradeAssetPickerModal";
 import { buildBuyOrderExecution, reconcileGuSelection, toggleGuSelection } from "./marketplaceGuSelection";
 import { getItemIconUrl } from "@/lib/item-icons";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
 interface RecipeData {
   recipe_id: string;
@@ -349,6 +350,15 @@ export function BaoHoangMarket({
   // Auction custom bid modal state
   const [biddingListing, setBiddingListing] = useState<Listing | null>(null);
   const [customBidPrice, setCustomBidPrice] = useState(0);
+  const closeMarketDialog = () => {
+    if (biddingListing) setBiddingListing(null);
+    else setSelectedBuybackOrder(null);
+  };
+  const { dialogRef: marketDialogRef, onKeyDown: marketDialogKeyDown } = useAccessibleDialog<HTMLDivElement>(
+    closeMarketDialog,
+    Boolean(selectedBuybackOrder || biddingListing),
+    biddingListing?.id ?? selectedBuybackOrder?.id
+  );
 
   const activeAuctionListings = listings.filter((l) => {
     if (l.listing_type !== "AUCTION") return false;
@@ -688,7 +698,7 @@ export function BaoHoangMarket({
                         </div>
                         <div className="w-full bg-zinc-900 rounded-full h-1.5 overflow-hidden">
                           <div
-                            className={`h-full rounded-full transition-all ${isSellOrder ? "bg-cyan-400" : "bg-amber-400"}`}
+                            className={`h-full rounded-full transition-[width] ${isSellOrder ? "bg-cyan-400" : "bg-amber-400"}`}
                             style={{ width: `${Math.min(100, (order.quantity_filled / order.quantity_requested) * 100)}%` }}
                           />
                         </div>
@@ -1995,7 +2005,7 @@ export function BaoHoangMarket({
       {/* MODAL: BUY/SELL INTERACTION FOR ORDER BOOK */}
       {selectedBuybackOrder && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start sm:items-center justify-center overflow-y-auto p-4">
-          <GameCard variant="vital" className="p-6 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto space-y-4 relative">
+          <GameCard ref={marketDialogRef} role="dialog" aria-modal="true" aria-label="Giao dịch đơn thu mua" tabIndex={-1} onKeyDown={marketDialogKeyDown} variant="vital" className="p-6 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain space-y-4 relative">
             <h3 className="text-lg font-bold font-serif text-amber-200">
               {selectedBuybackOrder.order_type === "SELL" ? "Mua Vật Phẩm Từ Đơn Rao Bán" : "Bán Vật Phẩm Vào Đơn Thu Mua"}
             </h3>
@@ -2145,7 +2155,7 @@ export function BaoHoangMarket({
       {/* MODAL: CUSTOM BID FOR AUCTION LISTING */}
       {biddingListing && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <GameCard variant="vital" className="p-6 max-w-md w-full space-y-4 relative">
+          <GameCard ref={marketDialogRef} role="dialog" aria-modal="true" aria-label="Đặt giá đấu giá bảo vật" tabIndex={-1} onKeyDown={marketDialogKeyDown} variant="vital" className="p-6 max-h-[90dvh] max-w-md w-full overflow-y-auto overscroll-contain space-y-4 relative">
             <h3 className="text-lg font-bold font-serif text-amber-200">
               Đặt Giá Đấu Giá Bảo Vật
             </h3>

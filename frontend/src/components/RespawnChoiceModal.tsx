@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import { useGameStore } from "@/store/useGameStore";
@@ -20,6 +20,8 @@ export function RespawnChoiceModal() {
   const [pending, setPending] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   const load = useCallback(async () => {
     if (!player?.id || !token) return;
@@ -54,6 +56,38 @@ export function RespawnChoiceModal() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [player?.id, token, load]);
 
+  useEffect(() => {
+    if (!pending) return;
+    previouslyFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const frame = requestAnimationFrame(() => {
+      const dialog = dialogRef.current;
+      const firstOption = dialog?.querySelector<HTMLElement>("button:not([disabled])");
+      (firstOption || dialog)?.focus();
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      document.body.style.overflow = previousOverflow;
+      if (previouslyFocusedRef.current?.isConnected) previouslyFocusedRef.current.focus();
+    };
+  }, [pending]);
+
+  const handleDialogKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+    const controls = dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
+    if (!controls?.length) {
+      event.preventDefault();
+      dialogRef.current?.focus();
+    } else if (event.shiftKey && document.activeElement === controls[0]) {
+      event.preventDefault();
+      controls[controls.length - 1].focus();
+    } else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) {
+      event.preventDefault();
+      controls[0].focus();
+    }
+  };
+
   const choose = async (kind: string) => {
     setSaving(true);
     setError("");
@@ -77,12 +111,12 @@ export function RespawnChoiceModal() {
 
   if (!pending) return null;
   return (
-    <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md space-y-4 rounded-2xl border border-amber-700/50 bg-zinc-950 p-6 shadow-2xl">
+    <div className="fixed inset-0 z-[10001] flex items-center justify-center overscroll-contain bg-black/85 p-4 backdrop-blur-sm" onKeyDown={handleDialogKeyDown}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="respawn-choice-title" aria-describedby="respawn-choice-description" tabIndex={-1} className="max-h-[90dvh] w-full max-w-md space-y-4 overflow-y-auto overscroll-contain rounded-2xl border border-amber-700/50 bg-zinc-950 p-6 shadow-2xl">
         <div className="text-center">
           <div className="mb-2 text-4xl">🕯️</div>
-          <h2 className="text-xl font-serif font-bold text-amber-300">Chọn nơi hồi sinh</h2>
-          <p className="mt-2 text-sm text-zinc-400">Đạo hữu đã được đưa về điểm an toàn. Chọn nơi hồi sinh trong 10 phút.</p>
+          <h2 id="respawn-choice-title" className="text-xl font-serif font-bold text-amber-300">Chọn nơi hồi sinh</h2>
+          <p id="respawn-choice-description" className="mt-2 text-sm text-zinc-400">Đạo hữu đã được đưa về điểm an toàn. Chọn nơi hồi sinh trong 10 phút.</p>
         </div>
         <div className="space-y-2">
           {options.map((option) => (
@@ -97,7 +131,7 @@ export function RespawnChoiceModal() {
             </button>
           ))}
         </div>
-        {error && <p className="text-center text-sm text-red-400">{error}</p>}
+        {error && <p role="alert" className="text-center text-sm text-red-400">{error}</p>}
         <p className="text-center text-xs text-zinc-600">Máu khi hồi sinh: 1 HP</p>
       </div>
     </div>

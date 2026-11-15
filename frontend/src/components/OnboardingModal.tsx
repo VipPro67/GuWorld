@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Sparkles,
@@ -99,21 +99,61 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
   const [selectedDefenseGu, setSelectedDefenseGu] = useState("GU_STONE_SKIN");
   const [selectedVital, setSelectedVital] = useState("ATTACK");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const getControls = () => dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+    );
+    const frame = requestAnimationFrame(() => dialog.focus());
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const controls = getControls();
+      if (!controls.length) {
+        event.preventDefault();
+        dialog.focus();
+      } else if (document.activeElement === dialog) {
+        event.preventDefault();
+        (event.shiftKey ? controls[controls.length - 1] : controls[0]).focus();
+      } else if (event.shiftKey && document.activeElement === controls[0]) {
+        event.preventDefault();
+        controls[controls.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) {
+        event.preventDefault();
+        controls[0].focus();
+      }
+    };
+    dialog.addEventListener("keydown", onKeyDown);
+    return () => {
+      cancelAnimationFrame(frame);
+      dialog.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, []);
 
   const handleComplete = async () => {
     setIsSubmitting(true);
-    await onComplete({
-      starting_region: selectedRegion,
-      attack_gu_id: selectedAttackGu,
-      defense_gu_id: selectedDefenseGu,
-      vital_gu_choice: selectedVital,
-    });
-    setIsSubmitting(false);
+    try {
+      await onComplete({
+        starting_region: selectedRegion,
+        attack_gu_id: selectedAttackGu,
+        defense_gu_id: selectedDefenseGu,
+        vital_gu_choice: selectedVital,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-4 pb-16 sm:pb-8 bg-zinc-950/90 backdrop-blur-md overflow-y-auto">
-      <div className="glass-panel-gold rounded-3xl p-5 sm:p-8 w-full max-w-lg relative overflow-hidden shadow-[0_0_50px_rgba(234,179,8,0.15)] my-auto">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overscroll-contain p-3 pb-16 sm:p-4 sm:pb-8 bg-zinc-950/90 backdrop-blur-md overflow-y-auto">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="onboarding-title" tabIndex={-1} className="glass-panel-gold my-auto max-h-[calc(100dvh-5rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl p-5 shadow-[0_0_50px_rgba(234,179,8,0.15)] sm:max-h-[calc(100dvh-4rem)] sm:p-8">
         <div className="absolute -left-12 -bottom-12 w-28 h-28 rounded-full bg-emerald-500/10 blur-2xl pointer-events-none" />
         <div className="absolute -right-12 -top-12 w-28 h-28 rounded-full bg-amber-500/10 blur-2xl pointer-events-none" />
 
@@ -122,7 +162,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
           <div className="inline-flex p-3 rounded-2xl bg-amber-950/40 border border-amber-500/20 text-amber-400 mb-4 animate-pulse">
             <Sparkles className="w-6 h-6" />
           </div>
-          <h2 className="text-2xl font-bold text-zinc-100 font-serif tracking-wide">
+          <h2 id="onboarding-title" className="text-2xl font-bold text-zinc-100 font-serif tracking-wide">
             Thiết Lập Ban Đầu
           </h2>
           <p className="text-xs text-zinc-500 mt-2 font-mono">
@@ -154,16 +194,17 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
 
           {/* 1. Region */}
           <div>
-            <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">
+            <p id="starting-region-label" className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">
               Khu Vực Khởi Đầu
-            </label>
-            <div className="grid grid-cols-1 gap-1.5">
+            </p>
+            <div role="group" aria-labelledby="starting-region-label" className="grid grid-cols-1 gap-1.5">
               {REGIONS.map((r) => (
                 <button
                   key={r.id}
                   type="button"
+                  aria-pressed={selectedRegion === r.id}
                   onClick={() => setSelectedRegion(r.id)}
-                  className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer text-xs ${
+                  className={`min-h-11 w-full text-left p-2.5 rounded-xl border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer text-xs ${
                     selectedRegion === r.id
                       ? "border-amber-500 shadow-[0_0_12px_rgba(234,179,8,0.15)] bg-amber-950/30 text-amber-300"
                       : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:border-zinc-700"
@@ -179,10 +220,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
 
           {/* 2. Attack Gu */}
           <div>
-            <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">
+            <p id="starting-attack-label" className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">
               Cổ Trùng Tấn Công (Cấp 1)
-            </label>
-            <div className="grid grid-cols-3 gap-2">
+            </p>
+            <div role="group" aria-labelledby="starting-attack-label" className="grid grid-cols-3 gap-2">
               {STARTING_ATTACK_GUS.map((item) => {
                 const IconComponent = item.icon;
                 const isSelected = selectedAttackGu === item.id;
@@ -190,8 +231,9 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
                   <button
                     key={item.id}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() => setSelectedAttackGu(item.id)}
-                    className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                    className={`flex min-h-11 flex-col items-center gap-1.5 p-2.5 rounded-xl border text-center transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                       isSelected
                         ? item.activeColor
                         : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:text-zinc-300 hover:border-zinc-700"
@@ -210,10 +252,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
 
           {/* 3. Defense Gu */}
           <div>
-            <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">
+            <p id="starting-defense-label" className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">
               Cổ Trùng Phòng Thủ (Cấp 1)
-            </label>
-            <div className="grid grid-cols-5 gap-1.5">
+            </p>
+            <div role="group" aria-labelledby="starting-defense-label" className="grid grid-cols-5 gap-1.5">
               {STARTING_DEFENSE_GUS.map((item) => {
                 const IconComponent = item.icon;
                 const isSelected = selectedDefenseGu === item.id;
@@ -221,9 +263,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
                   <button
                     key={item.id}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() => setSelectedDefenseGu(item.id)}
                     title={item.name}
-                    className={`flex flex-col items-center gap-1 p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                    className={`flex min-h-11 flex-col items-center gap-1 p-2 rounded-xl border text-center transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                       isSelected
                         ? item.activeColor
                         : "border-zinc-800 bg-zinc-950/40 text-zinc-400 hover:text-zinc-300 hover:border-zinc-700"
@@ -244,13 +287,15 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
 
           {/* 4. Vital Gu */}
           <div>
-            <label className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5">
+            <label htmlFor="vital-gu-choice" className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5">
               Bản Mệnh Cổ
             </label>
             <select
+              id="vital-gu-choice"
+              name="vital_gu_choice"
               value={selectedVital}
               onChange={(e) => setSelectedVital(e.target.value)}
-              className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-zinc-100 focus:outline-none focus:border-amber-500/50 transition-all cursor-pointer"
+              className="min-h-11 w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
             >
               <option value="ATTACK">Đặt Cổ Tấn Công làm Bản Mệnh</option>
               <option value="DEFENSE">Đặt Cổ Phòng Thủ làm Bản Mệnh</option>
@@ -264,7 +309,8 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
           type="button"
           onClick={handleComplete}
           disabled={isSubmitting}
-          className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 text-zinc-950 text-sm font-serif font-semibold tracking-wider hover:from-amber-500 hover:to-yellow-500 hover:shadow-[0_0_25px_rgba(234,179,8,0.25)] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-6 flex items-center justify-center gap-2"
+          aria-busy={isSubmitting}
+          className="min-h-11 w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 text-zinc-950 text-sm font-serif font-semibold tracking-wider hover:from-amber-500 hover:to-yellow-500 hover:shadow-[0_0_25px_rgba(234,179,8,0.25)] active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-6 flex items-center justify-center gap-2"
         >
           {isSubmitting ? (
             <>

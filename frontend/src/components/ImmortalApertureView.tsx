@@ -40,6 +40,7 @@ import { Num } from "./Num";
 import { GamePanel, GameTabs, GameButton, GameCard, GameModal, GameProgressBar, GameSection, SearchableSelect } from "@/components/ui";
 import { AperturePointsPanel, pointGlyph, pointIsReady } from "./AperturePointsPanel";
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
 export interface DaoGroupDef {
   id: string;
@@ -352,6 +353,19 @@ export const ImmortalApertureView: React.FC = () => {
   const [refineRecipeId, setRefineRecipeId] = useState<string>("GU_LIQUOR_WORM");
   const [refineMode, setRefineMode] = useState<string>("FIXED_COUNT");
   const [refineTargetQty, setRefineTargetQty] = useState<number>(10);
+  const apertureDialogOpen = Boolean(showCleanseModal || showBuildSettlementModal || showBuildRefineModal || showAnchorModal || showPortalManageModal || showUnanchorModal || showGuestModal || contractGuest);
+  const apertureDialogKey = contractGuest ? `contract-${contractGuest.player_id}` : showGuestModal ? "guests" : showUnanchorModal ? "unanchor" : showPortalManageModal ? "manage" : showAnchorModal ? "anchor" : showBuildRefineModal ? "refine" : showBuildSettlementModal ? "settlement" : "cleanse";
+  const closeApertureDialog = () => {
+    if (contractGuest) setContractGuest(null);
+    else if (showGuestModal) setShowGuestModal(false);
+    else if (showUnanchorModal) setShowUnanchorModal(false);
+    else if (showPortalManageModal) setShowPortalManageModal(false);
+    else if (showAnchorModal) setShowAnchorModal(false);
+    else if (showBuildRefineModal) setShowBuildRefineModal(false);
+    else if (showBuildSettlementModal) setShowBuildSettlementModal(false);
+    else if (showCleanseModal) setShowCleanseModal(false);
+  };
+  const { dialogRef: apertureDialogRef, onKeyDown: apertureDialogKeyDown } = useAccessibleDialog<HTMLDivElement>(closeApertureDialog, apertureDialogOpen, apertureDialogKey);
   const [buildCategory, setBuildCategory] = useState<"khu_trong" | "khu_nuoi" | "khu_khai_thac" | "defense">("defense");
   const [pendingBuildZone, setPendingBuildZone] = useState<string | null>(null);
   const [buildPath, setBuildPath] = useState<string>("Wisdom Path");
@@ -521,7 +535,7 @@ export const ImmortalApertureView: React.FC = () => {
         </p>
         <button
           onClick={() => setView("dashboard")}
-          className="px-6 py-2 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 text-slate-100 rounded-lg border border-slate-600 transition-all"
+          className="px-6 py-2 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 text-slate-100 rounded-lg border border-slate-600 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
         >
           Quay lại Động Phủ
         </button>
@@ -825,7 +839,7 @@ return (
               </span>
               <div className="w-16 h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
                 <div
-                  className="h-full bg-cyan-400 transition-all duration-300"
+                  className="h-full bg-cyan-400 transition-[width] duration-300"
                   style={{ width: `${Math.min(100, ((aperture?.heaven_qi ?? 1000) / (aperture?.max_heaven_qi ?? 1000)) * 100)}%` }}
                 />
               </div>
@@ -840,7 +854,7 @@ return (
               </span>
               <div className="w-16 h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
                 <div
-                  className="h-full bg-amber-500 transition-all duration-300"
+                  className="h-full bg-amber-500 transition-[width] duration-300"
                   style={{ width: `${Math.min(100, ((aperture?.earth_qi ?? 1000) / (aperture?.max_earth_qi ?? 1000)) * 100)}%` }}
                 />
               </div>
@@ -1332,7 +1346,7 @@ return (
                   </div>
                   <div className="w-full bg-slate-950/80 h-3 rounded-full overflow-hidden border border-slate-800">
                     <div
-                      className="h-full bg-gradient-to-r from-rose-500 to-emerald-500 transition-all duration-500"
+                      className="h-full bg-gradient-to-r from-rose-500 to-emerald-500 transition-[width] duration-500"
                       style={{ width: `${(aperture.aperture_hp / aperture.max_aperture_hp) * 100}%` }}
                     />
                   </div>
@@ -1571,7 +1585,7 @@ return (
                           onClick={() => {
                             if (!pendingBuildZone) handleCellClick(x, y);
                           }}
-                          className={`w-full aspect-square flex items-center justify-center text-sm font-bold rounded cursor-pointer border transition-all ${cellColor}`}
+                          className={`w-full aspect-square flex items-center justify-center text-sm font-bold rounded cursor-pointer border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${cellColor}`}
                           title={node
                             ? `${node.name} · ${node.cells?.length || 1} ô · (${x}, ${y})${hasPoint ? ` · có ${pointsHere?.length} điểm tài nguyên` : ""}`
                             : hasPoint
@@ -2351,13 +2365,13 @@ return (
                 {/* Thanh Đạo Tẩy Thể Modal */}
                 {showCleanseModal && typeof document !== "undefined" && createPortal(
                   <div className="mmo-paper-theme fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-purple-700/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+                    <div ref={apertureDialogRef} role="dialog" aria-modal="true" aria-label="Thanh Đạo Tẩy Thể" tabIndex={-1} onKeyDown={apertureDialogKeyDown} className="max-h-[90dvh] overflow-y-auto overscroll-contain bg-slate-900 border border-purple-700/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
                       <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                         <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                           <Sparkles className="w-5 h-5 text-purple-400" />
                           Thanh Đạo Tẩy Thể
                         </h3>
-                        <button onClick={() => setShowCleanseModal(false)} className="text-slate-400 hover:text-slate-200">✕</button>
+                        <button type="button" onClick={() => setShowCleanseModal(false)} aria-label="Đóng tẩy thể" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200">✕</button>
                       </div>
 
                       <div className="space-y-4 text-xs">
@@ -2632,7 +2646,7 @@ return (
                           </div>
                           <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-800">
                             <div
-                              className="bg-gradient-to-r from-amber-500 to-purple-500 h-full rounded-full transition-all duration-500"
+                              className="bg-gradient-to-r from-amber-500 to-purple-500 h-full rounded-full transition-[width] duration-500"
                               style={{ width: `${Math.min(100, Math.max(0, detail.purity_pct))}%` }}
                             />
                           </div>
@@ -2819,7 +2833,7 @@ return (
                         };
 
                         return (
-                          <div key={raceInfo.race} className="bg-slate-950/60 border border-slate-850 hover:border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-5 transition-all">
+                          <div key={raceInfo.race} className="bg-slate-950/60 border border-slate-850 hover:border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]">
                             <div className="space-y-3">
                               <div className="flex items-center gap-3">
                                 <span className="text-3xl select-none">{raceInfo.icon}</span>
@@ -2836,7 +2850,7 @@ return (
                                   <span className="font-bold text-slate-200">{population} / {maxPop}</span>
                                 </div>
                                 <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
-                                  <div className="h-full bg-cyan-500 transition-all duration-500"
+                                  <div className="h-full bg-cyan-500 transition-[width] duration-500"
                                     style={{ width: `${maxPop > 0 ? Math.min(100, (population / maxPop) * 100) : 0}%` }} />
                                 </div>
                               </div>
@@ -2850,7 +2864,7 @@ return (
                                     </span>
                                   </div>
                                   <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                                    <div className={`h-full transition-all duration-500 ${happiness < 30 ? "bg-rose-500" : happiness > 60 ? "bg-emerald-500" : "bg-amber-500"}`}
+                                    <div className={`h-full transition-[width] duration-500 ${happiness < 30 ? "bg-rose-500" : happiness > 60 ? "bg-emerald-500" : "bg-amber-500"}`}
                                       style={{ width: `${happiness}%` }} />
                                   </div>
                                 </div>
@@ -2862,7 +2876,7 @@ return (
                                     </span>
                                   </div>
                                   <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                                    <div className={`h-full transition-all duration-500 ${oppression > 70 ? "bg-rose-500" : "bg-slate-500"}`}
+                                    <div className={`h-full transition-[width] duration-500 ${oppression > 70 ? "bg-rose-500" : "bg-slate-500"}`}
                                       style={{ width: `${oppression}%` }} />
                                   </div>
                                 </div>
@@ -2935,7 +2949,7 @@ return (
                   <button
                     onClick={() => setShowBuildSettlementModal(true)}
                     disabled={actionLoading}
-                    className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 shrink-0 self-start sm:self-auto"
+                    className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-2 shrink-0 self-start sm:self-auto"
                   >
                     <Plus className="w-4 h-4" />
                     Xây Thành Trì Mới
@@ -3019,7 +3033,7 @@ return (
                       };
 
                       return (
-                        <div key={s.id} className="bg-slate-950/80 border border-slate-800 hover:border-cyan-800/60 rounded-xl p-4 space-y-4 transition-all flex flex-col justify-between">
+                        <div key={s.id} className="bg-slate-950/80 border border-slate-800 hover:border-cyan-800/60 rounded-xl p-4 space-y-4 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex flex-col justify-between">
                           <div className="space-y-3">
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex items-center gap-2.5">
@@ -3059,7 +3073,7 @@ return (
                               <button
                                 onClick={handleUpgrade}
                                 disabled={actionLoading}
-                                className="w-full py-2 bg-slate-900 hover:bg-cyan-950/60 border border-slate-700 hover:border-cyan-600 text-cyan-300 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5"
+                                className="w-full py-2 bg-slate-900 hover:bg-cyan-950/60 border border-slate-700 hover:border-cyan-600 text-cyan-300 text-xs font-bold rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-center gap-1.5"
                               >
                                 <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
                                 Nâng cấp lên {typeInfo.nextLabel}
@@ -3079,13 +3093,13 @@ return (
                 {/* Build Settlement Modal */}
                 {showBuildSettlementModal && (
                   <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+                    <div ref={apertureDialogRef} role="dialog" aria-modal="true" aria-label="Xây dựng cơ sở định cư mới" tabIndex={-1} onKeyDown={apertureDialogKeyDown} className="max-h-[90dvh] overflow-y-auto overscroll-contain bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
                       <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                         <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                           <MapIcon className="w-5 h-5 text-cyan-400" />
                           Xây Dựng Cơ Sở Định Cư Mới
                         </h3>
-                        <button onClick={() => setShowBuildSettlementModal(false)} className="text-slate-400 hover:text-slate-200">
+                        <button type="button" onClick={() => setShowBuildSettlementModal(false)} aria-label="Đóng xây dựng cơ sở" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200">
                           ✕
                         </button>
                       </div>
@@ -3139,7 +3153,7 @@ return (
                       <div className="flex gap-3 pt-2">
                         <button
                           onClick={() => setShowBuildSettlementModal(false)}
-                          className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-all"
+                          className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
                         >
                           Hủy Bỏ
                         </button>
@@ -3152,7 +3166,7 @@ return (
                             }
                           }}
                           disabled={actionLoading}
-                          className="flex-1 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl text-xs transition-all"
+                          className="flex-1 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
                         >
                           Xác Nhận Xây Dựng
                         </button>
@@ -3231,7 +3245,7 @@ return (
                   <button
                     onClick={() => setShowBuildRefineModal(true)}
                     disabled={actionLoading}
-                    className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 shrink-0 self-start sm:self-auto"
+                    className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold rounded-xl shadow-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-2 shrink-0 self-start sm:self-auto"
                   >
                     <Plus className="w-4 h-4" />
                     Tạo Lệnh Mới
@@ -3244,7 +3258,7 @@ return (
                     <div>Chưa có lệnh luyện Cổ nào trong hàng đợi.</div>
                     <button
                       onClick={() => setShowBuildRefineModal(true)}
-                      className="px-4 py-1.5 bg-orange-600/20 border border-orange-500/40 text-orange-300 font-bold rounded-lg text-xs hover:bg-orange-600/40 transition-all"
+                      className="px-4 py-1.5 bg-orange-600/20 border border-orange-500/40 text-orange-300 font-bold rounded-lg text-xs hover:bg-orange-600/40 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
                     >
                       Tạo Lệnh Luyện Cổ Mới
                     </button>
@@ -3290,7 +3304,7 @@ return (
                                 <span className="font-bold text-amber-300">{job.current_quantity} / {job.target_quantity}</span>
                               </div>
                               <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
-                                <div className="h-full bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-500" style={{ width: `${progressPct}%` }} />
+                                <div className="h-full bg-gradient-to-r from-orange-500 to-amber-500 transition-[width] duration-500" style={{ width: `${progressPct}%` }} />
                               </div>
                             </div>
                           </div>
@@ -3308,7 +3322,7 @@ return (
                                 }
                               }}
                               disabled={actionLoading}
-                              className="px-2.5 py-1 text-[10px] font-bold text-rose-400 hover:text-rose-300 bg-rose-950/40 border border-rose-900/60 hover:bg-rose-900/60 rounded-lg transition-all"
+                              className="px-2.5 py-1 text-[10px] font-bold text-rose-400 hover:text-rose-300 bg-rose-950/40 border border-rose-900/60 hover:bg-rose-900/60 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
                             >
                               Xóa Lệnh
                             </button>
@@ -3322,13 +3336,13 @@ return (
                 {/* Create Refinement Job Modal */}
                 {showBuildRefineModal && (
                   <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+                    <div ref={apertureDialogRef} role="dialog" aria-modal="true" aria-label="Tạo lệnh luyện cổ tự động" tabIndex={-1} onKeyDown={apertureDialogKeyDown} className="max-h-[90dvh] overflow-y-auto overscroll-contain bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
                       <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                         <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                           <Flame className="w-5 h-5 text-orange-400" />
                           Tạo Lệnh Luyện Cổ Tự Động
                         </h3>
-                        <button onClick={() => setShowBuildRefineModal(false)} className="text-slate-400 hover:text-slate-200">
+                        <button type="button" onClick={() => setShowBuildRefineModal(false)} aria-label="Đóng lệnh luyện cổ" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200">
                           ✕
                         </button>
                       </div>
@@ -3411,7 +3425,7 @@ return (
                       <div className="flex gap-3 pt-2">
                         <button
                           onClick={() => setShowBuildRefineModal(false)}
-                          className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-all"
+                          className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
                         >
                           Hủy Bỏ
                         </button>
@@ -3432,7 +3446,7 @@ return (
                             }
                           }}
                           disabled={actionLoading}
-                          className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl text-xs transition-all"
+                          className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
                         >
                           Xác Nhận Tạo Lệnh
                         </button>
@@ -3449,13 +3463,13 @@ return (
       {/* MODAL 1: HẠ KHIẾU (ANCHOR APERTURE) */}
       {showAnchorModal && typeof document !== "undefined" && createPortal(
         <div className="mmo-paper-theme fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-emerald-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
+          <div ref={apertureDialogRef} role="dialog" aria-modal="true" aria-label="Hạ Khiếu — Mở Môn Hộ Thế Giới" tabIndex={-1} onKeyDown={apertureDialogKeyDown} className="max-h-[90dvh] overflow-y-auto overscroll-contain bg-slate-900 border border-emerald-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                 <span className="text-lg">⛩️</span>
                 Hạ Khiếu — Mở Môn Hộ Thế Giới
               </h3>
-              <button onClick={() => setShowAnchorModal(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">✕</button>
+              <button type="button" onClick={() => setShowAnchorModal(false)} aria-label="Đóng hạ khiếu" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer">✕</button>
             </div>
 
             <div className="space-y-4 text-xs">
@@ -3525,13 +3539,13 @@ return (
       {/* MODAL 2: CẤU HÌNH MÔN HỘ (PORTAL MANAGE) */}
       {showPortalManageModal && typeof document !== "undefined" && createPortal(
         <div className="mmo-paper-theme fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-amber-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
+          <div ref={apertureDialogRef} role="dialog" aria-modal="true" aria-label="Cấu hình Môn Hộ Thế Giới" tabIndex={-1} onKeyDown={apertureDialogKeyDown} className="max-h-[90dvh] overflow-y-auto overscroll-contain bg-slate-900 border border-amber-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                 <Settings2 className="w-5 h-5 text-amber-400" />
                 Cấu Hình Môn Hộ Thế Giới
               </h3>
-              <button onClick={() => setShowPortalManageModal(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">✕</button>
+              <button type="button" onClick={() => setShowPortalManageModal(false)} aria-label="Đóng cấu hình Môn Hộ" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer">✕</button>
             </div>
 
             <div className="space-y-4 text-xs">
@@ -3588,13 +3602,13 @@ return (
       {/* MODAL 3: THU KHIẾU (UNANCHOR APERTURE) */}
       {showUnanchorModal && typeof document !== "undefined" && createPortal(
         <div className="mmo-paper-theme fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-rose-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
+          <div ref={apertureDialogRef} role="dialog" aria-modal="true" aria-label="Thu Khiếu Về Thể" tabIndex={-1} onKeyDown={apertureDialogKeyDown} className="max-h-[90dvh] overflow-y-auto overscroll-contain bg-slate-900 border border-rose-500/50 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                 <span className="text-lg">⛩️</span>
                 Thu Khiếu Về Thể
               </h3>
-              <button onClick={() => setShowUnanchorModal(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">✕</button>
+              <button type="button" onClick={() => setShowUnanchorModal(false)} aria-label="Đóng thu khiếu" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer">✕</button>
             </div>
 
             <div className="space-y-4 text-xs">
@@ -3661,13 +3675,13 @@ return (
       {/* MODAL 4: QUẢN LÝ NGOẠI KHÁCH (GUEST MATRIX MODAL) */}
       {showGuestModal && typeof document !== "undefined" && createPortal(
         <div className="mmo-paper-theme fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-purple-500/50 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
+          <div ref={apertureDialogRef} role="dialog" aria-modal={contractGuest ? undefined : "true"} aria-label="Danh sách ngoại khách trong Tiên Khiếu" tabIndex={-1} onKeyDown={apertureDialogKeyDown} className="bg-slate-900 border border-purple-500/50 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 max-h-[90dvh] flex flex-col">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                 <Users className="w-5 h-5 text-purple-400" />
                 Danh Sách Ngoại Khách Trong Tiên Khiếu ({guests.length})
               </h3>
-              <button onClick={() => setShowGuestModal(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">✕</button>
+              <button type="button" onClick={() => setShowGuestModal(false)} aria-label="Đóng danh sách ngoại khách" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer">✕</button>
             </div>
 
             <div className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
@@ -3759,13 +3773,13 @@ return (
       {/* MODAL 5: MINH ƯỚC TÍN ĐẠO (SIGN CONTRACT MODAL) */}
       {contractGuest && typeof document !== "undefined" && createPortal(
         <div className="mmo-paper-theme fixed inset-0 z-[110] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-purple-500/60 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
+          <div ref={apertureDialogRef} role="dialog" aria-modal="true" aria-label="Lập Minh Ước Tín Đạo" tabIndex={-1} onKeyDown={apertureDialogKeyDown} className="max-h-[90dvh] overflow-y-auto overscroll-contain bg-slate-900 border border-purple-500/60 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-purple-400" />
                 Lập Minh Ước Tín Đạo
               </h3>
-              <button onClick={() => setContractGuest(null)} className="text-slate-400 hover:text-slate-200 cursor-pointer">✕</button>
+              <button type="button" onClick={() => setContractGuest(null)} aria-label="Đóng minh ước tín đạo" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 cursor-pointer">✕</button>
             </div>
 
             <div className="space-y-4 text-xs">

@@ -6,6 +6,7 @@ import { Player, PlayerPet, ItemSpec, MonsterSpec, useGameStore } from "@/store/
 import { restoreHunger } from "@/lib/effect-blocks";
 import { MonsterSprite } from "@/components/MonsterSprite";
 import { getItemIconUrl } from "@/lib/item-icons";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import {
   PawPrint,
   Heart,
@@ -82,6 +83,11 @@ export const PetPanel: React.FC<PetPanelProps> = ({
   const [inspectedPetId, setInspectedPetId] = useState<string | null>(null);
 
   const inspectedPet = pets.find((p) => p.id === inspectedPetId) || null;
+  const { dialogRef: petDialogRef, onKeyDown: petDialogKeyDown } = useAccessibleDialog<HTMLDivElement>(
+    () => setInspectedPetId(null),
+    Boolean(inspectedPet),
+    inspectedPetId
+  );
 
   useEffect(() => { void fetchPlayerPets(); }, [fetchPlayerPets]);
 
@@ -265,7 +271,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={() => { setMergeMode(!mergeMode); setMergeTarget(null); setMergeSources([]); }}
-            className={`text-xs px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${mergeMode ? "border-purple-600 bg-purple-950/50 text-purple-300" : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600"}`}
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${mergeMode ? "border-purple-600 bg-purple-950/50 text-purple-300" : "border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-600"}`}
           >
             <Merge className="w-3 h-3 inline mr-1" />
             Gộp Bầy
@@ -290,7 +296,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
           <button
             type="button"
             onClick={() => setViewMode("grid")}
-            className={`p-1.5 rounded-lg text-xs font-mono transition-all flex items-center gap-1 cursor-pointer ${
+            className={`p-1.5 rounded-lg text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1 cursor-pointer ${
               viewMode === "grid"
                 ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
                 : "text-zinc-500 hover:text-zinc-300"
@@ -303,7 +309,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
           <button
             type="button"
             onClick={() => setViewMode("list")}
-            className={`p-1.5 rounded-lg text-xs font-mono transition-all flex items-center gap-1 cursor-pointer ${
+            className={`p-1.5 rounded-lg text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1 cursor-pointer ${
               viewMode === "list"
                 ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
                 : "text-zinc-500 hover:text-zinc-300"
@@ -344,7 +350,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                     setInspectedPetId(pet.id);
                   }
                 }}
-                className={`relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer select-none group hover:-translate-y-0.5 hover:shadow-xl ${
+                className={`relative rounded-2xl border p-3 flex flex-col justify-between transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 cursor-pointer select-none group hover:-translate-y-0.5 hover:shadow-xl ${
                   isMergeSelected
                     ? "border-purple-500 bg-purple-950/30 ring-2 ring-purple-500/50"
                     : isTarget
@@ -410,7 +416,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                   </div>
                   <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-rose-500 rounded-full transition-all"
+                      className="h-full bg-rose-500 rounded-full transition-[width]"
                       style={{ width: `${Math.min(100, (pet.hp / Math.max(1, pet.max_hp)) * 100)}%` }}
                     />
                   </div>
@@ -421,7 +427,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                   </div>
                   <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
                     <div
-                      className={`h-full ${hungerColor(pet.hunger, pet.max_hunger)} rounded-full transition-all`}
+                      className={`h-full ${hungerColor(pet.hunger, pet.max_hunger)} rounded-full transition-[width]`}
                       style={{ width: `${(pet.hunger / pet.max_hunger) * 100}%` }}
                     />
                   </div>
@@ -456,7 +462,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
             return (
               <div
                 key={pet.id}
-                className={`bg-zinc-900/80 border rounded-xl p-3 transition-all ${
+                className={`bg-zinc-900/80 border rounded-xl p-3 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                   isMergeSelected ? "border-purple-500 bg-purple-950/20" : isFormation ? "border-amber-700/50" : "border-zinc-800"
                 }`}
               >
@@ -488,7 +494,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                     <div className="mt-1.5 flex items-center gap-2">
                       <Heart className="w-3 h-3 text-red-400 flex-shrink-0" />
                       <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                        <div className={`h-full ${hungerColor(pet.hunger, pet.max_hunger)} rounded-full transition-all`} style={{ width: `${(pet.hunger / pet.max_hunger) * 100}%` }} />
+                        <div className={`h-full ${hungerColor(pet.hunger, pet.max_hunger)} rounded-full transition-[width]`} style={{ width: `${(pet.hunger / pet.max_hunger) * 100}%` }} />
                       </div>
                       <span className="text-[10px] text-zinc-500 w-20 text-right">{hungerLabel(pet.hunger, pet.max_hunger)}</span>
                     </div>
@@ -557,14 +563,21 @@ export const PetPanel: React.FC<PetPanelProps> = ({
             onClick={() => setInspectedPetId(null)}
           >
             <div
-              className="relative w-full max-w-md max-h-[90vh] overflow-y-auto bg-zinc-950 border border-amber-500/35 rounded-3xl p-5 sm:p-6 shadow-[0_0_40px_rgba(245,158,11,0.2)] text-left space-y-4"
+              ref={petDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="pet-inspector-title"
+              tabIndex={-1}
+              onKeyDown={petDialogKeyDown}
+              className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain bg-zinc-950 border border-amber-500/35 rounded-3xl p-5 sm:p-6 shadow-[0_0_40px_rgba(245,158,11,0.2)] text-left space-y-4"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Close Button */}
               <button
                 type="button"
                 onClick={() => setInspectedPetId(null)}
-                className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 rounded-xl hover:bg-zinc-900 cursor-pointer"
+                aria-label="Đóng thông tin linh thú"
+                className="absolute top-4 right-4 flex min-h-11 min-w-11 items-center justify-center text-zinc-500 hover:text-zinc-200 transition-colors rounded-xl hover:bg-zinc-900 cursor-pointer"
                 title="Đóng"
               >
                 <X className="w-5 h-5" />
@@ -585,7 +598,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                   )}
                 </div>
 
-                <h3 className="text-lg font-serif font-bold text-zinc-100 mt-3">
+                <h3 id="pet-inspector-title" className="text-lg font-serif font-bold text-zinc-100 mt-3">
                   {inspectedPet.nickname}
                 </h3>
                 <p className="text-xs font-mono text-zinc-400">
@@ -635,7 +648,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                     </span>
                   </div>
                   <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-rose-500 rounded-full transition-all" style={{ width: `${hpPct}%` }} />
+                    <div className="h-full bg-rose-500 rounded-full transition-[width]" style={{ width: `${hpPct}%` }} />
                   </div>
                 </div>
 
@@ -651,7 +664,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                   </div>
                   <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
                     <div
-                      className={`h-full ${hungerColor(inspectedPet.hunger, inspectedPet.max_hunger)} rounded-full transition-all`}
+                      className={`h-full ${hungerColor(inspectedPet.hunger, inspectedPet.max_hunger)} rounded-full transition-[width]`}
                       style={{ width: `${hungerPct}%` }}
                     />
                   </div>
@@ -730,7 +743,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                   type="button"
                   onClick={() => handleAutoFeed(inspectedPet.id)}
                   disabled={actionLoading || inspectedPet.hunger >= inspectedPet.max_hunger}
-                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-900 disabled:border-zinc-800 disabled:text-zinc-600 text-white font-mono font-bold text-xs transition-all shadow-md active:scale-98 cursor-pointer disabled:cursor-not-allowed"
+                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-900 disabled:border-zinc-800 disabled:text-zinc-600 text-white font-mono font-bold text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shadow-md active:scale-98 cursor-pointer disabled:cursor-not-allowed"
                 >
                   Cho Ăn Nhanh
                 </button>
@@ -738,7 +751,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                 <button
                   type="button"
                   onClick={() => setFeedTarget(feedTarget === inspectedPet.id ? null : inspectedPet.id)}
-                  className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 font-mono font-bold text-xs transition-all cursor-pointer"
+                  className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 font-mono font-bold text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                 >
                   {feedTarget === inspectedPet.id ? "Đóng Thức Ăn" : "Chọn Thức Ăn"}
                 </button>
@@ -747,7 +760,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                   type="button"
                   onClick={() => setPetSleep(inspectedPet.id, inspectedPet.state === "ACTIVE")}
                   disabled={actionLoading}
-                  className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-mono font-bold text-xs transition-all cursor-pointer"
+                  className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-mono font-bold text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                 >
                   {inspectedPet.state === "SLEEPING" ? "Đánh Thức" : inspectedPet.state === "INJURED" ? "Đưa Về Kho" : "Cho Ngủ (Hồi Phục)"}
                 </button>
@@ -759,7 +772,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                     setInspectedPetId(null);
                   }}
                   disabled={actionLoading}
-                  className="py-2.5 px-3 rounded-xl bg-red-950/40 hover:bg-red-900/60 border border-red-800/40 text-red-300 font-mono font-bold text-xs transition-all cursor-pointer"
+                  className="py-2.5 px-3 rounded-xl bg-red-950/40 hover:bg-red-900/60 border border-red-800/40 text-red-300 font-mono font-bold text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                 >
                   Thả Về Tự Nhiên
                 </button>

@@ -277,7 +277,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
       <div className="flex items-center justify-between bg-black/40 p-4 rounded-xl border border-zinc-800 gap-4 flex-col sm:flex-row">
         {/* Team A / Ally */}
         <div
-          className={`w-full sm:flex-1 p-3 rounded-lg transition-all ${
+          className={`w-full sm:flex-1 p-3 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
             isAllyWinner
               ? "bg-emerald-950/40 border border-emerald-500/50"
               : "bg-zinc-900/40 border border-zinc-800/60"
@@ -310,7 +310,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
 
         {/* Team B / Enemy */}
         <div
-          className={`w-full sm:flex-1 p-3 rounded-lg text-right transition-all ${
+          className={`w-full sm:flex-1 p-3 rounded-lg text-right transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
             isEnemyWinner
               ? "bg-emerald-950/40 border border-emerald-500/50"
               : "bg-zinc-900/40 border border-zinc-800/60"
@@ -461,7 +461,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
               return (
                 <div
                   key={idx}
-                  className={`rounded-lg transition-all border ${
+                  className={`rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] border ${
                     isExpanded
                       ? `bg-zinc-900/80 ${borderExpandedColor} p-2 my-1`
                       : "hover:bg-zinc-900/40 border-transparent border-b-zinc-900/60 last:border-b-0 py-1.5 px-2"

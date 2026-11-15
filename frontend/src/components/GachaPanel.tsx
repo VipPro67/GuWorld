@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Gift, Sparkles, Coins, Heart, Zap, Gem, Crown, X, ChevronRight, Star, Repeat, Clock, Minus, Plus, Layers } from "lucide-react";
 import { useGameStore } from "@/store/useGameStore";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
 const POOL_ICONS: Record<string, React.ReactNode> = {
   da_thuong: <Coins className="w-5 h-5 text-yellow-400" />,
@@ -45,6 +46,11 @@ export const GachaPanel: React.FC = () => {
   const [quantity, setQuantity] = useState<number>(1);
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [now, setNow] = useState(() => Date.now());
+  const closeAnimation = () => {
+    setShowAnim(false);
+    setResults(null);
+  };
+  const { dialogRef, onKeyDown } = useAccessibleDialog<HTMLDivElement>(closeAnimation, showAnim);
 
   useEffect(() => {
     fetchGachaPools();
@@ -125,17 +131,20 @@ export const GachaPanel: React.FC = () => {
     const shown = animRewards.slice(0, 20);
     const hiddenCount = animRewards.length - shown.length;
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => { setShowAnim(false); setResults(null); }}>
-        <div className="max-w-lg w-full mx-4" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-black/80 p-4" onClick={closeAnimation}>
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="gacha-result-title" tabIndex={-1} onKeyDown={onKeyDown} className="relative max-h-[90dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-zinc-700 bg-zinc-950 p-4 sm:p-5" onClick={e => e.stopPropagation()}>
+          <button type="button" onClick={closeAnimation} aria-label="Đóng kết quả mở đá" className="absolute right-3 top-3 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100">
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
           <div className="text-center mb-6">
-            <h3 className="text-lg font-bold font-serif text-amber-400 animate-pulse">Mở Đá</h3>
-            <div className="text-[10px] text-zinc-500 font-mono mt-1">{Math.min(animIndex, shown.length)}/{animRewards.length} lần</div>
+            <h3 id="gacha-result-title" className="pt-5 text-lg font-bold font-serif text-amber-400 animate-pulse">Mở Đá</h3>
+            <div aria-live="polite" className="mt-1 font-mono text-xs text-zinc-400">{Math.min(animIndex, shown.length)}/{animRewards.length} lần</div>
           </div>
           <div className="grid grid-cols-5 gap-3 justify-items-center">
             {shown.map((r, i) => (
               <div
                 key={i}
-                className={`w-full aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-1 p-1 transition-all duration-500 ${i < animIndex ? rarityClass(r) : "bg-zinc-950/80 border-zinc-800/40 opacity-30"}`}
+                className={`w-full aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-1 p-1 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-500 ${i < animIndex ? rarityClass(r) : "bg-zinc-950/80 border-zinc-800/40 opacity-30"}`}
               >
                 {i < animIndex ? (
                   <>
@@ -184,13 +193,16 @@ export const GachaPanel: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => setQuantity((q) => clampQty(q - 1))}
-                className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center cursor-pointer transition-colors"
+                aria-label="Giảm số lần mở"
+                className="min-h-11 min-w-11 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center cursor-pointer transition-colors"
               >
                 <Minus className="w-4 h-4" />
               </button>
               <input
                 type="number"
+                aria-label="Số lần mở đá"
                 min={1}
                 max={100}
                 value={quantity}
@@ -198,8 +210,10 @@ export const GachaPanel: React.FC = () => {
                 className="w-20 h-8 bg-zinc-950 border border-zinc-800 rounded-lg text-center text-sm font-mono font-bold text-amber-400 outline-none focus:border-amber-600"
               />
               <button
+                type="button"
                 onClick={() => setQuantity((q) => clampQty(q + 1))}
-                className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center cursor-pointer transition-colors"
+                aria-label="Tăng số lần mở"
+                className="min-h-11 min-w-11 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center cursor-pointer transition-colors"
               >
                 <Plus className="w-4 h-4" />
               </button>
@@ -208,8 +222,10 @@ export const GachaPanel: React.FC = () => {
               {QUICK_QTYS.map((q) => (
                 <button
                   key={q}
+                  type="button"
+                  aria-pressed={quantity === q}
                   onClick={() => setQuantity(q)}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer ${quantity === q ? "bg-amber-600 text-white" : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"}`}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${quantity === q ? "bg-amber-600 text-white" : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"}`}
                 >
                   {q}
                 </button>
@@ -244,7 +260,7 @@ export const GachaPanel: React.FC = () => {
                 <button
                   disabled={actionLoading || cooldownLeft > 0 || !canAfford(pool)}
                   onClick={() => handleOpen(pool.id, quantity)}
-                  className={`w-full py-2.5 ${POOL_BTN[pool.id] || "bg-amber-600 hover:bg-amber-500"} disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-[11px] font-bold font-mono cursor-pointer transition-all flex items-center justify-center gap-1.5`}
+                  className={`w-full py-2.5 ${POOL_BTN[pool.id] || "bg-amber-600 hover:bg-amber-500"} disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-[11px] font-bold font-mono cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-center gap-1.5`}
                 >
                   {cooldownLeft > 0 ? (
                     <>

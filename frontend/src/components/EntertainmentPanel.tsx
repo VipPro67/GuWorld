@@ -111,7 +111,7 @@ export const EntertainmentPanel: React.FC = () => {
 				<div className="flex bg-zinc-900/60 p-1 rounded-2xl border border-zinc-800">
 					<button
 						onClick={() => setActiveTab("gacha")}
-						className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+						className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
 							activeTab === "gacha"
 								? "bg-zinc-800 text-amber-400 shadow-sm"
 								: "text-zinc-400 hover:text-zinc-200"
@@ -122,7 +122,7 @@ export const EntertainmentPanel: React.FC = () => {
 					</button>
 					<button
 						onClick={() => setActiveTab("betting")}
-						className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+						className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
 							activeTab === "betting"
 								? "bg-zinc-800 text-amber-400 shadow-sm"
 								: "text-zinc-400 hover:text-zinc-200"
@@ -168,11 +168,11 @@ export const EntertainmentPanel: React.FC = () => {
 								<div className="h-4 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800 flex">
 									<div
 										style={{ width: `${totalPool > 0 ? (totalA / totalPool) * 100 : 50}%` }}
-										className="bg-gradient-to-r from-red-600 to-rose-500 transition-all duration-500"
+										className="bg-gradient-to-r from-red-600 to-rose-500 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-500"
 									/>
 									<div
 										style={{ width: `${totalPool > 0 ? (totalB / totalPool) * 100 : 50}%` }}
-										className="bg-gradient-to-l from-blue-600 to-indigo-500 transition-all duration-500"
+										className="bg-gradient-to-l from-blue-600 to-indigo-500 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-500"
 									/>
 								</div>
 							</div>
@@ -210,7 +210,7 @@ export const EntertainmentPanel: React.FC = () => {
 								<button
 									type="button"
 									onClick={() => setSelectedTeam("team_a")}
-									className={`py-3.5 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
+									className={`py-3.5 rounded-xl border text-sm font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
 										selectedTeam === "team_a"
 											? "bg-rose-950/40 border-rose-500/60 text-rose-200 shadow-[0_0_15px_rgba(244,63,94,0.15)]"
 											: "bg-zinc-900/50 border-zinc-800 text-zinc-400 hover:border-zinc-700"
@@ -221,7 +221,7 @@ export const EntertainmentPanel: React.FC = () => {
 								<button
 									type="button"
 									onClick={() => setSelectedTeam("team_b")}
-									className={`py-3.5 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
+									className={`py-3.5 rounded-xl border text-sm font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
 										selectedTeam === "team_b"
 											? "bg-blue-950/40 border-blue-500/60 text-blue-200 shadow-[0_0_15px_rgba(59,130,246,0.15)]"
 											: "bg-zinc-900/50 border-zinc-800 text-zinc-400 hover:border-zinc-700"
@@ -271,7 +271,7 @@ export const EntertainmentPanel: React.FC = () => {
 							<button
 								type="submit"
 								disabled={actionLoading || (player?.primeval_stones || 0) < betAmount || betAmount < 100}
-								className="w-full py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
+								className="w-full py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-xs font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shadow-md cursor-pointer flex items-center justify-center gap-2"
 							>
 								{actionLoading ? (
 									<Loader2 className="w-4 h-4 animate-spin" />

@@ -766,7 +766,7 @@ export default function WikiClientView({
           <div className="flex flex-wrap items-center gap-4">
             <Link
               href="/"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/60 border border-zinc-850 hover:border-emerald-500/30 text-zinc-400 hover:text-emerald-400 transition-all font-mono text-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/60 border border-zinc-850 hover:border-emerald-500/30 text-zinc-400 hover:text-emerald-400 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono text-xs cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               Quay về Game
@@ -813,7 +813,7 @@ export default function WikiClientView({
         <div className="flex flex-wrap gap-1 border-b border-[var(--border)] pb-px mb-6">
           <button
             onClick={() => handleTabChange("guides")}
-            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
               activeTab === "guides"
                 ? "border-emerald-500 text-emerald-400 bg-emerald-950/5"
                 : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-zinc-800/10"
@@ -824,7 +824,7 @@ export default function WikiClientView({
           </button>
           <button
             onClick={() => handleTabChange("gus")}
-            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
               activeTab === "gus"
                 ? "border-indigo-500 text-indigo-400 bg-indigo-950/5"
                 : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-zinc-800/10"
@@ -835,7 +835,7 @@ export default function WikiClientView({
           </button>
           <button
             onClick={() => handleTabChange("items")}
-            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
               activeTab === "items"
                 ? "border-sky-500 text-sky-400 bg-sky-950/5"
                 : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-zinc-800/10"
@@ -846,7 +846,7 @@ export default function WikiClientView({
           </button>
           <button
             onClick={() => handleTabChange("recipes")}
-            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
               activeTab === "recipes"
                 ? "border-amber-500 text-amber-400 bg-amber-950/5"
                 : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-zinc-800/10"
@@ -857,7 +857,7 @@ export default function WikiClientView({
           </button>
           <button
             onClick={() => handleTabChange("monsters")}
-            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
               activeTab === "monsters"
                 ? "border-red-500 text-red-400 bg-red-950/5"
                 : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-zinc-800/10"
@@ -868,7 +868,7 @@ export default function WikiClientView({
           </button>
           <button
             onClick={() => handleTabChange("regions")}
-            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-bold font-serif uppercase tracking-wider border-b-2 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
               activeTab === "regions"
                 ? "border-orange-500 text-orange-400 bg-orange-950/5"
                 : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-zinc-800/10"
@@ -913,7 +913,7 @@ export default function WikiClientView({
               </div>
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border text-xs font-bold cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                   showFilters
                     ? "bg-zinc-800 border-zinc-700 text-zinc-200"
                     : "bg-[var(--surface)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -940,7 +940,7 @@ export default function WikiClientView({
                     <button
                       key={cat.id}
                       onClick={() => setGuEffect(cat.id)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-mono shrink-0 transition-all flex items-center gap-1 cursor-pointer border ${
+                      className={`px-2.5 py-1 rounded-lg text-xs font-mono shrink-0 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1 cursor-pointer border ${
                         isActive
                           ? "bg-indigo-600/30 text-indigo-200 border-indigo-500/60 shadow-sm font-bold"
                           : "bg-zinc-900/40 text-zinc-400 border-zinc-800/60 hover:text-zinc-200 hover:border-zinc-700/80 hover:bg-zinc-800/30"
@@ -1233,7 +1233,7 @@ export default function WikiClientView({
               {roadmap && (
                 <Link
                   href={`/wiki/${roadmap.id}`}
-                  className="flex items-center gap-3 p-4 rounded-xl bg-[var(--surface)] border border-[var(--border)] hover:border-emerald-500/30 hover:bg-[var(--bg-elevated)] transition-all group shadow-sm cursor-pointer"
+                  className="flex items-center gap-3 p-4 rounded-xl bg-[var(--surface)] border border-[var(--border)] hover:border-emerald-500/30 hover:bg-[var(--bg-elevated)] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] group shadow-sm cursor-pointer"
                 >
                   <span className="text-xl shrink-0 p-2 rounded-lg bg-zinc-950/40 border border-zinc-800/30">🗺️</span>
                   <div className="min-w-0">
@@ -1299,7 +1299,7 @@ export default function WikiClientView({
                     <Link
                       key={gu.id + "_" + gu.rank}
                       href={`/wiki/gu/${gu.id}?rank=${gu.rank}`}
-                      className="group flex flex-col p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] hover:border-indigo-500/40 transition-all hover:bg-[var(--bg-elevated)] hover:-translate-y-0.5 duration-200 shadow-sm hover:shadow-md cursor-pointer"
+                      className="group flex flex-col p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] hover:border-indigo-500/40 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] hover:bg-[var(--bg-elevated)] hover:-translate-y-0.5 duration-200 shadow-sm hover:shadow-md cursor-pointer"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3 min-w-0">
@@ -1505,7 +1505,7 @@ export default function WikiClientView({
                 {paginatedItems.map((item) => (
                   <div
                     key={item.id}
-                    className="group flex flex-col p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] hover:border-sky-500/20 transition-all bg-gradient-to-br from-[var(--bg-card)] to-zinc-900/10 shadow-sm"
+                    className="group flex flex-col p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] hover:border-sky-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] bg-gradient-to-br from-[var(--bg-card)] to-zinc-900/10 shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3 min-w-0">
@@ -1653,7 +1653,7 @@ export default function WikiClientView({
                   return (
                     <div
                       key={recipe.id}
-                      className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] hover:border-amber-500/20 transition-all flex flex-col md:flex-row gap-5 items-start md:items-stretch shadow-sm"
+                      className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] hover:border-amber-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex flex-col md:flex-row gap-5 items-start md:items-stretch shadow-sm"
                     >
                       {/* Left Block: Target Gu Info */}
                       <div className="md:w-1/4 shrink-0 flex flex-col justify-between border-b md:border-b-0 md:border-r border-zinc-900/80 pb-4 md:pb-0 md:pr-5">
@@ -1880,7 +1880,7 @@ export default function WikiClientView({
                   return (
                     <div
                       key={monster.id}
-                      className="flex flex-col p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] shadow-sm hover:border-red-500/20 transition-all"
+                      className="flex flex-col p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] shadow-sm hover:border-red-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
                     >
                       <div className="flex items-start justify-between gap-3 border-b border-zinc-900/80 pb-4 mb-4">
                         <div className="flex items-center gap-3">
@@ -2190,7 +2190,7 @@ export default function WikiClientView({
                   return (
                     <div
                       key={region.id}
-                      className="flex flex-col p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] shadow-sm hover:border-orange-500/20 transition-all"
+                      className="flex flex-col p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] shadow-sm hover:border-orange-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
                     >
                       <div className="flex items-start justify-between gap-3 border-b border-zinc-900/80 pb-4 mb-4">
                         <div className="flex items-center gap-3">

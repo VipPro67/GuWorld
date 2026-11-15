@@ -5,6 +5,7 @@ import { ShoppingCart, AlertCircle, Coins, Sparkles, LayoutGrid, List, Search, X
 import { getItemIconUrl } from "@/lib/item-icons";
 import { getGuIconUrl } from "@/lib/gu-icons";
 import { getGuRankColor } from "@/lib/gu-frames";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
 interface ItemMeta {
   type: string;
@@ -24,6 +25,11 @@ export const ArenaShopView: React.FC = () => {
   const [buyQuantity, setBuyQuantity] = useState(1);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const { dialogRef: itemDialogRef, onKeyDown: itemDialogKeyDown } = useAccessibleDialog<HTMLDivElement>(
+    () => setSelectedBuyItem(null),
+    Boolean(selectedBuyItem),
+    selectedBuyItem?.id
+  );
 
   const filteredItems = arenaShopItems.filter((item: ApiResponseData) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -184,7 +190,7 @@ export const ArenaShopView: React.FC = () => {
               <div
                 key={item.id}
                 onClick={() => handleOpenBuyModal(item)}
-                className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer hover:-translate-y-1 ${meta.rankColor.border} ${meta.rankColor.bgGradient} hover:shadow-lg ${meta.rankColor.glow}`}
+                className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 cursor-pointer hover:-translate-y-1 ${meta.rankColor.border} ${meta.rankColor.bgGradient} hover:shadow-lg ${meta.rankColor.glow}`}
               >
                 {/* Art & Badges */}
                 <div className="relative aspect-square w-full rounded-xl bg-black/40 border border-zinc-800/60 overflow-hidden flex items-center justify-center p-2 mb-2">
@@ -225,7 +231,7 @@ export const ArenaShopView: React.FC = () => {
                         e.stopPropagation();
                         handleOpenBuyModal(item);
                       }}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                         canAfford
                           ? "bg-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-black border border-amber-500/30"
                           : "bg-zinc-900 text-zinc-500 border border-zinc-800"
@@ -248,7 +254,7 @@ export const ArenaShopView: React.FC = () => {
               <div
                 key={item.id}
                 onClick={() => handleOpenBuyModal(item)}
-                className={`bg-zinc-950/60 border rounded-2xl p-3 flex items-center justify-between gap-3 hover:border-amber-900/50 transition-all group cursor-pointer ${meta.rankColor.border}`}
+                className={`bg-zinc-950/60 border rounded-2xl p-3 flex items-center justify-between gap-3 hover:border-amber-900/50 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] group cursor-pointer ${meta.rankColor.border}`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-12 h-12 rounded-xl bg-black/40 border border-zinc-800 flex items-center justify-center p-1.5 shrink-0 relative">
@@ -298,7 +304,7 @@ export const ArenaShopView: React.FC = () => {
                       e.stopPropagation();
                       handleOpenBuyModal(item);
                     }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1.5 cursor-pointer ${
                       canAfford
                         ? "bg-amber-600 hover:bg-amber-500 text-zinc-950 shadow-md"
                         : "bg-zinc-900 border border-zinc-800 text-zinc-500"
@@ -322,13 +328,20 @@ export const ArenaShopView: React.FC = () => {
             onClick={() => setSelectedBuyItem(null)}
           >
             <div
+              ref={itemDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Thông tin ${selectedMeta.name}`}
+              tabIndex={-1}
+              onKeyDown={itemDialogKeyDown}
               className={`bg-zinc-950 border ${selectedMeta.rankColor.border} rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl relative ${selectedMeta.rankColor.glow}`}
               onClick={(e) => e.stopPropagation()}
             >
               <button
                 type="button"
                 onClick={() => setSelectedBuyItem(null)}
-                className="absolute top-4 right-4 p-1.5 text-zinc-500 hover:text-zinc-200 rounded-full hover:bg-zinc-900 transition-colors cursor-pointer"
+                aria-label={`Đóng thông tin ${selectedMeta.name}`}
+                className="absolute top-4 right-4 flex min-h-11 min-w-11 items-center justify-center text-zinc-500 hover:text-zinc-200 rounded-full hover:bg-zinc-900 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -439,7 +452,7 @@ export const ArenaShopView: React.FC = () => {
                       key={step}
                       type="button"
                       onClick={() => setBuyQuantity((prev) => (prev || 0) + step)}
-                      className="flex-1 py-1 text-[11px] font-mono text-zinc-400 bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-all cursor-pointer"
+                      className="flex-1 py-1 text-[11px] font-mono text-zinc-400 bg-zinc-900/50 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                     >
                       +{step}
                     </button>
@@ -453,7 +466,7 @@ export const ArenaShopView: React.FC = () => {
                           : 999;
                       setBuyQuantity(Math.max(1, affordable));
                     }}
-                    className="flex-1 py-1 text-[11px] font-mono text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 rounded-lg transition-all cursor-pointer font-semibold"
+                    className="flex-1 py-1 text-[11px] font-mono text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/30 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-semibold"
                   >
                     Tối đa
                   </button>
@@ -490,7 +503,7 @@ export const ArenaShopView: React.FC = () => {
                   type="button"
                   disabled={actionLoading}
                   onClick={() => setSelectedBuyItem(null)}
-                  className="py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:bg-zinc-900 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer"
+                  className="py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:bg-zinc-900 font-semibold text-xs active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                 >
                   Hủy Bỏ
                 </button>
@@ -498,7 +511,7 @@ export const ArenaShopView: React.FC = () => {
                   type="button"
                   disabled={actionLoading || !!successMessage}
                   onClick={handleConfirmPurchase}
-                  className="py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold text-xs active:scale-[0.98] transition-all cursor-pointer shadow-lg"
+                  className="py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-zinc-950 font-bold text-xs active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shadow-lg"
                 >
                   Xác Nhận Đổi
                 </button>

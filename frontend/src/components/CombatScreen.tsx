@@ -1018,7 +1018,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             <div className="p-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-rose-500/50 focus-within:bg-zinc-900/80 group">
+                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] focus-within:border-rose-500/50 focus-within:bg-zinc-900/80 group">
                     <label className="text-xs font-bold text-rose-400/80 group-focus-within:text-rose-400 w-24">Máu (HP)</label>
                     <input
                       type="number"
@@ -1027,7 +1027,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                       className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
                     />
                   </div>
-                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-blue-500/50 focus-within:bg-zinc-900/80 group">
+                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] focus-within:border-blue-500/50 focus-within:bg-zinc-900/80 group">
                     <label className="text-xs font-bold text-blue-400/80 group-focus-within:text-blue-400 w-24">Khiên Ảo</label>
                     <input
                       type="number"
@@ -1039,7 +1039,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-amber-500/50 focus-within:bg-zinc-900/80 group">
+                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] focus-within:border-amber-500/50 focus-within:bg-zinc-900/80 group">
                     <label className="text-xs font-bold text-amber-400/80 group-focus-within:text-amber-400 w-24">Công Kích</label>
                     <input
                       type="number"
@@ -1048,7 +1048,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                       className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
                     />
                   </div>
-                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-emerald-500/50 focus-within:bg-zinc-900/80 group">
+                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] focus-within:border-emerald-500/50 focus-within:bg-zinc-900/80 group">
                     <label className="text-xs font-bold text-emerald-400/80 group-focus-within:text-emerald-400 w-24">Phòng Thủ</label>
                     <input
                       type="number"
@@ -1057,7 +1057,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                       className="w-full bg-transparent text-right text-zinc-200 text-sm font-mono focus:outline-none"
                     />
                   </div>
-                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-all focus-within:border-cyan-500/50 focus-within:bg-zinc-900/80 group">
+                  <div className="flex items-center justify-between bg-zinc-950/50 border border-zinc-800/80 rounded-lg p-2.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] focus-within:border-cyan-500/50 focus-within:bg-zinc-900/80 group">
                     <label className="text-xs font-bold text-cyan-400/80 group-focus-within:text-cyan-400 w-24">Tốc Độ</label>
                     <input
                       type="number"
@@ -1116,7 +1116,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
           <span className="text-xs font-mono text-amber-200"><Num value={Math.round(hp)} /> / <Num value={Math.round(max)} /></span>
         </div>
         <div className="h-3 w-full bg-zinc-900 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+          <div className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-[width]" style={{ width: `${pct}%` }} />
         </div>
       </div>
     );
@@ -1194,7 +1194,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         <button
           onClick={handleStartInteractive}
           disabled={actionLoading || Boolean(interactiveSession) || isIncomingPvp}
-          className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
+          className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <Play className="w-6 h-6" />
           <span>Điều khiển từng lượt</span>
@@ -1251,7 +1251,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                 }
               }}
               disabled={actionLoading}
-              className="px-6 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white font-bold py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(168,85,247,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
+              className="px-6 bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white font-bold py-4 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shadow-[0_0_15px_rgba(168,85,247,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <PawPrint className="w-6 h-6" />
               <span>Thu Phục</span>
@@ -1300,7 +1300,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
               }
             }}
             disabled={actionLoading}
-            className="px-6 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold py-4 rounded-xl border border-zinc-800 transition-all flex items-center gap-2 justify-center"
+            className="px-6 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold py-4 rounded-xl border border-zinc-800 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-2 justify-center"
           >
             <span>Rút Lui</span>
           </button>
@@ -1333,7 +1333,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={recommendLoadout}
-                className="px-3 py-1.5 bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-300 rounded-lg text-xs font-bold border border-emerald-700 transition-all flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-300 rounded-lg text-xs font-bold border border-emerald-700 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1.5"
               >
                 <Zap className="w-3.5 h-3.5" />
                 Tự động chọn
@@ -1358,20 +1358,20 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             <div className="flex bg-zinc-900 rounded-lg border border-zinc-800 p-0.5">
               <button
                 onClick={() => setGuSortMode("rank")}
-                className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${guSortMode === "rank" ? 'bg-zinc-700 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`px-2 py-1 rounded text-[10px] font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${guSortMode === "rank" ? 'bg-zinc-700 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}`}
               >
                 <ChevronDown className="w-3 h-3 inline" /> Bậc
               </button>
               <button
                 onClick={() => setGuSortMode("path")}
-                className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${guSortMode === "path" ? 'bg-zinc-700 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`px-2 py-1 rounded text-[10px] font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${guSortMode === "path" ? 'bg-zinc-700 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'}`}
               >
                 <ChevronUp className="w-3 h-3 inline" /> Hệ
               </button>
             </div>
             <button
               onClick={recommendLoadout}
-              className="px-2 py-1 bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-300 rounded text-[10px] font-bold border border-emerald-800 transition-all flex items-center gap-1"
+              className="px-2 py-1 bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-300 rounded text-[10px] font-bold border border-emerald-800 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1"
             >
               <Wand2 className="w-3 h-3" />
               Gợi ý
@@ -1441,7 +1441,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                   <div
                     key={gu.instance_id}
                     onClick={() => toggleGu(gu.instance_id)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all relative ${isSelected ? 'border-emerald-500 bg-emerald-950/30 ring-1 ring-emerald-500/30' :
+                    className={`p-3 rounded-xl border cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] relative ${isSelected ? 'border-emerald-500 bg-emerald-950/30 ring-1 ring-emerald-500/30' :
                         isHigherRank ? 'border-rose-800/40 bg-rose-950/10' :
                           pathMatch ? 'border-emerald-800/40 bg-emerald-950/10' :
                             'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'
@@ -1528,10 +1528,13 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                   }
                 };
                 return (
-                  <div
+                  <button
                     key={km.id}
+                    type="button"
                     onClick={toggleKm}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all relative ${
+                    disabled={!km.available && !isSelected || (!isSelected && selectedKmIds.length >= 4)}
+                    aria-pressed={isSelected}
+                    className={`w-full p-3 rounded-xl border text-left transition-[background-color,border-color,box-shadow] relative disabled:cursor-not-allowed ${
                       !km.available ? 'border-zinc-800/40 bg-zinc-950/30 opacity-50 cursor-not-allowed' :
                       isSelected ? 'border-amber-500 bg-amber-950/30 ring-1 ring-amber-500/30' :
                       'border-zinc-800 bg-zinc-900/50 hover:border-zinc-600'
@@ -1556,7 +1559,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                         <span className="text-[8px] text-zinc-950 font-bold">✓</span>
                       </div>
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -1570,34 +1573,30 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             Tự Động Chiến Đấu
           </h3>
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={autoHealHP} onChange={e => setAutoHealHP(e.target.checked)} />
-                  <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:bg-emerald-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
+              <div className="flex items-center justify-between gap-3">
+                <label className="flex min-h-11 items-center gap-2 cursor-pointer">
+                  <input type="checkbox" className="peer sr-only" checked={autoHealHP} onChange={e => setAutoHealHP(e.target.checked)} />
+                  <span aria-hidden="true" className="relative h-5 w-9 rounded-full bg-zinc-700 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-emerald-600 peer-checked:after:translate-x-full peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-amber-300" />
+                  <span className="text-xs text-zinc-300">Tự động dùng dược liệu hồi HP</span>
                 </label>
-                <span className="text-xs text-zinc-300">Tự động dùng dược liệu hồi HP</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-zinc-500">HP &le;</span>
-                <input type="range" min="10" max="80" value={healThreshold} onChange={e => setHealThreshold(Number(e.target.value))} disabled={!autoHealHP} className="w-20 h-1 accent-emerald-500" />
-                <span className="text-xs text-zinc-300 w-8">{healThreshold}%</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={autoRestoreMana} onChange={e => setAutoRestoreMana(e.target.checked)} />
-                  <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:bg-cyan-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
+                <label className="flex min-h-11 items-center gap-2 text-[10px] text-zinc-500">
+                  HP ≤
+                  <input aria-label="Ngưỡng tự động hồi HP" type="range" min="10" max="80" value={healThreshold} onChange={e => setHealThreshold(Number(e.target.value))} disabled={!autoHealHP} className="h-11 w-20 accent-emerald-500 disabled:opacity-40" />
+                  <span className="w-8 text-xs text-zinc-300">{healThreshold}%</span>
                 </label>
-                <span className="text-xs text-zinc-300">Tự động dùng Nguyên Thạch hồi Mana</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-zinc-500">Mana &le;</span>
-                <input type="range" min="10" max="80" value={manaThreshold} onChange={e => setManaThreshold(Number(e.target.value))} disabled={!autoRestoreMana} className="w-20 h-1 accent-cyan-500" />
-                <span className="text-xs text-zinc-300 w-8">{manaThreshold}%</span>
+              <div className="flex items-center justify-between gap-3">
+                <label className="flex min-h-11 items-center gap-2 cursor-pointer">
+                  <input type="checkbox" className="peer sr-only" checked={autoRestoreMana} onChange={e => setAutoRestoreMana(e.target.checked)} />
+                  <span aria-hidden="true" className="relative h-5 w-9 rounded-full bg-zinc-700 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-cyan-600 peer-checked:after:translate-x-full peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-amber-300" />
+                  <span className="text-xs text-zinc-300">Tự động dùng Nguyên Thạch hồi Mana</span>
+                </label>
+                <label className="flex min-h-11 items-center gap-2 text-[10px] text-zinc-500">
+                  Mana ≤
+                  <input aria-label="Ngưỡng tự động hồi Mana" type="range" min="10" max="80" value={manaThreshold} onChange={e => setManaThreshold(Number(e.target.value))} disabled={!autoRestoreMana} className="h-11 w-20 accent-cyan-500 disabled:opacity-40" />
+                  <span className="w-8 text-xs text-zinc-300">{manaThreshold}%</span>
+                </label>
               </div>
-            </div>
           </div>
           <div className="mt-2 text-[10px] text-zinc-600">
             {player.materials_inventory && Object.keys(player.materials_inventory).length > 0

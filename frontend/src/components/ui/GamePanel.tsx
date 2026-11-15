@@ -76,7 +76,7 @@ export const GamePanel = React.forwardRef<HTMLDivElement, GamePanelProps>(
   ) => {
     const borderClass = bordered ? "border border-border" : "border-0";
     const hoverClass = hoverable
-      ? "transition-all duration-300 hover:-translate-y-1 hover:border-border-hover hover:shadow-lg"
+      ? "transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-border-hover hover:shadow-lg"
       : "";
     const clickableClass = clickable
       ? "cursor-pointer active:scale-[0.99] active:shadow-md"

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useGameStore, ImmortalAperture } from "@/store/useGameStore";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
 import { statusRemainLabel } from "@/lib/utils";
@@ -25,16 +25,49 @@ const translatePath = (path: string): string => {
 
 export const PlayerProfileModal: React.FC = () => {
   const { inspectedProfile, inspectedUsernameQuery, clearInspectedProfile, guDictionary, player, initiateTrade, aperture, constitutionDictionary, raceDictionary, statusDictionary } = useGameStore();
-
-  if (!inspectedProfile) return null;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const isOpen = Boolean(inspectedProfile);
 
   useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") clearInspectedProfile();
+    if (!isOpen) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const getControls = () => dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+    );
+    const frame = requestAnimationFrame(() => (getControls()[0] || dialog).focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        clearInspectedProfile();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = getControls();
+      if (!controls.length) {
+        event.preventDefault();
+        dialog.focus();
+      } else if (event.shiftKey && document.activeElement === controls[0]) {
+        event.preventDefault();
+        controls[controls.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) {
+        event.preventDefault();
+        controls[0].focus();
+      }
     };
-    window.addEventListener("keydown", handleEsc);
-    return () => window.removeEventListener("keydown", handleEsc);
-  }, [clearInspectedProfile]);
+    dialog.addEventListener("keydown", handleKeyDown);
+    return () => {
+      cancelAnimationFrame(frame);
+      dialog.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [isOpen, clearInspectedProfile]);
+
+  if (!inspectedProfile) return null;
 
   const {
     username,
@@ -169,9 +202,14 @@ export const PlayerProfileModal: React.FC = () => {
   return (
     <div
       onClick={clearInspectedProfile}
-      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 sm:p-4 pb-16 sm:pb-6 bg-[var(--bg-primary)]/80 backdrop-blur-sm overflow-y-auto transition-opacity animate-fade-in cursor-pointer"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overscroll-contain p-3 sm:p-4 pb-16 sm:pb-6 bg-[var(--bg-primary)]/80 backdrop-blur-sm overflow-y-auto transition-opacity animate-fade-in cursor-pointer"
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="inspected-profile-title"
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         className={`w-full max-w-sm sm:max-w-lg bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--border-default)] rounded-2xl sm:rounded-3xl p-4 sm:p-6 my-auto relative overflow-y-auto max-h-[calc(100dvh-5rem)] sm:max-h-[90vh] ${glowClass} shadow-2xl flex flex-col gap-4 sm:gap-6 animate-scale-up cursor-default pb-8 sm:pb-6`}
       >
@@ -182,8 +220,10 @@ export const PlayerProfileModal: React.FC = () => {
             <p className="text-xs font-mono font-medium leading-relaxed">{scouting_status}</p>
           </div>
           <button
+            type="button"
             onClick={clearInspectedProfile}
-            className="p-1.5 rounded-lg bg-[var(--bg-elevated)] hover:bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors border border-[var(--border-default)] cursor-pointer shrink-0 z-10"
+            aria-label="Đóng hồ sơ người chơi"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-[var(--bg-elevated)] hover:bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors border border-[var(--border-default)] cursor-pointer shrink-0 z-10"
             title="Đóng"
           >
             <X className="w-3.5 h-3.5" />
@@ -208,7 +248,7 @@ export const PlayerProfileModal: React.FC = () => {
           </div>
 
           <div className="flex flex-col min-w-0 text-left">
-            <h3 className="text-lg font-serif font-bold text-[var(--text-primary)] truncate flex items-center gap-1.5">
+            <h3 id="inspected-profile-title" className="text-lg font-serif font-bold text-[var(--text-primary)] truncate flex items-center gap-1.5">
               {username}
               {status_type === "failure" && username === "Ẩn Danh Cổ Sư" && (
                 <Crown className="w-4 h-4 text-amber-500 animate-bounce" />
@@ -347,7 +387,7 @@ export const PlayerProfileModal: React.FC = () => {
               </div>
               <div className="w-full bg-zinc-950 rounded-full h-2 border border-zinc-900 overflow-hidden">
                 <div
-                  className="bg-gradient-to-r from-red-600 to-rose-500 h-full rounded-full transition-all duration-300"
+                  className="bg-gradient-to-r from-red-600 to-rose-500 h-full rounded-full transition-[width] duration-300"
                   style={{ width: base_hp <= 0 ? "0%" : `${Math.min(100, (hp / base_hp) * 100)}%` }}
                 />
               </div>
@@ -376,7 +416,7 @@ export const PlayerProfileModal: React.FC = () => {
                 </div>
                 <div className="w-full bg-zinc-950 rounded-full h-2 border border-zinc-900 overflow-hidden">
                   <div
-                    className="bg-gradient-to-r from-cyan-600 to-blue-500 h-full rounded-full transition-all duration-300"
+                    className="bg-gradient-to-r from-cyan-600 to-blue-500 h-full rounded-full transition-[width] duration-300"
                     style={{ width: max_mana <= 0 ? "0%" : `${Math.min(100, (current_mana / max_mana) * 100)}%` }}
                   />
                 </div>
@@ -457,7 +497,7 @@ export const PlayerProfileModal: React.FC = () => {
                   return (
                     <span
                       key={index}
-                      className={`text-xs px-3 py-1.5 rounded-xl border font-serif font-semibold flex items-center gap-1.5 transition-all hover:scale-102 ${
+                      className={`text-xs px-3 py-1.5 rounded-xl border font-serif font-semibold flex items-center gap-1.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] hover:scale-102 ${
                         isObfuscated
                           ? "bg-zinc-900/60 text-zinc-600 border-zinc-900/40 select-none cursor-not-allowed"
                           : isImmortal
@@ -488,7 +528,7 @@ export const PlayerProfileModal: React.FC = () => {
                   }
                   clearInspectedProfile();
                 }}
-                className="w-full py-3 rounded-2xl font-serif font-bold text-sm bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-[var(--text-primary)] shadow-lg shadow-emerald-950/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-500/20"
+                className="w-full py-3 rounded-2xl font-serif font-bold text-sm bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-[var(--text-primary)] shadow-lg shadow-emerald-950/20 active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-center gap-2 cursor-pointer border border-emerald-500/20"
               >
                 <Sparkles className="w-4 h-4" /> Bắt Đầu Giao Dịch
               </button>

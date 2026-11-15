@@ -40,7 +40,7 @@ export const WikiView: React.FC = () => {
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Tìm kiếm tài liệu..."
-              className="w-full bg-zinc-900 border border-zinc-900 focus:border-zinc-700 rounded-xl pl-9 pr-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-all font-mono"
+              className="w-full bg-zinc-900 border border-zinc-900 focus:border-zinc-700 rounded-xl pl-9 pr-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
             />
           </div>
         </div>
@@ -58,7 +58,7 @@ export const WikiView: React.FC = () => {
                     type="button"
                     onClick={() => selectPage(page.id)}
                     aria-current={selectedPageId === page.id ? "page" : undefined}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all ${selectedPageId === page.id
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${selectedPageId === page.id
                       ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/15"
                       : "text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200"}`}
                   >
@@ -100,7 +100,7 @@ export const WikiView: React.FC = () => {
                   key={card.targetId}
                   type="button"
                   onClick={() => selectPage(card.targetId)}
-                  className="p-4 text-left bg-zinc-950/80 border border-zinc-900 hover:border-violet-500/30 hover:bg-zinc-900/30 rounded-2xl group transition-all flex items-center justify-between"
+                  className="p-4 text-left bg-zinc-950/80 border border-zinc-900 hover:border-violet-500/30 hover:bg-zinc-900/30 rounded-2xl group transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-between"
                 >
                   <span className="space-y-1">
                     <span className="block text-xs font-bold font-serif text-zinc-200 group-hover:text-indigo-400 transition-colors">

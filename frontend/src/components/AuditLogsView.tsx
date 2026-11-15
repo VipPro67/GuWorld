@@ -374,7 +374,7 @@ export const AuditLogsView: React.FC = () => {
         <button
           onClick={handleRefresh}
           disabled={auditLogsLoading}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-700/60 rounded-lg text-xs font-semibold text-slate-200 hover:bg-slate-850 hover:text-white transition-all disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-700/60 rounded-lg text-xs font-semibold text-slate-200 hover:bg-slate-850 hover:text-white transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${auditLogsLoading ? "animate-spin" : ""}`} />
           Làm mới
@@ -509,7 +509,7 @@ export const AuditLogsView: React.FC = () => {
                     </div>
                   )}
                   <div
-                    className={`border rounded-xl transition-all ${
+                    className={`border rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                       isDeath
                         ? "border-rose-900/50 bg-rose-950/20 border-l-4 border-l-rose-500/80 hover:border-rose-700/60"
                         : isExpanded

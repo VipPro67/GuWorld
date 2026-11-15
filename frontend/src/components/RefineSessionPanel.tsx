@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import type { RefineActiveStep, RefineSession } from "@/store/slices/refineSessionSlice";
 import { GameStepProgress } from "@/components/ui/GameProgressBar";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
 // Phiên Luyện Cổ chạy nền (WF-REF-07): timeline + 4 minigame + HUD nổi.
 // Server chấm điểm; client chỉ gửi input rời rạc + nonce (idempotent).
@@ -69,7 +70,7 @@ function CountdownBar({ windowEnd, offsetMs, durationMs = 20000 }: { windowEnd: 
   const pct = Math.min(100, Math.max(0, (left / total) * 100));
   return (
     <div className="h-1.5 w-full rounded bg-zinc-800 overflow-hidden">
-      <div className="h-full bg-gradient-to-r from-rose-500 to-pink-500 transition-all" style={{ width: `${pct}%` }} />
+      <div className="h-full bg-gradient-to-r from-rose-500 to-pink-500 transition-[width]" style={{ width: `${pct}%` }} />
     </div>
   );
 }
@@ -359,6 +360,12 @@ export function RefineSessionPanel() {
       setSubmitting(false);
     }
   }, [session?.step, submitting, submitRefineStep]);
+  const acknowledgeResult = useCallback(async () => {
+    await ackRefineSession();
+    useGameStore.setState({ refineSession: null });
+  }, [ackRefineSession]);
+  const resultOpen = Boolean(session && session.status !== "ACTIVE" && session.result && !session.acknowledged_at);
+  const { dialogRef, onKeyDown } = useAccessibleDialog<HTMLDivElement>(acknowledgeResult, resultOpen);
 
   const stepWindowMs = useMemo(() => {
     if (!step || !session) return 20000;
@@ -386,10 +393,9 @@ export function RefineSessionPanel() {
   }, [session?.steps, offsetMs]);
   const currentStepIndex = session?.step?.index ?? (session?.status !== "ACTIVE" ? (session?.steps?.length ?? 0) : 0);
 
+  const finished = Boolean(session && session.status !== "ACTIVE");
+  const nowTick = useNowTick(Boolean(session && !finished && panelOpen));
   if (!session) return null;
-  const finished = session.status !== "ACTIVE";
-  // Đồng hồ hiển thị thời gian — gọi hook TRƯỚC mọi return sớm (rules of hooks).
-  const nowTick = useNowTick(!finished && panelOpen);
 
 
   // ── Result overlay ──
@@ -397,11 +403,11 @@ export function RefineSessionPanel() {
     const ok = session.result.outcome === "SUCCESS";
     const breakdown = (session.result.rate_breakdown || {}) as Record<string, unknown>;
     return (
-      <div className="fixed inset-0 z-[95] bg-black/80 flex items-center justify-center p-4">
-        <div className="max-w-md w-full rounded-2xl border border-zinc-700 bg-zinc-950 p-5 space-y-4">
-          <div className={`text-center text-xl font-bold ${ok ? "text-amber-300" : "text-rose-300"}`}>
+      <div className="fixed inset-0 z-[95] flex items-center justify-center overscroll-contain bg-black/80 p-4" onKeyDown={onKeyDown}>
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="refine-result-title" tabIndex={-1} className="max-h-[90dvh] w-full max-w-md space-y-4 overflow-y-auto overscroll-contain rounded-2xl border border-zinc-700 bg-zinc-950 p-5">
+          <h2 id="refine-result-title" className={`text-center text-xl font-bold ${ok ? "text-amber-300" : "text-rose-300"}`}>
             {ok ? "🔥 Luyện Cổ Thành Công" : "Luyện Cổ Thất Bại"}
-          </div>
+          </h2>
           {ok && (
             <div className="text-center text-sm text-zinc-200">
               {typeof session.result.new_gu === "object" && session.result.new_gu
@@ -421,11 +427,8 @@ export function RefineSessionPanel() {
             )}
           </div>
           <button
-            onClick={async () => {
-              await ackRefineSession();
-              useGameStore.setState({ refineSession: null });
-            }}
-            className="w-full py-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-zinc-950 font-semibold"
+            onClick={() => void acknowledgeResult()}
+            className="min-h-11 w-full rounded-lg bg-amber-600 py-2.5 font-semibold text-zinc-950 hover:bg-amber-500"
           >
             Xác nhận
           </button>

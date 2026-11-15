@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useGameStore, Player } from "@/store/useGameStore";
 import { X, Sparkles, Compass, Shield, Coins, Layers, ArrowRightLeft, Award, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { GameButton } from "@/components/ui";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import type { TeleportBuildRequest, TeleportCompositionTemplate, TeleportFormationCompositionGraph, TeleportFormationEffectPreview } from "@/store/slices/teleportSlice";
 
 interface TeleportBuildModalProps {
@@ -58,6 +59,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
   const [effectPreviewMessage, setEffectPreviewMessage] = useState("");
   const [effectPreviewLoading, setEffectPreviewLoading] = useState(false);
   const [compositionDraftID, setCompositionDraftID] = useState("");
+  const { dialogRef, onKeyDown } = useAccessibleDialog<HTMLDivElement>(onClose);
 
   const invalidateEffectPreview = () => {
     setCompositionDraftID("");
@@ -238,8 +240,8 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
 
   return (
     <div className="pointer-events-auto fixed inset-0 z-[9999] h-[100dvh] flex items-center justify-center md:p-4">
-      <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={onClose} />
-      <div className="relative bg-zinc-950 border border-amber-500/30 shadow-2xl h-full w-full max-h-full flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left md:h-auto md:max-h-[90dvh] md:max-w-xl md:rounded-3xl">
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={onClose} aria-hidden="true" />
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Bố trí truyền tống trận" tabIndex={-1} onKeyDown={onKeyDown} className="relative bg-zinc-950 border border-amber-500/30 shadow-2xl h-full w-full max-h-full flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left md:h-auto md:max-h-[90dvh] md:max-w-xl md:rounded-3xl">
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between border-b border-zinc-800/80 px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-amber-950/20 via-zinc-900/40 to-transparent">
           <div className="flex items-center gap-2.5">
@@ -255,7 +257,8 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors cursor-pointer"
+            aria-label="Đóng bố trí truyền tống trận"
+            className="min-h-11 min-w-11 p-2 rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -310,7 +313,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
                     key={tpl.tier}
                     type="button"
                     onClick={() => { setSelectedTier(tpl.tier); invalidateEffectPreview(); }}
-                    className={`p-3 rounded-2xl border text-left transition-all relative flex flex-col justify-between ${
+                    className={`p-3 rounded-2xl border text-left transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] relative flex flex-col justify-between ${
                       isSelected
                         ? "bg-amber-950/25 border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/30"
                         : "bg-zinc-900/40 border-zinc-800/80 hover:border-zinc-700 hover:bg-zinc-900/70"
@@ -396,7 +399,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
               {/* Progress Bar */}
               <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-300 ${
+                  className={`h-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${
                     activeBreakdown.total >= 80 ? "bg-emerald-500" : activeBreakdown.total >= 50 ? "bg-amber-500" : "bg-rose-500"
                   }`}
                   style={{ width: `${activeBreakdown.total}%` }}
@@ -609,7 +612,7 @@ export const TeleportBuildModal: React.FC<TeleportBuildModalProps> = ({
                     onChange={(e) => setFeeEnabled(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600"></div>
+                  <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] peer-checked:bg-amber-600"></div>
                 </label>
               </div>
 

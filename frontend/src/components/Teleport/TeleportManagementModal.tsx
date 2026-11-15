@@ -5,6 +5,7 @@ import { useGameStore, Player } from "@/store/useGameStore";
 import { TeleportArray } from "@/store/slices/teleportSlice";
 import { X, Settings, Coins, Wrench, Trash2, Shield, ArrowRightLeft, Check, AlertTriangle, Award, Sparkles } from "lucide-react";
 import { GameButton } from "@/components/ui";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import { getFormationInfo } from "./TeleportBuildModal";
 
 interface TeleportManagementModalProps {
@@ -35,6 +36,7 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
   const [feeEnabled, setFeeEnabled] = useState<boolean>(array.fee_enabled);
   const [feeCurrency, setFeeCurrency] = useState<string>(array.fee_currency || "primeval_stones");
   const [feeAmount, setFeeAmount] = useState<number>(array.fee_amount || 0);
+  const { dialogRef, onKeyDown } = useAccessibleDialog<HTMLDivElement>(onClose);
 
   // Formation Path & Dao Mark calculations
   const formationPts = player.path_masteries?.["formation"] ?? player.path_masteries?.["formation path"] ?? 0;
@@ -85,8 +87,8 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
 
   return (
     <div className="pointer-events-auto fixed inset-0 z-[9999] h-[100dvh] flex items-center justify-center px-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:px-4">
-      <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={onClose} />
-      <div className="relative bg-zinc-950 border border-amber-500/30 rounded-3xl shadow-2xl w-full max-w-lg max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left">
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={onClose} aria-hidden="true" />
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Quản lý truyền tống trận" tabIndex={-1} onKeyDown={onKeyDown} className="relative bg-zinc-950 border border-amber-500/30 rounded-3xl shadow-2xl w-full max-w-lg max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-1rem)] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left">
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between border-b border-zinc-800/80 px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-amber-950/20 via-zinc-900/40 to-transparent">
           <div className="flex items-center gap-2.5">
@@ -102,7 +104,8 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors cursor-pointer"
+            aria-label="Đóng quản lý truyền tống trận"
+            className="min-h-11 min-w-11 p-2 rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -143,7 +146,7 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
               </div>
               <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
                 <div
-                  className={`h-full transition-all ${
+                  className={`h-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                     durPercent > 50 ? "bg-emerald-500" : durPercent > 20 ? "bg-amber-500" : "bg-rose-500"
                   }`}
                   style={{ width: `${durPercent}%` }}
@@ -155,7 +158,7 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
                     type="button"
                     onClick={handleRepair}
                     disabled={actionLoading}
-                    className="w-full py-1.5 mt-1 rounded-xl bg-blue-950/40 border border-blue-800/60 text-blue-300 hover:bg-blue-900/60 text-[11px] font-mono font-bold transition-all flex items-center justify-center gap-1"
+                    className="w-full py-1.5 mt-1 rounded-xl bg-blue-950/40 border border-blue-800/60 text-blue-300 hover:bg-blue-900/60 text-[11px] font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-center gap-1"
                   >
                     <Wrench className="w-3 h-3" />
                     Sửa Chữa (+{array.max_durability - array.current_durability})
@@ -186,7 +189,7 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
                 type="button"
                 onClick={handleWithdraw}
                 disabled={actionLoading || array.vault_balance <= 0}
-                className={`w-full py-1.5 rounded-xl border text-[11px] font-mono font-bold transition-all flex items-center justify-center gap-1 ${
+                className={`w-full py-1.5 rounded-xl border text-[11px] font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-center gap-1 ${
                   array.vault_balance > 0
                     ? "bg-amber-950/40 border-amber-800/60 text-amber-300 hover:bg-amber-900/60"
                     : "bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed"
@@ -259,7 +262,7 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
                     onChange={(e) => setFeeEnabled(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600"></div>
+                  <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] peer-checked:bg-amber-600"></div>
                 </label>
               </div>
 
@@ -314,7 +317,7 @@ export const TeleportManagementModal: React.FC<TeleportManagementModalProps> = (
               type="button"
               onClick={handleDismantle}
               disabled={actionLoading}
-              className="w-full py-2 rounded-xl bg-rose-950/50 border border-rose-800/80 text-rose-300 hover:bg-rose-900/60 hover:text-white text-xs font-mono font-bold transition-all flex items-center justify-center gap-1.5"
+              className="w-full py-2 rounded-xl bg-rose-950/50 border border-rose-800/80 text-rose-300 hover:bg-rose-900/60 hover:text-white text-xs font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-center gap-1.5"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Thu Hồi & Phá Dỡ Trận Pháp

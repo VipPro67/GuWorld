@@ -7,6 +7,7 @@ import { GamePanel, GameCard } from "@/components/ui";
 import { Player, GuSpec, ItemSpec, RefiningRecipe, GuInstance, useGameStore, guSpecFor, RefineRateBreakdown } from "@/store/useGameStore";
 import { reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { getItemIconUrl } from "@/lib/item-icons";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import { RefineConceiveTab } from "@/components/RefineConceiveTab";
 import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search, Brain, ShieldCheck, Clock, TrendingUp, Award } from "lucide-react";
 
@@ -39,6 +40,15 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
   const [isRefining, setIsRefining] = useState(false);
   const [furnaceStage, setFurnaceStage] = useState("Đang khởi động lò luyện...");
   const [refineResult, setRefineResult] = useState<{ status: "success" | "failed"; new_gu?: GuInstance; message: string; rate_breakdown?: RefineRateBreakdown } | null>(null);
+  const closeRefineResult = () => {
+    setRefineResult(null);
+    setSlottedGus({});
+  };
+  const { dialogRef: refineResultDialogRef, onKeyDown: refineResultDialogKeyDown } = useAccessibleDialog<HTMLDivElement>(
+    closeRefineResult,
+    Boolean(refineResult),
+    refineResult?.status
+  );
   const [searchKeyword, setSearchKeyword] = useState("");
   const [customRecipes, setCustomRecipes] = useState<RefiningRecipe[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -613,7 +623,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMainTab("furnace")}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-serif transition-all flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-serif transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-2 cursor-pointer ${
               mainTab === "furnace"
                 ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold shadow-sm shadow-amber-500/20"
                 : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
@@ -625,7 +635,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
           <button
             onClick={() => setMainTab("conceive")}
-            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-serif transition-all flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-serif transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-2 cursor-pointer ${
               mainTab === "conceive"
                 ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold shadow-sm shadow-indigo-500/20"
                 : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
@@ -730,7 +740,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         }
                       }}
                       onClick={() => handleInventoryGroupClick(guId, spec.rank)}
-                      className={`p-3 flex justify-between items-center cursor-grab active:cursor-grabbing hover:bg-zinc-950/80 transition-all select-none group text-left`}
+                      className={`p-3 flex justify-between items-center cursor-grab active:cursor-grabbing hover:bg-zinc-950/80 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] select-none group text-left`}
                     >
                       <div className="space-y-0.5 max-w-[75%]">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -753,7 +763,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         <button
                           type="button"
                           onClick={(e) => toggleGroupExpand(groupKey, e)}
-                          className="text-[9px] py-1 px-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 rounded transition-all cursor-pointer font-mono"
+                          className="text-[9px] py-1 px-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 rounded transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-mono"
                         >
                           {isExpanded ? "Ẩn" : `Hiện (${totalAvailable})`}
                         </button>
@@ -812,7 +822,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                                   </span>
                                   <button
                                     type="button"
-                                    className="text-[9px] py-0.5 px-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded font-bold font-serif hover:bg-amber-500/20 transition-all cursor-pointer"
+                                    className="text-[9px] py-0.5 px-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded font-bold font-serif hover:bg-amber-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                                   >
                                     Xếp vào
                                   </button>
@@ -833,7 +843,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
 
       {/* 2. RIGHT PANEL: Furnace Crucible */}
       <div
-        className={`lg:col-span-7 glass-panel rounded-3xl p-3 sm:p-5 flex flex-col lg:max-h-[600px] lg:overflow-y-auto custom-scrollbar relative transition-all duration-300 ${
+        className={`lg:col-span-7 glass-panel rounded-3xl p-3 sm:p-5 flex flex-col lg:max-h-[600px] lg:overflow-y-auto custom-scrollbar relative transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${
           isRefining ? "animate-shake border-rose-500/30" : "border-zinc-800/80"
         }`}
       >
@@ -900,7 +910,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                 type="button"
                 onClick={handleQuickUseRestoreMental}
                 disabled={restoreMentalGus.length === 0 || isUsingRestoreGu || actionLoading}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold font-serif transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold font-serif transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1.5 cursor-pointer ${
                   restoreMentalGus.length > 0 && !isUsingRestoreGu && !actionLoading
                     ? "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-zinc-100 shadow-sm active:scale-95"
                     : "bg-zinc-900 border border-zinc-800 text-zinc-600 cursor-not-allowed"
@@ -925,7 +935,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
             {/* Recipe Selection Combobox */}
             <div className="relative" ref={dropdownRef}>
               <div
-                className={`flex items-center justify-between w-full p-3.5 rounded-xl border transition-all cursor-pointer ${
+                className={`flex items-center justify-between w-full p-3.5 rounded-xl border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                   isRefining ? "bg-zinc-950/20 border-zinc-800 opacity-50 cursor-not-allowed" : "bg-zinc-950/60 border-zinc-800 hover:border-amber-500/50 hover:shadow-[0_0_10px_rgba(245,158,11,0.1)]"
                 }`}
                 onClick={() => !isRefining && setIsDropdownOpen(!isDropdownOpen)}
@@ -961,21 +971,21 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setStatusTab("all"); }}
-                      className={`px-2 py-1 rounded transition-all cursor-pointer font-serif ${statusTab === "all" ? "bg-amber-500/10 text-amber-400 font-bold" : "text-zinc-500 hover:text-zinc-300"}`}
+                      className={`px-2 py-1 rounded transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-serif ${statusTab === "all" ? "bg-amber-500/10 text-amber-400 font-bold" : "text-zinc-500 hover:text-zinc-300"}`}
                     >
                       Tất cả
                     </button>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setStatusTab("complete"); }}
-                      className={`px-2 py-1 rounded transition-all cursor-pointer font-serif ${statusTab === "complete" ? "bg-amber-500/10 text-amber-400 font-bold" : "text-zinc-500 hover:text-zinc-300"}`}
+                      className={`px-2 py-1 rounded transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-serif ${statusTab === "complete" ? "bg-amber-500/10 text-amber-400 font-bold" : "text-zinc-500 hover:text-zinc-300"}`}
                     >
                       Hoàn chỉnh
                     </button>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setStatusTab("incomplete"); }}
-                      className={`px-2 py-1 rounded transition-all cursor-pointer font-serif ${statusTab === "incomplete" ? "bg-amber-500/10 text-amber-400 font-bold" : "text-zinc-500 hover:text-zinc-300"}`}
+                      className={`px-2 py-1 rounded transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-serif ${statusTab === "incomplete" ? "bg-amber-500/10 text-amber-400 font-bold" : "text-zinc-500 hover:text-zinc-300"}`}
                     >
                       Tàn phương
                     </button>
@@ -996,7 +1006,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                               setSelectedRecipeId(recipe.id);
                               setIsDropdownOpen(false);
                             }}
-                            className={`p-3 rounded-lg text-sm cursor-pointer transition-all flex justify-between items-center ${
+                            className={`p-3 rounded-lg text-sm cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex justify-between items-center ${
                               isActive
                                 ? "bg-amber-500/15 text-amber-400 font-bold border border-amber-500/20"
                                 : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 border border-transparent"
@@ -1061,7 +1071,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         onDragOver={handleDragOver}
                         onDrop={(e) => handleDrop(e, slot.index)}
                         onClick={() => handleSlotClick(slot)}
-                        className={`w-32 h-36 rounded-2xl border transition-all flex flex-col items-center justify-center p-3 relative cursor-pointer group ${
+                        className={`w-32 h-36 rounded-2xl border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex flex-col items-center justify-center p-3 relative cursor-pointer group ${
                           slottedGu
                             ? "bg-zinc-950/90 border-amber-500/40 shadow-lg shadow-amber-900/5 hover:border-rose-500/50"
                             : "bg-zinc-950/40 border-dashed border-zinc-800 hover:border-zinc-700"
@@ -1190,7 +1200,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                           type="button"
                           onClick={handleDeduce}
                           disabled={!canDeduce}
-                          className={`w-full py-2 px-3 rounded-lg text-xs font-bold font-serif transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          className={`w-full py-2 px-3 rounded-lg text-xs font-bold font-serif transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-center gap-1.5 cursor-pointer ${
                             canDeduce
                               ? "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-zinc-100 shadow-md active:scale-[0.98]"
                               : "bg-zinc-900 border border-zinc-800 text-zinc-650 cursor-not-allowed"
@@ -1246,7 +1256,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         type="button"
                         onClick={handleRefine}
                         disabled={!canRefine}
-                        className={`w-full py-3 px-4 rounded-xl text-sm font-bold tracking-wide font-serif transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        className={`w-full py-3 px-4 rounded-xl text-sm font-bold tracking-wide font-serif transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-center gap-2 cursor-pointer ${
                           canRefine
                             ? "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 shadow-lg shadow-amber-950/20 active:scale-[0.98]"
                             : "bg-zinc-900 border border-zinc-800 text-zinc-500 cursor-not-allowed"
@@ -1279,17 +1289,14 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
             <div className="absolute inset-0 bg-white opacity-0 pointer-events-none animate-flash z-50" />
 
             {refineResult.status === "success" ? (
-              <div className="relative w-full max-w-md my-auto space-y-5 animate-gold-glow p-6 rounded-3xl border border-amber-500/50 bg-gradient-to-b from-zinc-900 via-zinc-950 to-zinc-950 shadow-[0_0_60px_rgba(245,158,11,0.25)] overflow-hidden text-center">
+              <div ref={refineResultDialogRef} role="dialog" aria-modal="true" aria-label="Kết quả hợp luyện thành công" tabIndex={-1} onKeyDown={refineResultDialogKeyDown} className="relative my-auto max-h-[90dvh] w-full max-w-md space-y-5 overflow-y-auto overscroll-contain animate-gold-glow p-6 rounded-3xl border border-amber-500/50 bg-gradient-to-b from-zinc-900 via-zinc-950 to-zinc-950 shadow-[0_0_60px_rgba(245,158,11,0.25)] text-center">
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500/15 via-transparent to-transparent pointer-events-none" />
 
                 {/* Close/Exit Button */}
                 <button
-                  onClick={() => {
-                    setRefineResult(null);
-                    setSlottedGus({});
-                  }}
-                  className="absolute top-4 right-4 text-zinc-400 hover:text-amber-400 transition-colors p-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800 hover:border-amber-500/40 cursor-pointer z-10"
-                  title="Thoát"
+                  onClick={closeRefineResult}
+                  aria-label="Đóng kết quả hợp luyện"
+                  className="absolute top-4 right-4 z-10 flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/80 text-zinc-400 transition-colors hover:border-amber-500/40 hover:text-amber-400 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1381,7 +1388,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                     setRefineResult(null);
                     setSlottedGus({});
                   }}
-                  className="w-full py-3 px-5 rounded-2xl text-xs font-bold bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-zinc-950 transition-all font-serif cursor-pointer tracking-wider shadow-lg shadow-amber-500/20 active:scale-[0.98] uppercase flex items-center justify-center gap-2"
+                  className="w-full py-3 px-5 rounded-2xl text-xs font-bold bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-zinc-950 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif cursor-pointer tracking-wider shadow-lg shadow-amber-500/20 active:scale-[0.98] uppercase flex items-center justify-center gap-2"
                 >
                   <Award className="w-4 h-4 text-zinc-950" />
                   <span>XÁC NHẬN THU HỒI</span>
@@ -1413,15 +1420,12 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                 }
 
                 return (
-                  <div className={`relative w-full max-w-md my-auto space-y-4 p-6 rounded-3xl border ${headerColor} overflow-hidden text-center`}>
+                  <div ref={refineResultDialogRef} role="dialog" aria-modal="true" aria-label={mainTitle} tabIndex={-1} onKeyDown={refineResultDialogKeyDown} className={`relative my-auto max-h-[90dvh] w-full max-w-md space-y-4 overflow-y-auto overscroll-contain p-6 rounded-3xl border ${headerColor} text-center`}>
                     {/* Close/Exit Button */}
                     <button
-                      onClick={() => {
-                        setRefineResult(null);
-                        setSlottedGus({});
-                      }}
-                      className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 rounded-xl bg-zinc-900/80 border border-zinc-800 cursor-pointer z-10"
-                      title="Thoát"
+                      onClick={closeRefineResult}
+                      aria-label="Đóng kết quả hợp luyện"
+                      className="absolute top-4 right-4 z-10 flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/80 text-zinc-500 transition-colors hover:text-zinc-200 cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -1496,7 +1500,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         setRefineResult(null);
                         setSlottedGus({});
                       }}
-                      className="w-full py-3 px-4 rounded-2xl text-xs font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 transition-all font-serif cursor-pointer tracking-wider border border-zinc-700/80 hover:border-zinc-500 shadow-md active:scale-[0.98] uppercase"
+                      className="w-full py-3 px-4 rounded-2xl text-xs font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-200 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif cursor-pointer tracking-wider border border-zinc-700/80 hover:border-zinc-500 shadow-md active:scale-[0.98] uppercase"
                     >
                       RÚT KINH NGHIỆM
                     </button>

@@ -92,7 +92,7 @@ export const CombatHistoryView: React.FC = () => {
               <button
                 key={entry.id}
                 onClick={() => handleSelectEntry(entry)}
-                className="group w-full overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/50 text-left transition-all hover:border-amber-700/60 hover:bg-zinc-900/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                className="group w-full overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/50 text-left transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] hover:border-amber-700/60 hover:bg-zinc-900/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
               >
                 <div className="relative flex h-32 items-center justify-around overflow-hidden bg-gradient-to-br from-zinc-800/80 via-zinc-900 to-rose-950/30 px-4">
                   <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(245,158,11,0.08),transparent_65%)]" />

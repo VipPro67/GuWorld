@@ -88,7 +88,7 @@ export const DreamRealmView: React.FC = () => {
           </span>
           <button
             onClick={() => setView("mmo-world")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-xs text-zinc-300 font-mono transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-xs text-zinc-300 font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Trở Về
@@ -138,7 +138,7 @@ export const DreamRealmView: React.FC = () => {
               <button
                 onClick={() => exitDreamRealm()}
                 disabled={dreamActionLoading}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-900/40 bg-red-950/30 hover:bg-red-950/60 text-xs text-red-300 font-mono transition-all cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-900/40 bg-red-950/30 hover:bg-red-950/60 text-xs text-red-300 font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                 title="Rút lui khỏi mộng cảnh (Thất bại)"
               >
                 <LogOut className="w-3.5 h-3.5" />
@@ -173,7 +173,7 @@ export const DreamRealmView: React.FC = () => {
                   key={idx}
                   onClick={() => actionDreamRealm(idx)}
                   disabled={dreamActionLoading}
-                  className="w-full text-left p-4 rounded-2xl border text-sm transition-all duration-300 cursor-pointer flex flex-col gap-1 bg-purple-950/10 hover:bg-purple-950/40 border-purple-900/30 hover:border-purple-600/50 text-purple-100 disabled:opacity-50"
+                  className="w-full text-left p-4 rounded-2xl border text-sm transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 cursor-pointer flex flex-col gap-1 bg-purple-950/10 hover:bg-purple-950/40 border-purple-900/30 hover:border-purple-600/50 text-purple-100 disabled:opacity-50"
                 >
                   <span className="font-medium">{opt.text}</span>
                   {reqText && (
@@ -208,7 +208,7 @@ export const DreamRealmView: React.FC = () => {
                   <GameCard
                     key={realm.id}
                     variant="danger"
-                    className="border rounded-3xl p-6 flex flex-col justify-between gap-5 transition-all duration-350 hover:-translate-y-1 hover:border-zinc-800 hover:shadow-[0_0_30px_rgba(168,85,247,0.12)] border-purple-900/20 bg-zinc-950/70"
+                    className="border rounded-3xl p-6 flex flex-col justify-between gap-5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-350 hover:-translate-y-1 hover:border-zinc-800 hover:shadow-[0_0_30px_rgba(168,85,247,0.12)] border-purple-900/20 bg-zinc-950/70"
                   >
                     <div className="space-y-3">
                       <div className="flex justify-between items-start gap-2">
@@ -274,7 +274,7 @@ export const DreamRealmView: React.FC = () => {
                       <button
                         onClick={() => enterDreamRealm(realm.id)}
                         disabled={dreamActionLoading}
-                        className="w-full py-2.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md bg-purple-600 hover:bg-purple-500 border border-purple-500/20 text-white disabled:opacity-50"
+                        className="w-full py-2.5 rounded-xl text-xs font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-1.5 shadow-md bg-purple-600 hover:bg-purple-500 border border-purple-500/20 text-white disabled:opacity-50"
                       >
                         <Compass className="w-4 h-4" />
                         Bắt Đầu Thám Hiểm Mộng Cảnh

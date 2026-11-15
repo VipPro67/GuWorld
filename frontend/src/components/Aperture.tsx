@@ -471,7 +471,7 @@ export const Aperture: React.FC<ApertureProps> = ({
       `}</style>
 
       <div
-        className="flex flex-col items-center justify-center p-3 sm:p-5 glass-panel-gold rounded-3xl w-full border border-amber-500/20 transition-all duration-300 relative overflow-hidden group"
+        className="flex flex-col items-center justify-center p-3 sm:p-5 glass-panel-gold rounded-3xl w-full border border-amber-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 relative overflow-hidden group"
         style={{
           boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.45), 0 0 25px ${c.glow}20`,
           borderColor: c.ring + "2a"
@@ -685,7 +685,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                 <ShieldAlert className="w-3.5 h-3.5 text-amber-500 mr-2 shrink-0 animate-pulse" />
                 <div className="relative flex-grow h-3 rounded-md overflow-hidden bg-zinc-900/60">
                   <div
-                    className="h-full bg-gradient-to-r from-amber-800 via-amber-600 to-yellow-500 rounded-md transition-all duration-300 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
+                    className="h-full bg-gradient-to-r from-amber-800 via-amber-600 to-yellow-500 rounded-md transition-[width] duration-300 shadow-[0_0_8px_rgba(245,158,11,0.5)]"
                     style={{ width: `${Math.min(100, player.aperture_stress ?? 0)}%` }}
                   />
                 </div>
@@ -741,7 +741,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                 <button
                   onClick={() => useGameStore.getState().unequipAllGu()}
                   disabled={equippedGus.filter(g => !g.is_vital).length === 0}
-                  className="px-4 py-1.5 rounded-xl border text-[11px] font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-red-950/30 text-red-400 border-red-500/30 hover:bg-red-900/40"
+                  className="px-4 py-1.5 rounded-xl border text-[11px] font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] disabled:opacity-50 disabled:cursor-not-allowed bg-red-950/30 text-red-400 border-red-500/30 hover:bg-red-900/40"
                 >
                   Tháo Tất Cả Cổ Trùng
                 </button>
@@ -1247,7 +1247,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                             <div className="text-[10px] text-zinc-400">{parts.join(" | ")}</div>
                             <div className="mt-1.5 flex items-center gap-2">
                               <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                                <div className="h-full bg-emerald-500 rounded-full transition-all" style={{width: `${pct}%`}} />
+                                <div className="h-full bg-emerald-500 rounded-full transition-[width]" style={{width: `${pct}%`}} />
                               </div>
                               <span className="text-[10px] text-zinc-500 font-mono shrink-0">{pct}%</span>
                             </div>
@@ -1366,7 +1366,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                           store.addToast("Đã sao chép Liên Kết Sư Đồ!", "success");
                         }
                       }}
-                      className="text-[10px] font-mono font-bold text-zinc-950 bg-amber-400 hover:bg-amber-300 px-2.5 py-1 rounded transition-all cursor-pointer shadow-md"
+                      className="text-[10px] font-mono font-bold text-zinc-950 bg-amber-400 hover:bg-amber-300 px-2.5 py-1 rounded transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shadow-md"
                     >
                       Copy Link
                     </button>
@@ -1405,7 +1405,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                         store.addToast(res?.message || "Lỗi", "error");
                       }
                     }}
-                    className="bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-mono font-bold px-3.5 py-1.5 rounded-xl transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                    className="bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-mono font-bold px-3.5 py-1.5 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer disabled:opacity-50 shrink-0"
                   >
                     Bái Sư
                   </button>
@@ -1440,7 +1440,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                       setGiftCodeMsg(result?.message || "Mã quà không hợp lệ.");
                     }
                   }}
-                  className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold font-mono cursor-pointer transition-all whitespace-nowrap"
+                  className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold font-mono cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] whitespace-nowrap"
                 >
                   {giftCodeLoading ? "Đang xử lý..." : "Nhận quà"}
                 </button>
@@ -1465,21 +1465,21 @@ export const Aperture: React.FC<ApertureProps> = ({
                 <button
                   onClick={() => store.simulateDeposit(100)}
                   disabled={store.actionLoading}
-                  className="flex-1 min-w-[120px] py-2 bg-emerald-650 hover:bg-emerald-600 disabled:bg-zinc-800 text-zinc-100 font-mono text-xs rounded-xl transition-all cursor-pointer font-bold shadow-md border border-emerald-500/25"
+                  className="flex-1 min-w-[120px] py-2 bg-emerald-650 hover:bg-emerald-600 disabled:bg-zinc-800 text-zinc-100 font-mono text-xs rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-bold shadow-md border border-emerald-500/25"
                 >
                   Nạp $1 (100 NT)
                 </button>
                 <button
                   onClick={() => store.simulateDeposit(1000)}
                   disabled={store.actionLoading}
-                  className="flex-1 min-w-[120px] py-2 bg-emerald-650 hover:bg-emerald-600 disabled:bg-zinc-800 text-zinc-100 font-mono text-xs rounded-xl transition-all cursor-pointer font-bold shadow-md border border-emerald-500/25"
+                  className="flex-1 min-w-[120px] py-2 bg-emerald-650 hover:bg-emerald-600 disabled:bg-zinc-800 text-zinc-100 font-mono text-xs rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-bold shadow-md border border-emerald-500/25"
                 >
                   Nạp $10 (1000 NT)
                 </button>
                 <button
                   onClick={() => store.simulateDeposit(5000)}
                   disabled={store.actionLoading}
-                  className="flex-1 min-w-[120px] py-2 bg-emerald-650 hover:bg-emerald-600 disabled:bg-zinc-800 text-zinc-100 font-mono text-xs rounded-xl transition-all cursor-pointer font-bold shadow-md border border-emerald-500/25"
+                  className="flex-1 min-w-[120px] py-2 bg-emerald-650 hover:bg-emerald-600 disabled:bg-zinc-800 text-zinc-100 font-mono text-xs rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-bold shadow-md border border-emerald-500/25"
                 >
                   Nạp $50 (5000 NT)
                 </button>
@@ -1665,7 +1665,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                     value={settingsUsername}
                     onChange={(e) => setSettingsUsername(e.target.value)}
                     required
-                    className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none transition-all font-mono"
+                    className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-700 focus:outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
                   />
                   <p className="text-[9px] text-zinc-600">Đạo hiệu được so sánh không phân biệt chữ hoa/thường.</p>
                   {/* Notice / Warning box if name is being changed */}
@@ -1720,7 +1720,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                     maxLength={150}
                     placeholder="Viết lời giới thiệu về nhân vật của đạo hữu..."
                     rows={3}
-                    className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-750 focus:outline-none transition-all font-mono resize-none leading-relaxed"
+                    className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-750 focus:outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono resize-none leading-relaxed"
                   />
                 </div>
 
@@ -1740,7 +1740,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                     <div className="flex flex-col gap-2 flex-1">
                       <label
                         htmlFor="avatar-upload"
-                        className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-zinc-100 border border-zinc-800 rounded-lg transition-all"
+                        className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-zinc-100 border border-zinc-800 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
                       >
                         <Camera className="w-3.5 h-3.5" /> Chọn ảnh
                       </label>
@@ -1773,7 +1773,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                     name="newPassword"
                     type="password"
                     placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
-                    className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-750 focus:outline-none transition-all font-mono"
+                    className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-3.5 py-2 text-xs text-zinc-200 placeholder-zinc-750 focus:outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
                   />
                 </div>
 
@@ -1797,7 +1797,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                         onChange={(e) => setIsDisguised(e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-9 h-5 bg-zinc-950 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-700 after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600 peer-checked:after:bg-amber-100 peer-disabled:opacity-20 peer-disabled:cursor-not-allowed"></div>
+                      <div className="w-9 h-5 bg-zinc-950 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-700 after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] peer-checked:bg-amber-600 peer-checked:after:bg-amber-100 peer-disabled:opacity-20 peer-disabled:cursor-not-allowed"></div>
                     </label>
                   </div>
 
@@ -1818,7 +1818,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                             id="settings-fakeRank"
                             value={fakeRank}
                             onChange={(e) => setFakeRank(Number(e.target.value))}
-                            className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-2 py-2 text-xs text-zinc-200 focus:outline-none transition-all font-mono"
+                            className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-2 py-2 text-xs text-zinc-200 focus:outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
                           >
                             {Array.from({ length: hasAttitude ? 9 : player.rank }, (_, i) => i + 1).map((r) => (
                               <option key={r} value={r}>
@@ -1840,7 +1840,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                             id="settings-fakeSubRank"
                             value={fakeSubRank}
                             onChange={(e) => setFakeSubRank(Number(e.target.value))}
-                            className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-2 py-2 text-xs text-zinc-200 focus:outline-none transition-all font-mono"
+                            className="w-full bg-zinc-950 border border-zinc-900 focus:border-zinc-850 rounded-xl px-2 py-2 text-xs text-zinc-200 focus:outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
                           >
                             {Object.entries(SUB_RANK_NAMES).map(([key, val]) => (
                               <option key={key} value={key}>
@@ -1878,7 +1878,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                 <button
                   type="submit"
                   disabled={store.actionLoading}
-                  className="w-full mt-2 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 disabled:from-zinc-900 disabled:to-zinc-900 disabled:opacity-40 border border-amber-500/20 text-white rounded-xl py-2.5 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 shadow-md hover:shadow-orange-500/10"
+                  className="w-full mt-2 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 disabled:from-zinc-900 disabled:to-zinc-900 disabled:opacity-40 border border-amber-500/20 text-white rounded-xl py-2.5 text-xs font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 shadow-md hover:shadow-orange-500/10"
                 >
                   {store.actionLoading ? (
                     <>
@@ -1942,6 +1942,7 @@ function WallControls() {
             <div className="relative flex-grow flex items-center bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus-within:border-cyan-500/50 rounded-xl px-3 transition-colors">
               <input
                 type="number"
+                aria-label="Số Nguyên Thạch cần nạp"
                 className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={rechargeStones}
                 onChange={(e) => setRechargeStones(Math.max(0, Number(e.target.value)))}
@@ -1954,13 +1955,13 @@ function WallControls() {
               <button
                 type="button"
                 onClick={() => setRechargeStones(player.primeval_stones)}
-                className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-all active:scale-95 cursor-pointer font-mono"
+                className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-95 cursor-pointer font-mono"
               >
                 MAX
               </button>
               <button
                 type="button"
-                className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide"
+                className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shrink-0 uppercase tracking-wide"
                 onClick={async () => {
                   if (rechargeStones <= 0) return store.addToast('Nhập số nguyên thạch để nạp', "error");
                   const res = await store.rechargeWithStones(rechargeStones);
@@ -1993,6 +1994,7 @@ function WallControls() {
           <div className="relative flex-grow flex items-center bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus-within:border-emerald-500/50 rounded-xl px-3 transition-colors">
             <input
               type="number"
+              aria-label="Lượng Chân Nguyên cần dùng"
               className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               value={manaSpend}
               onChange={(e) => setManaSpend(Math.max(0, Number(e.target.value)))}
@@ -2005,13 +2007,13 @@ function WallControls() {
             <button
               type="button"
               onClick={() => setManaSpend(Math.floor(player.current_mana))}
-              className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-all active:scale-95 cursor-pointer font-mono"
+              className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-95 cursor-pointer font-mono"
             >
               MAX
             </button>
             <button
               type="button"
-              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide"
+              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-emerald-950/20 active:scale-95 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shrink-0 uppercase tracking-wide"
               onClick={async () => {
                 if (manaSpend <= 0) return store.addToast('Nhập lượng mana cần dùng', "error");
                 const res = await store.breakWall(manaSpend);
@@ -2039,6 +2041,7 @@ function WallControls() {
           <div className="relative flex-grow flex items-center bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus-within:border-cyan-500/50 rounded-xl px-3 transition-colors">
             <input
               type="number"
+              aria-label="Số Nguyên Thạch cần luyện hóa"
               className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               value={rechargeStones}
               onChange={(e) => setRechargeStones(Math.max(0, Number(e.target.value)))}
@@ -2051,13 +2054,13 @@ function WallControls() {
             <button
               type="button"
               onClick={() => setRechargeStones(player.primeval_stones)}
-              className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-all active:scale-95 cursor-pointer font-mono"
+              className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-95 cursor-pointer font-mono"
             >
               MAX
             </button>
             <button
               type="button"
-              className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide"
+              className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shrink-0 uppercase tracking-wide"
               onClick={async () => {
                 if (rechargeStones <= 0) return store.addToast('Nhập số nguyên thạch để nạp', "error");
                 const res = await store.rechargeWithStones(rechargeStones);
@@ -2235,7 +2238,7 @@ function AscensionRitual() {
           )}
           <button
             disabled={!hasVital || humanQi < 100000 || player.current_mana < shatterCost || store.actionLoading}
-            className="w-full px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs rounded-xl shadow-[0_0_15px_rgba(244,3,94,0.45)] cursor-pointer disabled:cursor-not-allowed transition-all active:scale-95 uppercase tracking-wider"
+            className="w-full px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs rounded-xl shadow-[0_0_15px_rgba(244,3,94,0.45)] cursor-pointer disabled:cursor-not-allowed transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-95 uppercase tracking-wider"
             onClick={async () => {
               const attempts = session?.step === "SHATTERING" ? session.attempts : 0;
               const chance = Math.min(ASCENSION_SHATTER_MAX, ASCENSION_SHATTER_BASE + ASCENSION_SHATTER_STEP * attempts);
@@ -2264,7 +2267,7 @@ function AscensionRitual() {
               <button
                 key={i}
                 disabled={!affordable || store.actionLoading}
-                className="w-full text-left px-3 py-2 bg-zinc-950/70 hover:bg-zinc-900 border border-zinc-800 hover:border-rose-700/60 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-[11px] text-zinc-300 transition-all cursor-pointer disabled:cursor-not-allowed"
+                className="w-full text-left px-3 py-2 bg-zinc-950/70 hover:bg-zinc-900 border border-zinc-800 hover:border-rose-700/60 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-[11px] text-zinc-300 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer disabled:cursor-not-allowed"
                 onClick={async () => {
                   const res = await store.temperAscension(i);
                   if (res) store.addToast(res.message, res.success ? "success" : "error");
@@ -2286,7 +2289,7 @@ function AscensionRitual() {
           </div>
           <button
             disabled={store.actionLoading}
-            className="w-full px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs rounded-xl transition-all active:scale-95 uppercase tracking-wider cursor-pointer"
+            className="w-full px-5 py-2.5 bg-gradient-to-r from-rose-700 to-red-600 hover:from-rose-600 hover:to-red-500 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-white font-bold text-xs rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-95 uppercase tracking-wider cursor-pointer"
             onClick={async () => {
               const res = await store.engageAscensionCalamity();
               if (res) store.addToast(res.message, "info");
@@ -2315,7 +2318,7 @@ function AscensionRitual() {
               return (
                 <button
                   key={g.instance_id}
-                  className={`w-full text-left px-3 py-1.5 rounded-lg border text-[11px] transition-all cursor-pointer ${chosen ? "border-amber-500/60 bg-amber-950/30 text-amber-300" : "border-zinc-800 bg-zinc-950/60 text-zinc-300 hover:border-zinc-700"}`}
+                  className={`w-full text-left px-3 py-1.5 rounded-lg border text-[11px] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${chosen ? "border-amber-500/60 bg-amber-950/30 text-amber-300" : "border-zinc-800 bg-zinc-950/60 text-zinc-300 hover:border-zinc-700"}`}
                   onClick={() => setSelectedGu((cur) => chosen ? cur.filter((id) => id !== g.instance_id) : [...cur, g.instance_id])}
                 >
                   {chosen ? "☑" : "☐"} {spec?.name || g.gu_id} — {paths.map((p) => translatePath(p)).join(", ")} (+300 Đạo Ngân)
@@ -2325,7 +2328,7 @@ function AscensionRitual() {
           </div>
           <button
             disabled={selectedGu.length === 0 || store.actionLoading}
-            className="w-full px-5 py-2.5 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-zinc-950 font-black text-xs rounded-xl transition-all active:scale-95 uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed"
+            className="w-full px-5 py-2.5 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 disabled:from-zinc-800 disabled:to-zinc-800 disabled:text-zinc-500 text-zinc-950 font-black text-xs rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-95 uppercase tracking-wider cursor-pointer disabled:cursor-not-allowed"
             onClick={async () => {
               const totalMarks = selectedGu.length * 300;
               if (!(await store.showConfirm(`Thả ${selectedGu.length} cổ 5C để tiêu hủy, nhận ${totalMarks} Đạo Ngân và THĂNG TIÊN? Hành động không thể đảo ngược!`))) return;
@@ -2455,7 +2458,7 @@ function BlessedLandControls() {
         <div className="flex justify-center pt-2">
           <button
             onClick={() => store.setView("aperture")}
-            className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold rounded-xl shadow-lg active:scale-95 transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1"
+            className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold rounded-xl shadow-lg active:scale-95 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1"
           >
             <Sparkles className="w-4 h-4 animate-pulse" />
             Vào Tiên Khiếu Phúc Địa
@@ -2477,6 +2480,7 @@ function BlessedLandControls() {
             <div className="relative flex-grow flex items-center bg-zinc-950 border border-zinc-900 hover:border-zinc-800 focus-within:border-cyan-500/50 rounded-xl px-3 transition-colors">
               <input
                 type="number"
+                aria-label="Số Tiên Nguyên Thạch cần luyện hóa"
                 className="w-full py-2 bg-transparent text-sm text-zinc-100 font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={rechargeStones}
                 onChange={(e) => setRechargeStones(Math.max(0, Number(e.target.value)))}
@@ -2489,13 +2493,13 @@ function BlessedLandControls() {
               <button
                 type="button"
                 onClick={() => setRechargeStones(player.immortal_stones)}
-                className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-all active:scale-95 cursor-pointer font-mono"
+                className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-850 rounded-xl text-[10px] text-zinc-300 font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-95 cursor-pointer font-mono"
               >
                 MAX
               </button>
               <button
                 type="button"
-                className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-all cursor-pointer shrink-0 uppercase tracking-wide"
+                className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-950/20 active:scale-95 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shrink-0 uppercase tracking-wide"
                 onClick={async () => {
                   if (rechargeStones <= 0) return store.addToast('Nhập số tiên nguyên thạch để nạp', "error");
                   const res = await store.rechargeWithStones(rechargeStones);
@@ -2562,7 +2566,7 @@ function BlessedLandControls() {
                     </div>
                     {nextMax > currentMin && (
                       <div className="w-full h-1 bg-zinc-900 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${progress}%` }} />
+                        <div className="h-full bg-indigo-500 transition-[width] duration-300" style={{ width: `${progress}%` }} />
                       </div>
                     )}
                   </div>

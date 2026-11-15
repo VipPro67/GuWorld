@@ -271,7 +271,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
               return (
                 <div
                   key={pkg.id}
-                  className="rounded-2xl border border-zinc-900 bg-zinc-950/60 p-5 hover:border-violet-600/30 transition-all text-left flex flex-col justify-between"
+                  className="rounded-2xl border border-zinc-900 bg-zinc-950/60 p-5 hover:border-violet-600/30 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-left flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-3">
@@ -390,7 +390,7 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
               {topupPackages?.map((pkg) => (
                 <div
                   key={pkg.id}
-                  className="rounded-2xl border border-zinc-900 bg-zinc-950/60 p-5 hover:border-emerald-600/30 transition-all text-left flex flex-col justify-between"
+                  className="rounded-2xl border border-zinc-900 bg-zinc-950/60 p-5 hover:border-emerald-600/30 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-left flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex items-center justify-between">
@@ -560,14 +560,14 @@ const ExchangePanel: React.FC<ExchangePanelProps> = ({
   onExchange,
   buttonClass,
 }) => (
-  <div className="rounded-2xl border border-zinc-900 bg-zinc-950/60 p-5 hover:border-amber-600/30 transition-all text-left flex flex-col justify-between">
+  <div className="rounded-2xl border border-zinc-900 bg-zinc-950/60 p-5 hover:border-amber-600/30 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-left flex flex-col justify-between">
     <div>
       <h3 className="font-serif text-lg font-bold text-zinc-100">{title}</h3>
-      <p className="mt-1 text-xs text-zinc-500 font-mono">{subtitle}</p>
+      <p className="mt-1 text-xs text-zinc-400 font-mono">{subtitle}</p>
 
       <div className="mt-4 space-y-3 rounded-xl bg-zinc-900/50 p-3">
         <div>
-          <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+          <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-400 font-mono uppercase tracking-wider">
             <span className="flex items-center gap-1.5">
               {sourceIcon} {sourceLabel}
             </span>
@@ -600,7 +600,7 @@ const ExchangePanel: React.FC<ExchangePanelProps> = ({
         </div>
 
         <div>
-          <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+          <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-400 font-mono uppercase tracking-wider">
             <span className="flex items-center gap-1.5">
               {targetIcon} {targetLabel}
             </span>

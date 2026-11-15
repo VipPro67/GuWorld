@@ -100,7 +100,7 @@ function FormationGrid(props: {
                     } catch { /* ignore bad drop */ }
                   }}
                   onClick={() => { if (!isLeader && onCellClick) onCellClick(idx); }}
-                  className={`relative aspect-square rounded-lg border px-1 py-1 text-[11px] leading-tight flex flex-col items-center justify-center gap-0.5 transition-all ${
+                  className={`relative aspect-square rounded-lg border px-1 py-1 text-[11px] leading-tight flex flex-col items-center justify-center gap-0.5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                     isLeader
                       ? "bg-emerald-950/40 border-emerald-600/50 text-emerald-300 font-bold"
                       : found
@@ -282,7 +282,7 @@ export function PartyView() {
               type="button"
               onClick={handleCreateParty}
               disabled={partyLoading}
-              className="w-full sm:w-auto px-8 py-2.5 bg-emerald-950/40 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-900/50 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer shadow-lg disabled:opacity-50"
+              className="w-full sm:w-auto px-8 py-2.5 bg-emerald-950/40 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-900/50 font-bold rounded-xl text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-[0.98] cursor-pointer shadow-lg disabled:opacity-50"
             >
               {partyLoading ? "Đang lập tổ..." : "Lập Tổ Đội Mới"}
             </button>
@@ -315,7 +315,7 @@ export function PartyView() {
                           type="button"
                           onClick={() => respondPartyInvitation(inv.id, "accept")}
                           disabled={partyLoading}
-                          className="px-3 py-1.5 bg-emerald-950/40 border border-emerald-500/40 text-emerald-400 font-bold rounded-lg text-xs hover:bg-emerald-900/50 transition-all cursor-pointer disabled:opacity-50"
+                          className="px-3 py-1.5 bg-emerald-950/40 border border-emerald-500/40 text-emerald-400 font-bold rounded-lg text-xs hover:bg-emerald-900/50 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer disabled:opacity-50"
                         >
                           Đồng ý
                         </button>
@@ -323,7 +323,7 @@ export function PartyView() {
                           type="button"
                           onClick={() => respondPartyInvitation(inv.id, "reject")}
                           disabled={partyLoading}
-                          className="px-3 py-1.5 bg-rose-950/20 border border-rose-900/40 text-rose-400 font-bold rounded-lg text-xs hover:bg-rose-950/40 transition-all cursor-pointer disabled:opacity-50"
+                          className="px-3 py-1.5 bg-rose-950/20 border border-rose-900/40 text-rose-400 font-bold rounded-lg text-xs hover:bg-rose-950/40 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer disabled:opacity-50"
                         >
                           Từ chối
                         </button>
@@ -493,7 +493,7 @@ export function PartyView() {
                         setPartyLoading(false);
                       }
                     }}
-                    className="w-full py-2 bg-amber-950/40 border border-amber-600/40 text-amber-300 hover:bg-amber-900/40 font-bold rounded-xl text-xs transition-all disabled:opacity-50"
+                    className="w-full py-2 bg-amber-950/40 border border-amber-600/40 text-amber-300 hover:bg-amber-900/40 font-bold rounded-xl text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] disabled:opacity-50"
                   >
                     Lưu Đội Hình ({formationCells.filter(Boolean).length}/8 sau trưởng nhóm)
                   </button>
@@ -520,7 +520,7 @@ export function PartyView() {
                 type="button"
                 onClick={handleLeaveParty}
                 disabled={partyLoading}
-                className="w-full py-2.5 bg-rose-950/20 border border-rose-900/40 text-rose-400 hover:bg-rose-950/40 font-bold rounded-xl text-xs transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                className="w-full py-2.5 bg-rose-950/20 border border-rose-900/40 text-rose-400 hover:bg-rose-950/40 font-bold rounded-xl text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] active:scale-[0.98] cursor-pointer disabled:opacity-50"
               >
                 Rời Khỏi Tổ Đội
               </button>

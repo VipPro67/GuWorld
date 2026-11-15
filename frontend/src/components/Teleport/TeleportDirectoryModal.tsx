@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useGameStore, Player } from "@/store/useGameStore";
 import { X, Compass, MapPin, Sparkles, AlertCircle, Coins, Shield, ArrowRight, Settings, RefreshCw, Search } from "lucide-react";
 import { GameButton } from "@/components/ui";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
 interface TeleportDirectoryModalProps {
   player: Player;
@@ -31,6 +32,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
 
   const [filter, setFilter] = useState<"ALL" | "SECT" | "MINE">("ALL");
   const [search, setSearch] = useState("");
+  const { dialogRef, onKeyDown } = useAccessibleDialog<HTMLDivElement>(onClose);
 
   useEffect(() => {
     fetchTeleportDirectory();
@@ -80,7 +82,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
   return (
     <div className="pointer-events-auto fixed inset-0 z-[9999] h-[100dvh] flex items-center justify-center md:p-4">
       <div className="absolute inset-0 bg-black/75 backdrop-blur-md" onClick={onClose} />
-      <div className="relative bg-zinc-950 border border-amber-500/30 shadow-2xl h-full w-full max-h-full flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left md:h-auto md:max-h-[90dvh] md:max-w-2xl md:rounded-3xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Danh bạ truyền tống trận" tabIndex={-1} onKeyDown={onKeyDown} className="relative bg-zinc-950 border border-amber-500/30 shadow-2xl h-full w-full max-h-full flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-left md:h-auto md:max-h-[90dvh] md:max-w-2xl md:rounded-3xl">
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between border-b border-zinc-800/80 px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-blue-950/20 via-zinc-900/40 to-transparent">
           <div className="flex items-center gap-2.5">
@@ -108,7 +110,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
                   onClose();
                   onOpenManage(source.id);
                 }}
-                className="p-2 rounded-xl bg-zinc-900 border border-zinc-700/80 text-zinc-300 hover:text-amber-400 hover:border-amber-500/50 transition-all text-xs font-mono flex items-center gap-1 cursor-pointer"
+                className="min-h-11 min-w-11 p-2 rounded-xl bg-zinc-900 border border-zinc-700/80 text-zinc-300 hover:text-amber-400 hover:border-amber-500/50 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] text-xs font-mono flex items-center gap-1 cursor-pointer"
                 title="Quản lý trận pháp hiện tại"
               >
                 <Settings className="w-3.5 h-3.5" />
@@ -118,14 +120,15 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
             <button
               onClick={() => fetchTeleportDirectory()}
               disabled={teleportLoading}
-              className="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-colors cursor-pointer"
+              className="min-h-11 min-w-11 p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 transition-colors cursor-pointer"
               title="Làm mới"
             >
               <RefreshCw className={`w-4 h-4 ${teleportLoading ? "animate-spin" : ""}`} />
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors cursor-pointer"
+              aria-label="Đóng danh bạ truyền tống trận"
+              className="min-h-11 min-w-11 p-2 rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -137,6 +140,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
+              aria-label="Tìm trận pháp theo tên hoặc địa điểm"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -158,7 +162,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
             <button
               type="button"
               onClick={() => setFilter("ALL")}
-              className={`px-3 py-1 rounded-xl text-xs font-mono transition-all cursor-pointer shrink-0 ${
+              className={`px-3 py-1 rounded-xl text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shrink-0 ${
                 filter === "ALL"
                   ? "bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold"
                   : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
@@ -169,7 +173,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
             <button
               type="button"
               onClick={() => setFilter("SECT")}
-              className={`px-3 py-1 rounded-xl text-xs font-mono transition-all cursor-pointer shrink-0 ${
+              className={`px-3 py-1 rounded-xl text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shrink-0 ${
                 filter === "SECT"
                   ? "bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold"
                   : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
@@ -180,7 +184,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
             <button
               type="button"
               onClick={() => setFilter("MINE")}
-              className={`px-3 py-1 rounded-xl text-xs font-mono transition-all cursor-pointer shrink-0 ${
+              className={`px-3 py-1 rounded-xl text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shrink-0 ${
                 filter === "MINE"
                   ? "bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold"
                   : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
@@ -220,7 +224,7 @@ export const TeleportDirectoryModal: React.FC<TeleportDirectoryModalProps> = ({
               return (
                 <div
                   key={dest.id}
-                  className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                  className={`p-4 rounded-2xl border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                     can_use
                       ? "bg-zinc-900/50 border-zinc-800 hover:border-amber-500/40 hover:bg-zinc-900/80"
                       : "bg-zinc-950/40 border-zinc-900 opacity-60"

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import type { ScoreDetail } from "@/store/slices/scoutingSlice";
 import { formatNumber } from "@/lib/utils";
@@ -107,6 +107,7 @@ export const DivinationModal: React.FC = () => {
 
   // Sever clues action
   const [severing, setSevering] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (divinationTargetPreset) {
@@ -120,6 +121,45 @@ export const DivinationModal: React.FC = () => {
       fetchTrackedTargets();
     }
   }, [isDivinationModalOpen, activeScoutingTab, fetchTrackedTargets]);
+
+  useEffect(() => {
+    if (!isDivinationModalOpen) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const getControls = () => dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+    );
+    const frame = requestAnimationFrame(() => (getControls()[0] || dialog).focus());
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDivinationModal();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = getControls();
+      if (!controls.length) {
+        event.preventDefault();
+        dialog.focus();
+      } else if (event.shiftKey && document.activeElement === controls[0]) {
+        event.preventDefault();
+        controls[controls.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) {
+        event.preventDefault();
+        controls[0].focus();
+      }
+    };
+    dialog.addEventListener("keydown", onKeyDown);
+    return () => {
+      cancelAnimationFrame(frame);
+      dialog.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [isDivinationModalOpen, closeDivinationModal]);
 
   if (!isDivinationModalOpen) return null;
 
@@ -169,6 +209,21 @@ export const DivinationModal: React.FC = () => {
     setSevering(false);
   };
 
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const tabs = Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') || []);
+    const currentIndex = tabs.indexOf(event.currentTarget);
+    if (currentIndex < 0 || tabs.length === 0) return;
+    event.preventDefault();
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? tabs.length - 1
+        : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    tabs[nextIndex].focus();
+    tabs[nextIndex].click();
+  };
+
   const pReport = activeDivinationReport?.divination_report;
   const pStatus = activeDivinationReport?.status_type;
 
@@ -176,11 +231,13 @@ export const DivinationModal: React.FC = () => {
   const gStatus = activeGuDivinationReport?.status_type;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#080907]/70 p-2 backdrop-blur-sm sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-[#080907]/70 p-2 backdrop-blur-sm sm:p-4">
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="divination-title"
+        tabIndex={-1}
         className="relative flex h-[calc(100dvh-1rem)] max-h-[820px] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-amber-500/25 bg-[#1b1712] shadow-[0_18px_64px_rgba(0,0,0,0.52),0_0_32px_rgba(190,130,38,0.08)] md:h-auto md:max-h-[88vh]"
       >
         {/* Header */}
@@ -208,7 +265,7 @@ export const DivinationModal: React.FC = () => {
             onClick={closeDivinationModal}
             type="button"
             aria-label="Đóng Thiên Cơ Các"
-            className="relative z-[1] ml-3 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-black/15 text-neutral-400 transition hover:border-amber-400/40 hover:bg-amber-950/25 hover:text-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+            className="relative z-[1] ml-3 grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 bg-black/15 text-neutral-400 transition hover:border-amber-400/40 hover:bg-amber-950/25 hover:text-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
           >
             <X className="h-4 w-4" />
           </button>
@@ -223,8 +280,12 @@ export const DivinationModal: React.FC = () => {
           <button
             type="button"
             role="tab"
+            id="divination-player-tab"
+            aria-controls="divination-panel"
             aria-selected={activeScoutingTab === "player"}
+            tabIndex={activeScoutingTab === "player" ? 0 : -1}
             onClick={() => setActiveScoutingTab("player")}
+            onKeyDown={handleTabKeyDown}
             className={`flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3.5 transition sm:px-4 ${
               activeScoutingTab === "player"
                 ? "border-amber-400 bg-amber-500/[0.06] text-amber-200"
@@ -237,8 +298,12 @@ export const DivinationModal: React.FC = () => {
           <button
             type="button"
             role="tab"
+            id="divination-gu-tab"
+            aria-controls="divination-panel"
             aria-selected={activeScoutingTab === "gu"}
+            tabIndex={activeScoutingTab === "gu" ? 0 : -1}
             onClick={() => setActiveScoutingTab("gu")}
+            onKeyDown={handleTabKeyDown}
             className={`flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3.5 transition sm:px-4 ${
               activeScoutingTab === "gu"
                 ? "border-violet-400 bg-violet-500/[0.06] text-violet-200"
@@ -251,8 +316,12 @@ export const DivinationModal: React.FC = () => {
           <button
             type="button"
             role="tab"
+            id="divination-radar-tab"
+            aria-controls="divination-panel"
             aria-selected={activeScoutingTab === "radar"}
+            tabIndex={activeScoutingTab === "radar" ? 0 : -1}
             onClick={() => setActiveScoutingTab("radar")}
+            onKeyDown={handleTabKeyDown}
             className={`flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3.5 transition sm:px-4 ${
               activeScoutingTab === "radar"
                 ? "border-cyan-400 bg-cyan-500/[0.06] text-cyan-200"
@@ -265,8 +334,12 @@ export const DivinationModal: React.FC = () => {
           <button
             type="button"
             role="tab"
+            id="divination-sever-tab"
+            aria-controls="divination-panel"
             aria-selected={activeScoutingTab === "sever"}
+            tabIndex={activeScoutingTab === "sever" ? 0 : -1}
             onClick={() => setActiveScoutingTab("sever")}
+            onKeyDown={handleTabKeyDown}
             className={`flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3.5 transition sm:px-4 ${
               activeScoutingTab === "sever"
                 ? "border-rose-400 bg-rose-500/[0.06] text-rose-200"
@@ -280,7 +353,9 @@ export const DivinationModal: React.FC = () => {
 
         {/* Tab Content */}
         <div
+          id="divination-panel"
           role="tabpanel"
+          aria-labelledby={`divination-${activeScoutingTab}-tab`}
           className="flex-1 space-y-5 overflow-y-auto overscroll-contain bg-[radial-gradient(ellipse_at_50%_-20%,rgba(125,82,30,0.1),transparent_65%)] p-3 text-sm sm:p-4 md:p-6"
         >
           {/* TAB 1: PLAYER DIVINATION */}
@@ -395,7 +470,7 @@ export const DivinationModal: React.FC = () => {
               {/* Player Report */}
               {activeDivinationReport && (
                 <div
-                  className={`rounded-2xl border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all sm:p-5 ${
+                  className={`rounded-2xl border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] sm:p-5 ${
                     pStatus === "full"
                       ? "border-emerald-500/50 bg-emerald-950/20"
                       : pStatus === "partial"
@@ -589,7 +664,7 @@ export const DivinationModal: React.FC = () => {
               {/* Gu Divination Report */}
               {activeGuDivinationReport && (
                 <div
-                  className={`rounded-2xl border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all sm:p-5 ${
+                  className={`rounded-2xl border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] sm:p-5 ${
                     gStatus === "full"
                       ? "border-emerald-500/50 bg-emerald-950/20"
                       : gStatus === "partial"

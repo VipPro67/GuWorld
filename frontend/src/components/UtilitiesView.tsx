@@ -9,6 +9,7 @@ import { getPathColor as _getPathColor } from "@/lib/utils";
 import { getSealingStoneCost } from "@/lib/balance";
 import { getGuIconUrl } from "@/lib/gu-icons";
 import { getGuRankColor } from "@/lib/gu-frames";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
 const getPathColor = (path: string): string => {
   const c = _getPathColor(path);
@@ -31,6 +32,11 @@ export const UtilitiesView: React.FC = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [inspectedGu, setInspectedGu] = useState<GuInstance | null>(null);
+  const { dialogRef: utilityDialogRef, onKeyDown: utilityDialogKeyDown } = useAccessibleDialog<HTMLDivElement>(
+    () => setInspectedGu(null),
+    Boolean(inspectedGu),
+    inspectedGu?.instance_id
+  );
 
   // Lazy-load the full inventory if it isn't loaded yet
   const fetchGuInventory = useGameStore((state) => state.fetchGuInventory);
@@ -147,7 +153,7 @@ export const UtilitiesView: React.FC = () => {
           <button
             type="button"
             onClick={() => setView("dashboard")}
-            className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-xs text-zinc-300 transition-all cursor-pointer font-serif"
+            className="px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-xs text-zinc-300 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer font-serif"
           >
             Đóng
           </button>
@@ -162,7 +168,7 @@ export const UtilitiesView: React.FC = () => {
             setActiveTab("seal");
             setSearchTerm("");
           }}
-          className={`px-4 py-2 border-b-2 font-serif text-sm font-semibold transition-all shrink-0 flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-2 border-b-2 font-serif text-sm font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shrink-0 flex items-center gap-2 cursor-pointer ${
             activeTab === "seal"
               ? "border-amber-500 text-amber-500"
               : "border-transparent text-zinc-400 hover:text-zinc-200"
@@ -178,7 +184,7 @@ export const UtilitiesView: React.FC = () => {
             setActiveTab("unseal");
             setSearchTerm("");
           }}
-          className={`px-4 py-2 border-b-2 font-serif text-sm font-semibold transition-all shrink-0 flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-2 border-b-2 font-serif text-sm font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shrink-0 flex items-center gap-2 cursor-pointer ${
             activeTab === "unseal"
               ? "border-amber-500 text-amber-500"
               : "border-transparent text-zinc-400 hover:text-zinc-200"
@@ -191,7 +197,7 @@ export const UtilitiesView: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab("future")}
-          className={`px-4 py-2 border-b-2 font-serif text-sm font-semibold transition-all shrink-0 flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-2 border-b-2 font-serif text-sm font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shrink-0 flex items-center gap-2 cursor-pointer ${
             activeTab === "future"
               ? "border-amber-500 text-amber-500"
               : "border-transparent text-zinc-500 hover:text-zinc-400"
@@ -219,6 +225,7 @@ export const UtilitiesView: React.FC = () => {
 
             <div className="flex items-center gap-2">
               <select
+                aria-label="Lọc cổ trùng theo phẩm cấp"
                 value={selectedRank}
                 onChange={(e) => setSelectedRank(e.target.value)}
                 className="px-3 py-2 rounded-xl bg-zinc-900/50 border border-zinc-800 text-zinc-300 text-sm focus:outline-none focus:border-amber-500/50 font-mono cursor-pointer"
@@ -293,7 +300,7 @@ export const UtilitiesView: React.FC = () => {
                     <div
                       key={gu.instance_id}
                       onClick={() => setInspectedGu(gu)}
-                      className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-all duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
+                      className={`group relative rounded-2xl border p-3 flex flex-col justify-between transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 cursor-pointer hover:-translate-y-1 ${rankColors.border} ${rankColors.bgGradient} hover:shadow-lg ${rankColors.glow}`}
                     >
                       {/* Art & Badges */}
                       <div className="relative aspect-square w-full rounded-xl bg-black/40 border border-zinc-800/60 overflow-hidden flex items-center justify-center p-2 mb-2">
@@ -343,7 +350,7 @@ export const UtilitiesView: React.FC = () => {
                                 e.stopPropagation();
                                 handleSealGu(gu, name);
                               }}
-                              className={`w-full py-1 rounded-lg text-[10px] font-mono font-bold flex items-center justify-center gap-1 transition-all ${
+                              className={`w-full py-1 rounded-lg text-[10px] font-mono font-bold flex items-center justify-center gap-1 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                                 canAfford
                                   ? "bg-amber-600 hover:bg-amber-500 text-zinc-950 shadow-sm"
                                   : "bg-zinc-900 border border-zinc-800 text-zinc-500 opacity-60"
@@ -360,7 +367,7 @@ export const UtilitiesView: React.FC = () => {
                                 e.stopPropagation();
                                 handleUnsealGu(gu, name);
                               }}
-                              className="w-full py-1 rounded-lg text-[10px] font-mono font-bold bg-emerald-600 hover:bg-emerald-500 text-zinc-950 flex items-center justify-center gap-1 transition-all shadow-sm"
+                              className="w-full py-1 rounded-lg text-[10px] font-mono font-bold bg-emerald-600 hover:bg-emerald-500 text-zinc-950 flex items-center justify-center gap-1 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shadow-sm"
                             >
                               <Unlock className="w-3 h-3" />
                               {isProcessing ? "..." : "Giải Phong"}
@@ -387,7 +394,7 @@ export const UtilitiesView: React.FC = () => {
                     <div
                       key={gu.instance_id}
                       onClick={() => setInspectedGu(gu)}
-                      className={`p-3 rounded-2xl bg-zinc-950/60 border hover:border-zinc-700 transition-all flex justify-between items-center gap-4 cursor-pointer ${rankColors.border}`}
+                      className={`p-3 rounded-2xl bg-zinc-950/60 border hover:border-zinc-700 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex justify-between items-center gap-4 cursor-pointer ${rankColors.border}`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-12 h-12 rounded-xl bg-black/40 border border-zinc-800 flex items-center justify-center p-1.5 shrink-0">
@@ -440,7 +447,7 @@ export const UtilitiesView: React.FC = () => {
                               e.stopPropagation();
                               handleSealGu(gu, name);
                             }}
-                            className={`px-3.5 py-1.5 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
+                            className={`px-3.5 py-1.5 rounded-xl font-semibold text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1.5 cursor-pointer ${
                               canAfford
                                 ? "bg-amber-600 hover:bg-amber-500 text-zinc-950"
                                 : "bg-zinc-900 border border-zinc-800 text-zinc-500 opacity-60"
@@ -457,7 +464,7 @@ export const UtilitiesView: React.FC = () => {
                               e.stopPropagation();
                               handleUnsealGu(gu, name);
                             }}
-                            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-semibold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-semibold text-xs transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center gap-1.5"
                           >
                             <Unlock className="w-3.5 h-3.5" />
                             {isProcessing ? "Đang xử lý..." : "Giải Phong"}
@@ -498,13 +505,20 @@ export const UtilitiesView: React.FC = () => {
             onClick={() => setInspectedGu(null)}
           >
             <div
-              className={`bg-zinc-950 border ${inspectedRankColor.border} rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl relative ${inspectedRankColor.glow}`}
+              ref={utilityDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Thông tin ${inspectedName}`}
+              tabIndex={-1}
+              onKeyDown={utilityDialogKeyDown}
+              className={`max-h-[90dvh] overflow-y-auto overscroll-contain bg-zinc-950 border ${inspectedRankColor.border} rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl relative ${inspectedRankColor.glow}`}
               onClick={(e) => e.stopPropagation()}
             >
               <button
                 type="button"
                 onClick={() => setInspectedGu(null)}
-                className="absolute top-4 right-4 p-1.5 text-zinc-500 hover:text-zinc-200 rounded-full hover:bg-zinc-900 transition-colors cursor-pointer"
+                aria-label={`Đóng thông tin ${inspectedName}`}
+                className="absolute top-4 right-4 flex min-h-11 min-w-11 items-center justify-center text-zinc-500 hover:text-zinc-200 rounded-full hover:bg-zinc-900 transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -580,7 +594,7 @@ export const UtilitiesView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setInspectedGu(null)}
-                  className="py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:bg-zinc-900 font-semibold text-xs active:scale-[0.98] transition-all cursor-pointer"
+                  className="py-2.5 rounded-xl border border-zinc-800 text-zinc-400 hover:bg-zinc-900 font-semibold text-xs active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                 >
                   Đóng
                 </button>
@@ -589,7 +603,7 @@ export const UtilitiesView: React.FC = () => {
                     type="button"
                     disabled={actionLoading || processingId === inspectedGu.instance_id || sealingStoneQty < inspectedNeededStones}
                     onClick={() => handleSealGu(inspectedGu, inspectedName)}
-                    className="py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-zinc-950 font-bold text-xs active:scale-[0.98] transition-all cursor-pointer shadow-lg flex items-center justify-center gap-1.5"
+                    className="py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-zinc-950 font-bold text-xs active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shadow-lg flex items-center justify-center gap-1.5"
                   >
                     <Lock className="w-3.5 h-3.5" />
                     Phong Ấn
@@ -599,7 +613,7 @@ export const UtilitiesView: React.FC = () => {
                     type="button"
                     disabled={actionLoading || processingId === inspectedGu.instance_id}
                     onClick={() => handleUnsealGu(inspectedGu, inspectedName)}
-                    className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-zinc-950 font-bold text-xs active:scale-[0.98] transition-all cursor-pointer shadow-lg flex items-center justify-center gap-1.5"
+                    className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-zinc-950 font-bold text-xs active:scale-[0.98] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer shadow-lg flex items-center justify-center gap-1.5"
                   >
                     <Unlock className="w-3.5 h-3.5" />
                     Giải Phong

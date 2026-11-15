@@ -53,9 +53,11 @@ export const ClearCacheModal: React.FC<ClearCacheModalProps> = ({ isOpen, onClos
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             disabled={clearing}
-            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors disabled:opacity-50 cursor-pointer"
+            aria-label="Đóng cửa sổ dọn dẹp bộ nhớ"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition-colors disabled:opacity-50 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -74,7 +76,7 @@ export const ClearCacheModal: React.FC<ClearCacheModalProps> = ({ isOpen, onClos
           {/* Option 1: Preserve auth */}
           <div
             onClick={() => !clearing && setPreserveAuth(true)}
-            className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+            className={`p-3 rounded-xl border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-start gap-3 ${
               preserveAuth
                 ? "bg-emerald-950/20 border-emerald-500/40 text-zinc-200"
                 : "bg-zinc-900/40 border-zinc-800 text-zinc-400 hover:bg-zinc-900/70"
@@ -99,7 +101,7 @@ export const ClearCacheModal: React.FC<ClearCacheModalProps> = ({ isOpen, onClos
           {/* Option 2: Full wipe */}
           <div
             onClick={() => !clearing && setPreserveAuth(false)}
-            className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+            className={`p-3 rounded-xl border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-start gap-3 ${
               !preserveAuth
                 ? "bg-red-950/20 border-red-500/40 text-zinc-200"
                 : "bg-zinc-900/40 border-zinc-800 text-zinc-400 hover:bg-zinc-900/70"
@@ -133,7 +135,7 @@ export const ClearCacheModal: React.FC<ClearCacheModalProps> = ({ isOpen, onClos
           <button
             onClick={handleClear}
             disabled={clearing}
-            className="px-4 py-2 rounded-xl text-xs font-serif font-bold text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 transition-all flex items-center gap-2 shadow-lg shadow-amber-950/30 active:scale-95 disabled:opacity-50 cursor-pointer"
+            className="px-4 py-2 rounded-xl text-xs font-serif font-bold text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-2 shadow-lg shadow-amber-950/30 active:scale-95 disabled:opacity-50 cursor-pointer"
           >
             {clearing ? (
               <>
@@ -164,7 +166,7 @@ export const ClearCacheButton: React.FC<{ className?: string; showLabel?: boolea
       <button
         onClick={() => setModalOpen(true)}
         title="Xóa bộ nhớ đệm cục bộ (Clear Cache)"
-        className={`px-2.5 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-xs text-amber-500/90 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 font-serif transition-colors border border-[var(--border-default)] cursor-pointer inline-flex items-center gap-1.5 ${className}`}
+        className={`inline-flex min-h-11 items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-xs text-amber-500/90 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300 font-serif transition-colors border border-[var(--border-default)] cursor-pointer ${className}`}
       >
         <Trash2 className="w-3.5 h-3.5 shrink-0" />
         {showLabel && <span>Xóa Cache</span>}

@@ -173,7 +173,7 @@ export const Registration: React.FC<RegistrationProps> = ({
         <button
           type="button"
           onClick={() => handleTabChange(true)}
-          className={`flex-1 py-2.5 text-xs font-mono uppercase tracking-wider rounded-xl transition-all font-semibold cursor-pointer ${
+          className={`flex-1 py-2.5 text-xs font-mono uppercase tracking-wider rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-semibold cursor-pointer ${
             isLoginTab
               ? "bg-amber-500 text-zinc-950 shadow-md font-bold"
               : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -184,7 +184,7 @@ export const Registration: React.FC<RegistrationProps> = ({
         <button
           type="button"
           onClick={() => handleTabChange(false)}
-          className={`flex-1 py-2.5 text-xs font-mono uppercase tracking-wider rounded-xl transition-all font-semibold cursor-pointer ${
+          className={`flex-1 py-2.5 text-xs font-mono uppercase tracking-wider rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-semibold cursor-pointer ${
             !isLoginTab
               ? "bg-amber-500 text-zinc-950 shadow-md font-bold"
               : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -217,14 +217,17 @@ export const Registration: React.FC<RegistrationProps> = ({
               <input
                 type="email"
                 id="login-email"
+                name="email"
+                autoComplete="email"
+                spellCheck={false}
                 disabled={isLoading}
                 value={email}
                 onChange={(e) => {
                   onClearError();
                   setEmail(e.target.value);
                 }}
-                placeholder="example@gmail.com"
-                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all font-mono"
+                placeholder="ten@email.vn…"
+                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
                 maxLength={255}
                 required
               />
@@ -246,14 +249,17 @@ export const Registration: React.FC<RegistrationProps> = ({
               <input
                 type="text"
                 id="username"
+                name="username"
+                autoComplete="username"
+                spellCheck={false}
                 disabled={isLoading}
                 value={username}
                 onChange={(e) => {
                   onClearError();
                   setUsername(e.target.value);
                 }}
-                placeholder="Nhập đạo hiệu..."
-                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all font-serif"
+                placeholder="Nhập đạo hiệu…"
+                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif"
                 maxLength={30}
                 required
               />
@@ -277,19 +283,23 @@ export const Registration: React.FC<RegistrationProps> = ({
                 <input
                   type="email"
                   id="email"
+                  name="email"
+                  autoComplete="email"
+                  spellCheck={false}
                   disabled={isLoading}
                   value={email}
                   onChange={(e) => {
                     onClearError();
                     setEmail(e.target.value);
                   }}
-                  placeholder="example@gmail.com"
-                  className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all font-mono"
+                  placeholder="ten@email.vn…"
+                  className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
                   required
                 />
               </div>
               {emailVerificationRequired && <button
                 type="button"
+                aria-label={otpCooldown > 0 ? `Gửi lại mã sau ${otpCooldown} giây` : "Gửi mã xác thực"}
                 disabled={isLoading || otpCooldown > 0 || email.trim().length === 0}
                 onClick={handleSendOTP}
                 className="px-4 py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-[var(--bg-elevated)] disabled:text-zinc-600 border border-amber-500 rounded-xl text-xs font-serif text-amber-100 transition-colors shrink-0 cursor-pointer min-w-[80px]"
@@ -314,14 +324,18 @@ export const Registration: React.FC<RegistrationProps> = ({
               <input
                 type="text"
                 id="otp"
+                name="one-time-code"
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                spellCheck={false}
                 disabled={isLoading}
                 value={otp}
                 onChange={(e) => {
                   onClearError();
                   setOtp(e.target.value);
                 }}
-                placeholder="Nhập mã OTP 6 chữ số..."
-                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all font-mono tracking-[0.2em] text-center"
+                placeholder="Nhập mã OTP 6 chữ số…"
+                className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-4 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono tracking-[0.2em] text-center"
                 maxLength={6}
                 required
               />
@@ -344,9 +358,9 @@ export const Registration: React.FC<RegistrationProps> = ({
                     onClearError();
                     setGender(g.id);
                   }}
-                  className={`py-2.5 rounded-xl border font-serif text-xs font-bold transition-all cursor-pointer ${
+                  className={`py-2.5 rounded-xl border font-serif text-xs font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                     gender === g.id
-                      ? "bg-amber-600 border-amber-500 text-white"
+                      ? "bg-amber-600 border-amber-500 text-zinc-950"
                       : "bg-[var(--bg-elevated)] border-[var(--border-default)] text-[var(--text-secondary)] hover:border-[var(--border-hover)]"
                   }`}
                 >
@@ -358,7 +372,7 @@ export const Registration: React.FC<RegistrationProps> = ({
         )}
 
         {otpSuccessMessage && (
-          <div className="text-[11px] text-emerald-700 dark:text-emerald-400 font-serif bg-[var(--bg-elevated)] border border-emerald-500 p-2 rounded-xl text-center">
+          <div role="status" aria-live="polite" className="text-[11px] text-emerald-700 dark:text-emerald-400 font-serif bg-[var(--bg-elevated)] border border-emerald-500 p-2 rounded-xl text-center">
             {otpSuccessMessage}
           </div>
         )}
@@ -376,6 +390,9 @@ export const Registration: React.FC<RegistrationProps> = ({
             <input
               type={showPassword ? "text" : "password"}
               id="password"
+              name="password"
+              autoComplete={isLoginTab ? "current-password" : "new-password"}
+              spellCheck={false}
               disabled={isLoading}
               value={password}
               onChange={(e) => {
@@ -383,7 +400,7 @@ export const Registration: React.FC<RegistrationProps> = ({
                 setPassword(e.target.value);
               }}
               placeholder="••••••••"
-              className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-10 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-all font-mono"
+              className="w-full bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl py-3 pl-10 pr-10 text-sm text-[var(--text-primary)] placeholder-zinc-500 focus:outline-none focus:border-amber-500 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
               minLength={6}
               maxLength={50}
               required
@@ -391,7 +408,9 @@ export const Registration: React.FC<RegistrationProps> = ({
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-3.5 text-zinc-600 hover:text-zinc-400 focus:outline-none cursor-pointer"
+              aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+              aria-pressed={showPassword}
+              className="absolute right-1 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded text-zinc-600 hover:text-zinc-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 cursor-pointer"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -400,7 +419,7 @@ export const Registration: React.FC<RegistrationProps> = ({
 
         {/* Error Display */}
         {error && (
-          <div className="flex items-start gap-2 text-rose-700 dark:text-rose-400 bg-[var(--bg-elevated)] border border-rose-500 p-3 rounded-xl text-xs mt-2">
+          <div role="alert" className="flex items-start gap-2 text-rose-700 dark:text-rose-400 bg-[var(--bg-elevated)] border border-rose-500 p-3 rounded-xl text-xs mt-2">
             <ShieldAlert className="w-4.5 h-4.5 shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
@@ -416,7 +435,7 @@ export const Registration: React.FC<RegistrationProps> = ({
               : username.trim().length < 3 || email.trim().length === 0 || (emailVerificationRequired && otp.trim().length < 6)) ||
             password.length < 6
           }
-          className={`w-full py-3.5 px-6 rounded-xl font-serif text-sm font-semibold tracking-wider transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-lg mt-5 ${
+          className={`w-full py-3.5 px-6 rounded-xl font-serif text-sm font-semibold tracking-wider transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-lg mt-5 ${
             isLoading ||
             (isLoginTab
               ? email.trim().length === 0
@@ -449,7 +468,7 @@ export const Registration: React.FC<RegistrationProps> = ({
         <button
           type="button"
           onClick={handleGoogleLogin}
-          className="w-full py-3.5 px-4 rounded-xl border border-[var(--border-default)] hover:border-[var(--border-hover)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] text-xs font-semibold tracking-wider font-mono hover:text-[var(--text-primary)] transition-all flex items-center justify-center gap-2.5 active:scale-[0.98] cursor-pointer"
+          className="w-full py-3.5 px-4 rounded-xl border border-[var(--border-default)] hover:border-[var(--border-hover)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] text-xs font-semibold tracking-wider font-mono hover:text-[var(--text-primary)] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center justify-center gap-2.5 active:scale-[0.98] cursor-pointer"
         >
           <svg className="w-4.5 h-4.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>

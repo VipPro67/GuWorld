@@ -84,7 +84,7 @@ export const SpatialRealmHUD: React.FC = () => {
   const isSafePvP = (activeSpatialRealm.rules?.pvp_mode || "SAFE").toUpperCase() === "SAFE";
 
   return (
-    <aside aria-label="Bảng trạng thái bí cảnh" className="w-full max-w-xl mx-auto mb-3 bg-gradient-to-r from-zinc-950/90 via-amber-950/30 to-zinc-950/90 border border-amber-500/40 rounded-2xl p-3 shadow-[0_0_20px_rgba(245,158,11,0.2)] backdrop-blur-md transition-all">
+    <aside aria-label="Bảng trạng thái bí cảnh" className="w-full max-w-xl mx-auto mb-3 bg-gradient-to-r from-zinc-950/90 via-amber-950/30 to-zinc-950/90 border border-amber-500/40 rounded-2xl p-3 shadow-[0_0_20px_rgba(245,158,11,0.2)] backdrop-blur-md transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/20 pb-2 mb-2">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300">
@@ -110,7 +110,7 @@ export const SpatialRealmHUD: React.FC = () => {
         <button
           onClick={handleExit}
           disabled={spatialLoading}
-          className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-500/40 rounded-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-500/40 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] hover:scale-105 active:scale-95 disabled:opacity-50"
         >
           <DoorOpen className="w-3.5 h-3.5" />
           <span>Rời Bí Cảnh</span>

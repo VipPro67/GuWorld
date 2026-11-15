@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -184,6 +184,47 @@ export default function Home() {
   const setView = useUIStore((s) => s.setView);
   const showChangelog = useUIStore((s) => s.showChangelog);
   const setShowChangelog = useUIStore((s) => s.setShowChangelog);
+  const featureDialogRef = useRef<HTMLElement>(null);
+  const changelogDialogRef = useRef<HTMLDivElement>(null);
+  const featureDialogOpen = Boolean(
+    player && !player.active_combat && !activeCombatReplay && player.rank !== 0 && !player.needs_onboarding &&
+    !isExploreView && currentView !== "dashboard" && currentView !== "practice-room"
+  );
+
+  useEffect(() => {
+    if (!featureDialogOpen) return;
+    const dialog = featureDialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const getControls = () => dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    (getControls()[0] || dialog).focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setView("dashboard");
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = getControls();
+      if (!controls.length) {
+        event.preventDefault();
+        dialog.focus();
+      } else if (event.shiftKey && document.activeElement === controls[0]) {
+        event.preventDefault();
+        controls[controls.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) {
+        event.preventDefault();
+        controls[0].focus();
+      }
+    };
+    dialog.addEventListener("keydown", onKeyDown);
+    return () => {
+      dialog.removeEventListener("keydown", onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [featureDialogOpen, setView]);
 
   useEffect(() => {
     if (currentView === "wiki") router.replace("/wiki");
@@ -200,14 +241,49 @@ export default function Home() {
 
   const [dontShowToday, setDontShowToday] = useState(false);
 
-  const handleCloseChangelog = () => {
+  const handleCloseChangelog = useCallback(() => {
     if (dontShowToday) {
       const today = new Date().toISOString().split('T')[0];
       updateUiPreferences({ changelogHideUntil: today });
     }
     setDontShowToday(false);
     setShowChangelog(false);
-  };
+  }, [dontShowToday, setShowChangelog]);
+
+  useEffect(() => {
+    if (!showChangelog) return;
+    const dialog = changelogDialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const getControls = () => dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+    );
+    (getControls()[0] || dialog).focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        handleCloseChangelog();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = getControls();
+      if (!controls.length) {
+        event.preventDefault();
+        dialog.focus();
+      } else if (event.shiftKey && document.activeElement === controls[0]) {
+        event.preventDefault();
+        controls[controls.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) {
+        event.preventDefault();
+        controls[0].focus();
+      }
+    };
+    dialog.addEventListener("keydown", onKeyDown);
+    return () => {
+      dialog.removeEventListener("keydown", onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [showChangelog, handleCloseChangelog]);
 
   // 1. Session Restoration on Mount
   useEffect(() => {
@@ -301,16 +377,16 @@ export default function Home() {
         </main>
 
         <footer className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto text-center mt-8 pt-4 border-t border-zinc-950 flex flex-col items-center gap-2">
-          <div className="flex items-center gap-3">
-            <a href="https://www.facebook.com/profile.php?id=61587628762458" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-all">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <a href="https://www.facebook.com/profile.php?id=61587628762458" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
               Fanpage
             </a>
-            <a href="https://www.facebook.com/groups/2036276400523995" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 transition-all">
+            <a href="https://www.facebook.com/groups/2036276400523995" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
               Cộng Đồng
             </a>
-            <a href="https://discord.gg/pTMuYUFngg" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 transition-all">
+            <a href="https://discord.gg/pTMuYUFngg" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.094 13.094 0 0 1-1.873-.894.077.077 0 0 1-.008-.128c.126-.093.252-.19.372-.287a.075.075 0 0 1 .077-.011c3.92 1.793 8.18 1.793 12.061 0a.073.073 0 0 1 .078.009c.12.099.246.195.373.289a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.156-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.156 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.156-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.156 2.418z"/>
               </svg>
@@ -318,7 +394,7 @@ export default function Home() {
             </a>
             <ClearCacheButton showLabel={true} className="!text-amber-500 dark:!text-amber-400 !bg-amber-500/10 hover:!bg-amber-500/20 !border-amber-500/20" />
           </div>
-          <p className="text-xs text-zinc-600 font-mono">Cổ Chân Nhân Web Game © 2026 • Thiết Kế Trực Quan Sinh Động</p>
+          <p className="text-xs text-zinc-400 font-mono">Cổ Chân Nhân Web Game © 2026 • Thiết Kế Trực Quan Sinh Động</p>
         </footer>
       </div>
     );
@@ -404,7 +480,7 @@ export default function Home() {
     <div className="mmo-paper-theme h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden p-0 relative">
       <a href="#main-content" className="skip-link">Bỏ qua đến nội dung chính</a>
       {/* Top Header Navigation */}
-      <header className="w-full max-w-[1600px] px-2 sm:px-6 mx-auto py-2.5 sm:py-3 border-b border-[var(--border-default)] flex justify-between items-center gap-3 shrink-0 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-30">
+      <header inert={showChangelog} className="w-full max-w-[1600px] px-2 sm:px-6 mx-auto py-2.5 sm:py-3 border-b border-[var(--border-default)] flex justify-between items-center gap-3 shrink-0 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-30">
         <div className="flex items-center gap-3 sm:gap-6">
           <button
             type="button"
@@ -433,7 +509,8 @@ export default function Home() {
               href="/wiki"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-xs text-emerald-400 hover:text-emerald-300 font-serif transition-colors border border-zinc-800 inline-flex items-center gap-1"
+              aria-label="Mở Wiki trong tab mới"
+              className="min-h-11 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-xs text-emerald-400 hover:text-emerald-300 font-serif transition-colors border border-zinc-800 inline-flex items-center gap-1"
             >
               <HelpCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span className="hidden sm:inline">Wiki</span>
@@ -445,7 +522,8 @@ export default function Home() {
           {player && (
             <button
               onClick={logout}
-              className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-red-950/30 text-xs text-red-400 hover:text-red-300 font-serif transition-colors border border-zinc-800 hover:border-red-900/30 cursor-pointer inline-flex items-center gap-1"
+              aria-label="Đăng xuất"
+              className="min-h-11 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-red-950/30 text-xs text-red-400 hover:text-red-300 font-serif transition-colors border border-zinc-800 hover:border-red-900/30 cursor-pointer inline-flex items-center gap-1"
               title="Đăng Xuất"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -458,9 +536,9 @@ export default function Home() {
       </header>
 
       {/* Main Content Area */}
-      <main id="main-content" tabIndex={-1} className={`w-full flex-1 min-h-0 max-w-none px-0 mx-0 flex flex-col ${player ? "overflow-hidden" : "overflow-y-auto"}`}>
+      <main id="main-content" inert={showChangelog} tabIndex={-1} className={`w-full flex-1 min-h-0 max-w-none px-0 mx-0 flex flex-col ${player ? "overflow-hidden" : "overflow-y-auto"}`}>
         {!player ? (
-          <div className="relative isolate flex-1 min-h-full w-full overflow-hidden bg-[#101814]">
+          <div className="relative isolate flex-1 min-h-full w-full overflow-x-clip bg-[#101814]">
             <div
               aria-hidden="true"
               className="absolute inset-0 opacity-45"
@@ -566,22 +644,24 @@ export default function Home() {
             <OnboardingModal onComplete={completeOnboarding} />
           </div>
         ) : (
-          <div className="relative isolate w-full h-full min-h-0 flex-1 overflow-hidden bg-zinc-950">
+            <div className="relative isolate w-full h-full min-h-0 flex-1 overflow-hidden bg-zinc-950">
             {isExploreView ? (
               <div className="w-full h-full overflow-y-auto py-2 sm:py-4">
                 <ExplorationMap player={player} />
               </div>
             ) : (
-              <div className="w-full h-full overflow-y-auto py-2 sm:py-4 px-2 sm:px-6">
+              <div inert={featureDialogOpen} className="w-full h-full overflow-y-auto py-2 sm:py-4 px-2 sm:px-6">
                 <LobbyView />
               </div>
             )}
             {!isExploreView && currentView !== "dashboard" && (
               <div className={`absolute inset-0 z-40 flex items-center justify-center ${isFullBleedView ? "" : "bg-black/55 backdrop-blur-[2px] md:p-4"}`}>
                 <section
+                  ref={featureDialogRef}
                   role="dialog"
                   aria-modal="true"
                   aria-label={viewTitles[currentView] || "Chức năng"}
+                  tabIndex={-1}
                   className={`mmo-panel-theme mmo-paper-theme mmo-paper-surface relative flex h-full w-full flex-col overflow-hidden text-[var(--text-primary,#f4e8cb)] ${isFullBleedView ? "" : `md:h-[min(90dvh,900px)] md:max-h-[90dvh] md:rounded-2xl ${isWideFeatureView ? "md:w-[min(76vw,1100px)]" : "md:w-[min(64vw,820px)]"}`}`}
                 >
                   {!isFullBleedView && (
@@ -593,9 +673,10 @@ export default function Home() {
                     </div>
                     <div className="relative z-[1] flex shrink-0 items-center gap-2">
                       <button
+                        type="button"
                         onClick={() => setView("dashboard")}
                         aria-label="Đóng bảng điều khiển"
-                        className="mmo-bamboo-action grid h-9 w-9 shrink-0 place-items-center cursor-pointer"
+                        className="mmo-bamboo-action grid h-11 w-11 shrink-0 place-items-center cursor-pointer"
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -791,17 +872,17 @@ export default function Home() {
 
       {/* Footer Details */}
       {!player && (
-        <footer className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto text-center mt-8 pt-4 border-t border-primary flex flex-col items-center gap-2">
-          <div className="flex items-center gap-3">
-            <a href="https://www.facebook.com/profile.php?id=61587628762458" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-all">
+        <footer inert={showChangelog} className="w-full max-w-[1600px] px-2 sm:px-8 mx-auto text-center mt-8 pt-4 border-t border-primary flex flex-col items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
+            <a href="https://www.facebook.com/profile.php?id=61587628762458" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
               Fanpage
             </a>
-            <a href="https://www.facebook.com/groups/2036276400523995" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 transition-all">
+            <a href="https://www.facebook.com/groups/2036276400523995" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
               Cộng Đồng
             </a>
-            <a href="https://discord.gg/pTMuYUFngg" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 transition-all">
+            <a href="https://discord.gg/pTMuYUFngg" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.094 13.094 0 0 1-1.873-.894.077.077 0 0 1-.008-.128c.126-.093.252-.19.372-.287a.075.075 0 0 1 .077-.011c3.92 1.793 8.18 1.793 12.061 0a.073.073 0 0 1 .078.009c.12.099.246.195.373.289a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.156-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.156 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.156-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.156 2.418z"/>
               </svg>
@@ -809,23 +890,23 @@ export default function Home() {
             </a>
             <ClearCacheButton showLabel={true} className="!text-amber-500 dark:!text-amber-400 !bg-amber-500/10 hover:!bg-amber-500/20 !border-amber-500/20" />
           </div>
-          <p className="text-xs text-zinc-600 font-mono">Cổ Chân Nhân Web Game © 2026 • Thiết Kế Trực Quan Sinh Động</p>
+          <p className="text-xs text-zinc-400 font-mono">Cổ Chân Nhân Web Game © 2026 • Thiết Kế Trực Quan Sinh Động</p>
         </footer>
       )}
 
       {/* Changelog Modal */}
       {player && showChangelog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-primary)] animate-fade-in" onClick={handleCloseChangelog}>
-          <div className="w-full max-w-xl max-h-[90vh] sm:max-h-[85vh] flex flex-col bg-[var(--bg-surface)] border border-amber-300/20 rounded-3xl p-4 sm:p-5 shadow-[0_28px_90px_rgba(0,0,0,.65)] overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+          <div ref={changelogDialogRef} role="dialog" aria-modal="true" aria-labelledby="changelog-title" tabIndex={-1} className="w-full max-w-xl max-h-[90vh] sm:max-h-[85vh] flex flex-col bg-[var(--bg-surface)] border border-amber-300/20 rounded-3xl p-4 sm:p-5 shadow-[0_28px_90px_rgba(0,0,0,.65)] overflow-hidden overscroll-contain animate-scale-up" onClick={e => e.stopPropagation()}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-xl pointer-events-none" />
             <div className="flex items-center justify-between mb-4 shrink-0">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base font-serif font-bold text-[var(--text-primary)]">Cập Nhật Mới!</h3>
+                <h3 id="changelog-title" className="text-base font-serif font-bold text-[var(--text-primary)]">Cập Nhật Mới!</h3>
               </div>
-              <button onClick={handleCloseChangelog} className="text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
+              <button aria-label="Đóng cập nhật mới" onClick={handleCloseChangelog} className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+            <div tabIndex={0} aria-label="Chi tiết bản cập nhật" className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
               <section className="relative isolate overflow-hidden rounded-2xl border border-amber-300/20 bg-gradient-to-br from-amber-950/70 via-zinc-950/80 to-emerald-950/50 p-4 sm:p-5">
                 <img src="/assets/world/form-six-arm-ice-demon.webp" alt="" aria-hidden="true" className="pointer-events-none absolute -right-4 -top-8 h-36 w-40 object-contain opacity-35 sm:h-44 sm:w-48" />
                 <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-zinc-950/10 via-zinc-950/30 to-zinc-950/75" />
@@ -867,11 +948,11 @@ export default function Home() {
             <div className="flex gap-2.5 mt-2 shrink-0">
               <Link
                 href="/wiki"
-                className="flex-1 py-2 border border-amber-600/30 hover:border-amber-500/50 text-amber-400 hover:text-amber-300 rounded-xl text-xs font-semibold transition-all cursor-pointer text-center flex items-center justify-center gap-1.5"
+                className="flex-1 py-2 border border-amber-600/30 hover:border-amber-500/50 text-amber-400 hover:text-amber-300 rounded-xl text-xs font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer text-center flex items-center justify-center gap-1.5"
               >
                 📖 Xem Game Wiki
               </Link>
-              <button onClick={handleCloseChangelog} className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-semibold transition-all cursor-pointer">
+              <button onClick={handleCloseChangelog} className="flex min-h-11 flex-1 items-center justify-center rounded-xl bg-amber-600 py-2 text-zinc-950 text-xs font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] hover:bg-amber-500 cursor-pointer">
                 Đã hiểu!
               </button>
             </div>
@@ -949,14 +1030,14 @@ export default function Home() {
       {/* Dead Player Overlay — cõi chết is derived from lifespan on the server */}
       {player && player.lifespan <= 0 && (
         <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-zinc-950 border border-red-900/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl shadow-red-950/50">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="lifespan-depleted-title" aria-describedby="lifespan-depleted-description" tabIndex={-1} className="bg-zinc-950 border border-red-900/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl shadow-red-950/50">
             <div className="w-16 h-16 bg-red-950/50 border border-red-800/40 rounded-full flex items-center justify-center mx-auto text-red-500 text-3xl font-extrabold animate-pulse">
               ☠️
             </div>
-            <h2 className="text-xl font-serif font-extrabold text-red-500 tracking-wide">
+            <h2 id="lifespan-depleted-title" className="text-xl font-serif font-extrabold text-red-500 tracking-wide">
               Thọ Nguyên Đã Cạn!
             </h2>
-            <p className="text-xs text-zinc-400 font-serif leading-relaxed">
+            <p id="lifespan-depleted-description" className="text-xs text-zinc-400 font-serif leading-relaxed">
               Tuổi thọ của cổ sư <span className="text-red-400 font-bold">{player.username}</span> đã giảm về 0. Thể xác và thần hồn của đạo hữu đã rơi vào cõi chết.
             </p>
             <div className="p-3 bg-red-950/20 border border-red-900/20 rounded-xl text-[11px] text-red-300 font-mono">

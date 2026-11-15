@@ -510,10 +510,10 @@ export const characterPages: WikiPage[] = [
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             Các hiệu ứng đã chọn được kiểm tra theo executor combat theo lượt. Những combo recipe đặc biệt chưa có runtime nên không được xem là hiệu ứng đang hoạt động:
           </p>
-          <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs space-y-2 text-[var(--text-secondary)] leading-relaxed">
+          <ul className="list-disc list-inside p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs space-y-2 text-[var(--text-secondary)] leading-relaxed">
             <li>💥 <strong>Lực Đạo combo:</strong> Trang bị đồng thời <strong>Toàn Lực Ứng Phó Cổ</strong> (kích hoạt 100% thú ảnh) và <strong>Khổ Lực Cổ</strong> (tăng sát thương dựa trên Sinh Lực đã mất) để tối đa lượng sát thương bộc phát.</li>
             <li>❤️ <strong>Trị liệu combo:</strong> Sử dụng <strong>Tự Lực Cánh Sinh Cổ</strong> hồi phục sinh lực dựa trên chỉ số Sức mạnh thể chất của bạn. Sức mạnh càng lớn hồi máu càng nhiều.</li>
-          </div>
+          </ul>
         </div>
       </div>
     )

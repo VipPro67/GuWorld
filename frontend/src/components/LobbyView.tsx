@@ -88,7 +88,43 @@ export const LobbyView: React.FC = () => {
   } = useGameStore();
   const [manaNow, setManaNow] = useState(() => Date.now());
   const [combatSettingsOpen, setCombatSettingsOpen] = useState(false);
+  const combatSettingsDialogRef = useRef<HTMLElement>(null);
   const { lobbyItems, hiddenLobbyItems } = useUiPreferences();
+
+  useEffect(() => {
+    if (!combatSettingsOpen) return;
+    const dialog = combatSettingsDialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const getControls = () => dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    (getControls()[0] || dialog).focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setCombatSettingsOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = getControls();
+      if (!controls.length) {
+        event.preventDefault();
+        dialog.focus();
+      } else if (event.shiftKey && document.activeElement === controls[0]) {
+        event.preventDefault();
+        controls[controls.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) {
+        event.preventDefault();
+        controls[0].focus();
+      }
+    };
+    dialog.addEventListener("keydown", onKeyDown);
+    return () => {
+      dialog.removeEventListener("keydown", onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [combatSettingsOpen]);
 
   useEffect(() => {
     if (player && player.rank >= 6 && !aperture) {
@@ -648,7 +684,7 @@ export const LobbyView: React.FC = () => {
                 onClick={() => handleItemClick(item)}
                 aria-label={item.locked ? `${item.label} (đã khóa)` : item.label}
                 title={item.locked ? `${item.label} — chưa mở khóa` : item.label}
-                className={`mmo-game-tile group relative flex min-h-[92px] items-center gap-3 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-all duration-200 sm:min-h-[108px] sm:px-3.5 ${
+                className={`mmo-game-tile group relative flex min-h-[92px] items-center gap-3 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 sm:min-h-[108px] sm:px-3.5 ${
                   item.locked
                     ? "cursor-not-allowed opacity-55"
                     : "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
@@ -693,7 +729,7 @@ export const LobbyView: React.FC = () => {
         <button
           type="button"
           onClick={() => setCombatSettingsOpen(true)}
-          className="flex items-center gap-2 rounded-xl border border-[var(--mmo-menu-border-soft,rgba(168,137,82,0.4))] bg-[var(--mmo-theme-elevated,#352618)] px-4 py-2 text-xs font-semibold text-[var(--text-primary,#f4e8cb)] transition hover:border-[var(--mmo-menu-accent,#e4b96c)] hover:brightness-110"
+          className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--mmo-menu-border-soft,rgba(168,137,82,0.4))] bg-[var(--mmo-theme-elevated,#352618)] px-4 py-2 text-xs font-semibold text-[var(--text-primary,#f4e8cb)] transition hover:border-[var(--mmo-menu-accent,#e4b96c)] hover:brightness-110"
         >
           <Settings2 className="h-4 w-4 text-[var(--mmo-menu-accent,#e4b96c)]" />
           Cài đặt
@@ -702,21 +738,23 @@ export const LobbyView: React.FC = () => {
       {combatSettingsOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-6">
           <section
+            ref={combatSettingsDialogRef}
             role="dialog"
             aria-modal="true"
-            aria-label="Cài đặt Lobby"
-            className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-amber-900/60 bg-zinc-950 shadow-2xl"
+            aria-labelledby="lobby-settings-title"
+            tabIndex={-1}
+            className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden overscroll-contain rounded-2xl border border-amber-900/60 bg-zinc-950 shadow-2xl"
           >
             <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3 sm:px-5">
               <div>
-                <h2 className="font-serif text-base font-bold text-amber-100">Cài Đặt</h2>
+                <h2 id="lobby-settings-title" className="font-serif text-base font-bold text-amber-100">Cài Đặt</h2>
                 <p className="text-[10px] text-zinc-500">Menu lobby, giao diện và chiến thuật turn-based</p>
               </div>
               <button
                 type="button"
                 aria-label="Đóng cài đặt Lobby"
                 onClick={() => setCombatSettingsOpen(false)}
-                className="rounded-lg border border-zinc-800 p-2 text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-zinc-800 p-2 text-zinc-400 hover:bg-zinc-900 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
               >
                 <X className="h-4 w-4" />
               </button>

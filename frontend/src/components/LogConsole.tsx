@@ -29,6 +29,8 @@ export const LogConsole: React.FC<LogConsoleProps> = ({ logs }) => {
 
       <div
         ref={containerRef}
+        tabIndex={0}
+        aria-label="Nhật ký tu hành"
         className="flex-1 overflow-y-auto custom-scrollbar space-y-2.5 font-mono text-xs pr-1"
       >
         {logs.map((log, index) => {

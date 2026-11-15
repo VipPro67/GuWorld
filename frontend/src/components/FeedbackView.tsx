@@ -185,7 +185,7 @@ export const FeedbackView: React.FC = () => {
                 setFilterCategory("");
                 setFilterStatus("");
               }}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold font-serif border transition-all cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-semibold font-serif border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                 activeTab === "list"
                   ? "bg-zinc-900 border-zinc-800 text-zinc-100"
                   : "bg-transparent border-transparent text-zinc-500 hover:text-zinc-300"
@@ -195,7 +195,7 @@ export const FeedbackView: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab("create")}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold font-serif border transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-4 py-2 rounded-xl text-xs font-semibold font-serif border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center gap-1.5 ${
                 activeTab === "create"
                   ? "bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white border-transparent"
                   : "bg-zinc-950 border-zinc-900 text-zinc-400 hover:text-zinc-200"
@@ -235,7 +235,7 @@ export const FeedbackView: React.FC = () => {
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ví dụ: Đề xuất cân bằng sức mạnh Nguyệt Quang Cổ..."
                 maxLength={100}
-                className="bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-4 py-3 text-xs text-zinc-200 focus:outline-none placeholder-zinc-700 transition-all font-serif"
+                className="bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-4 py-3 text-xs text-zinc-200 focus:outline-none placeholder-zinc-700 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif"
               />
             </div>
 
@@ -245,7 +245,7 @@ export const FeedbackView: React.FC = () => {
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-4 py-3 text-xs text-zinc-200 focus:outline-none transition-all font-mono"
+                  className="bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-4 py-3 text-xs text-zinc-200 focus:outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
                 >
                   <option value="BUG">Lỗi game</option>
                   <option value="GU">Thêm Cổ Trùng hoang dã mới</option>
@@ -272,7 +272,7 @@ export const FeedbackView: React.FC = () => {
                 placeholder="Kính thưa Thiên Đạo, tại hạ đề xuất tăng tỷ lệ luyện cổ thành công của..."
                 rows={6}
                 maxLength={1000}
-                className="bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-4 py-3 text-xs text-zinc-200 focus:outline-none placeholder-zinc-700 transition-all font-serif resize-none"
+                className="bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-4 py-3 text-xs text-zinc-200 focus:outline-none placeholder-zinc-700 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif resize-none"
               />
               <div className="text-right text-[10px] text-zinc-650 font-mono">
                 {description.length} / 1000 kí tự
@@ -282,7 +282,7 @@ export const FeedbackView: React.FC = () => {
             <button
               type="submit"
               disabled={actionLoading || !title.trim() || !description.trim()}
-              className="bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-serif text-xs font-bold py-3.5 rounded-xl transition-all shadow-md active:scale-98 flex items-center justify-center gap-2 cursor-pointer mt-2"
+              className="bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-serif text-xs font-bold py-3.5 rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shadow-md active:scale-98 flex items-center justify-center gap-2 cursor-pointer mt-2"
             >
               {actionLoading ? (
                 <>
@@ -307,7 +307,7 @@ export const FeedbackView: React.FC = () => {
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
-                className="bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none transition-all font-mono"
+                className="bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
               >
                 {categories.map((c) => (
                   <option key={c.value} value={c.value}>
@@ -319,7 +319,7 @@ export const FeedbackView: React.FC = () => {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none transition-all font-mono"
+                className="bg-zinc-950 border border-zinc-900 focus:border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-400 focus:outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
               >
                 {statuses.map((s) => (
                   <option key={s.value} value={s.value}>
@@ -382,7 +382,7 @@ export const FeedbackView: React.FC = () => {
                 return (
                   <div
                     key={f.id}
-                    className="bg-zinc-950/60 border border-zinc-900 rounded-2xl p-5 hover:border-zinc-800/80 transition-all duration-300 shadow-lg relative flex flex-col md:flex-row gap-5 items-start"
+                    className="bg-zinc-950/60 border border-zinc-900 rounded-2xl p-5 hover:border-zinc-800/80 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 shadow-lg relative flex flex-col md:flex-row gap-5 items-start"
                   >
                     {/* Vote Column */}
                     <div className="flex md:flex-col items-center gap-2.5 shrink-0 bg-zinc-950/80 border border-zinc-900 rounded-xl p-2 md:p-3 w-full md:w-16 justify-between md:justify-center">
@@ -640,7 +640,7 @@ export const FeedbackView: React.FC = () => {
                                   }}
                                   placeholder="Viết góp ý của đạo hữu..."
                                   maxLength={500}
-                                  className="flex-grow bg-zinc-950 border border-zinc-900 focus:border-fuchsia-800/50 rounded-lg px-3 py-2 text-[11px] text-zinc-200 focus:outline-none placeholder-zinc-700 transition-all font-serif"
+                                  className="flex-grow bg-zinc-950 border border-zinc-900 focus:border-fuchsia-800/50 rounded-lg px-3 py-2 text-[11px] text-zinc-200 focus:outline-none placeholder-zinc-700 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif"
                                 />
                                 <button
                                   onClick={handleAddComment}

@@ -26,7 +26,7 @@ export interface GameTabsProps {
 
 const variantTabClasses: Record<GameTabsVariant, { base: string; active: string; inactive: string }> = {
   pills: {
-    base: "rounded-lg border transition-all duration-200",
+    base: "rounded-lg border transition-[color,background-color,border-color,box-shadow,transform] duration-200",
     active: "bg-brand-dim text-brand border-brand/40 shadow-sm",
     inactive: "text-text-muted border-transparent hover:text-text-primary hover:bg-elevated/60",
   },
@@ -36,7 +36,7 @@ const variantTabClasses: Record<GameTabsVariant, { base: string; active: string;
     inactive: "text-text-muted hover:text-text-primary",
   },
   segmented: {
-    base: "rounded-lg border transition-all duration-200",
+    base: "rounded-lg border transition-[color,background-color,border-color,box-shadow,transform] duration-200",
     active: "bg-brand-dim text-brand border-brand/40 shadow-sm",
     inactive: "text-text-muted border-transparent hover:text-text-primary hover:bg-elevated/60",
   },
@@ -120,7 +120,7 @@ export const GameTabs = React.forwardRef<HTMLDivElement, GameTabsProps>(
             scrollable ? "overflow-x-auto scrollbar-hide pb-1 -mb-1" : "",
           ].join(" ")}
           role="tablist"
-          aria-label="Tabs"
+          aria-label="Các mục"
         >
           {items.map((item) => {
             const isActive = item.id === activeId;
@@ -136,6 +136,18 @@ export const GameTabs = React.forwardRef<HTMLDivElement, GameTabsProps>(
                 aria-disabled={isDisabled}
                 disabled={isDisabled}
                 onClick={() => !isDisabled && onChange(item.id)}
+                onKeyDown={(event) => {
+                  if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+                  event.preventDefault();
+                  const tabs = Array.from(containerRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)') || []);
+                  const current = tabs.indexOf(event.currentTarget);
+                  const next = event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[tabs.length - 1] : tabs[(current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
+                  if (next) {
+                    onChange(next.dataset.tabId || "");
+                    next.focus();
+                  }
+                }}
+                tabIndex={isActive ? 0 : -1}
                 className={[
                   "flex items-center justify-center gap-1.5",
                   "font-serif font-semibold",

@@ -9,6 +9,7 @@ import {
   ArrowLeftRight,
   ArrowUpDown,
   CornerUpLeft,
+  Clock,
 } from "lucide-react";
 
 const rankNameColors: Record<number, string> = {
@@ -220,7 +221,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
               fetchBaoHoangMessages(activeChannel);
             }}
             aria-label="Mở kênh trò chuyện"
-            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.6)] transition-all duration-300 border relative bg-gradient-to-br from-[#4a321f] via-[#2c1d12] to-[#17120d] border-[#b89a66]/70 text-[#f6d99f] hover:border-[#f4d894] hover:text-white hover:scale-105 hover:shadow-[0_0_18px_rgba(202,163,91,0.45)] active:scale-95 cursor-pointer backdrop-blur-md"
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.6)] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 border relative bg-gradient-to-br from-[#4a321f] via-[#2c1d12] to-[#17120d] border-[#b89a66]/70 text-[#f6d99f] hover:border-[#f4d894] hover:text-white hover:scale-105 hover:shadow-[0_0_18px_rgba(202,163,91,0.45)] active:scale-95 cursor-pointer backdrop-blur-md"
           >
             <MessageSquare className="w-5 h-5 text-[#f6d99f]" />
 
@@ -282,7 +283,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                       subscribeAllBaoHoangMessages();
                       fetchBaoHoangMessages(ch.id);
                     }}
-                    className={`px-2.5 py-1.5 rounded-xl font-serif text-[10px] sm:text-[11px] font-semibold transition-all border cursor-pointer flex items-center gap-1 ${
+                    className={`px-2.5 py-1.5 rounded-xl font-serif text-[10px] sm:text-[11px] font-semibold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] border cursor-pointer flex items-center gap-1 ${
                       activeChannel === ch.id
                         ? "bg-[var(--bg-elevated)] text-[var(--text-primary)] border-[var(--border-default)]"
                         : "bg-[var(--bg-surface)] text-[var(--text-muted)] border-[var(--border-default)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)]"
@@ -302,7 +303,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                 type="button"
                 onClick={toggleWidth}
                 title="Thay đổi chiều rộng"
-                className="p-1 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer flex items-center justify-center"
+                className="p-1 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center"
               >
                 <ArrowLeftRight className="w-3.5 h-3.5" />
               </button>
@@ -310,7 +311,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                 type="button"
                 onClick={toggleHeight}
                 title="Thay đổi chiều cao"
-                className="p-1 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer flex items-center justify-center"
+                className="p-1 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer flex items-center justify-center"
               >
                 <ArrowUpDown className="w-3.5 h-3.5" />
               </button>
@@ -318,7 +319,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                 type="button"
                 onClick={() => setChatOpen(false)}
                 aria-label="Đóng chat"
-                className="p-1 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer"
+                className="p-1 rounded-lg hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
               >
                 <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
@@ -393,32 +394,42 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                         msg.sender_username.slice(0, 2).toUpperCase()
                       )}
                     </div>
-                    <div
-                      className="min-w-0 flex-1 leading-relaxed break-all cursor-pointer"
-                      onClick={() => toggleTimeVisibility(msg.id || index.toString())}
-                    >
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!isSystem && !isMe) {
-                            const msgId = msg.id || index.toString();
-                            setSelectedUserMenu(selectedUserMenu?.msgId === msgId ? null : { msgId, username: msg.sender_username });
-                          }
-                        }}
-                        className={`${nameColorClass} mr-1.5`}
-                        title={!isSystem && !isMe ? "Bấm để mở tùy chọn cổ sư" : undefined}
-                      >
+                    <div className="min-w-0 flex-1 leading-relaxed break-all">
+                      <span className="mr-1.5">
+                        {!isSystem && !isMe ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const msgId = msg.id || index.toString();
+                              setSelectedUserMenu(selectedUserMenu?.msgId === msgId ? null : { msgId, username: msg.sender_username });
+                            }}
+                            className={`${nameColorClass} rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300`}
+                            title="Mở tùy chọn cổ sư"
+                          >
+                            {msg.sender_username}
+                          </button>
+                        ) : (
+                          <span className={nameColorClass}>{msg.sender_username}</span>
+                        )}
                         {msg.sender_title && (
                           <span className="mr-1" title={(achievements.find((a: ApiResponseData) => a.id === msg.sender_title) as ApiResponseData)?.name || msg.sender_title}>
                             {(achievements.find((a: ApiResponseData) => a.id === msg.sender_title) as ApiResponseData)?.icon || "🏆"}
                           </span>
                         )}
-                        {msg.sender_username}
-                        {showTimeIds[msg.id || index.toString()] && (
-                          <span className="text-zinc-400 dark:text-zinc-650 text-[8.5px] font-normal ml-1 normal-case select-none">
-                            ({formatRelativeTime(msg.created_at)})
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => toggleTimeVisibility(msg.id || index.toString())}
+                          aria-label={`Thời gian gửi tin nhắn của ${msg.sender_username}`}
+                          aria-expanded={Boolean(showTimeIds[msg.id || index.toString()])}
+                          title="Hiện thời gian gửi"
+                          className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded-sm align-middle text-left text-zinc-400 hover:text-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
+                        >
+                          {showTimeIds[msg.id || index.toString()] ? (
+                            <span className="whitespace-nowrap text-[8.5px] font-normal normal-case text-zinc-400">{formatRelativeTime(msg.created_at)}</span>
+                          ) : (
+                            <Clock aria-hidden="true" className="h-3 w-3" />
+                          )}
+                        </button>
                         :
                       </span>
                       <span className={`${contentColorClass} ml-0.5`}>{msg.content}</span>
@@ -467,12 +478,12 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                           >
                             💬 Nhắc tên
                           </button>
-                           <button
-                             onClick={() => {
-                               navigator.clipboard?.writeText(msg.sender_username);
-                               addToast(`Đã sao chép: ${msg.sender_username}`, "info");
-                               setSelectedUserMenu(null);
-                             }}
+                          <button
+                            onClick={() => {
+                              navigator.clipboard?.writeText(msg.sender_username);
+                              addToast(`Đã sao chép: ${msg.sender_username}`, "info");
+                              setSelectedUserMenu(null);
+                            }}
                             className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-700"
                           >
                             📋 Sao chép
@@ -484,7 +495,8 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                       <button
                         type="button"
                         onClick={() => handleReply(msg.sender_username)}
-                        className="opacity-0 group-hover:opacity-100 sm:opacity-50 hover:sm:opacity-100 p-1 rounded hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all cursor-pointer self-start shrink-0 ml-1"
+                        aria-label={`Nhắc tên ${msg.sender_username}`}
+                        className="min-h-11 min-w-11 opacity-0 group-hover:opacity-100 sm:opacity-50 hover:sm:opacity-100 p-1 rounded hover:bg-[var(--bg-elevated)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer self-start shrink-0 ml-1"
                         title="Phản hồi (Nhắc tên)"
                       >
                         <CornerUpLeft className="w-3.5 h-3.5" />
@@ -500,6 +512,9 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
           <form onSubmit={handleSendChat} className="flex gap-2">
             <input
               ref={inputRef}
+              name="chat-message"
+              autoComplete="off"
+              aria-label={activeChannel === "private" ? `Tin nhắn riêng${privateRecipient ? ` tới ${privateRecipient}` : ""}` : `Tin nhắn kênh ${activeChannel}`}
               type="text"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
@@ -515,12 +530,13 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                   : "Nội bộ Bang Hội..."
               }
               maxLength={500}
-              className="flex-grow bg-[var(--bg-surface)] border border-[var(--border-default)] focus:border-[var(--border-hover)] rounded-xl px-3 py-2 text-xs md:text-sm text-[var(--text-primary)] placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none transition-all font-mono"
+              className="flex-grow bg-[var(--bg-surface)] border border-[var(--border-default)] focus:border-[var(--border-hover)] rounded-xl px-3 py-2 text-xs md:text-sm text-[var(--text-primary)] placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
             />
             <button
               type="submit"
+              aria-label="Gửi tin nhắn"
               disabled={actionLoading || !chatInput.trim()}
-              className="bg-[var(--bg-elevated)] border border-[var(--border-default)] hover:bg-[var(--bg-surface)] hover:border-[var(--border-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-zinc-400 text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-3.5 py-2 md:px-5 md:py-2.5 rounded-xl transition-all flex items-center justify-center shrink-0 cursor-pointer active:scale-95"
+              className="min-h-11 min-w-11 bg-[var(--bg-elevated)] border border-[var(--border-default)] hover:bg-[var(--bg-surface)] hover:border-[var(--border-hover)] disabled:bg-[var(--bg-elevated)] disabled:text-zinc-400 text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-3.5 py-2 md:px-5 md:py-2.5 rounded-xl transition-colors flex items-center justify-center shrink-0 cursor-pointer active:scale-95"
             >
               {actionLoading ? (
                 <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin text-zinc-400 dark:text-zinc-500" />

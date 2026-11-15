@@ -44,7 +44,7 @@ export const LobbySettingsPanel: React.FC = () => {
                 key={item.id}
                 type="button"
                 onClick={() => handleThemeChange(item.id)}
-                className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${
+                className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                   isSelected
                     ? "border-amber-400 bg-amber-950/40 text-amber-100 shadow-md"
                     : "border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/80 text-zinc-400"

@@ -83,7 +83,7 @@ export default function AchievementsPanel() {
       <div className="flex gap-2 w-full bg-zinc-950/60 p-1.5 rounded-2xl border border-zinc-900 mb-2">
         <button
           onClick={() => setSubTab("quests")}
-          className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
+          className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
             subTab === "quests"
               ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
               : "text-zinc-500 hover:text-zinc-300"
@@ -93,7 +93,7 @@ export default function AchievementsPanel() {
         </button>
         <button
           onClick={() => setSubTab("achievements")}
-          className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-all cursor-pointer ${
+          className={`flex-1 text-xs py-1.5 rounded-xl font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
             subTab === "achievements"
               ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
               : "text-zinc-500 hover:text-zinc-300"
@@ -165,7 +165,7 @@ export default function AchievementsPanel() {
                 <button
                   type="button"
                   onClick={() => setViewMode("grid")}
-                  className={`p-1.5 rounded-lg text-xs font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                  className={`p-1.5 rounded-lg text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1 cursor-pointer ${
                     viewMode === "grid"
                       ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
                       : "text-zinc-500 hover:text-zinc-300"
@@ -178,7 +178,7 @@ export default function AchievementsPanel() {
                 <button
                   type="button"
                   onClick={() => setViewMode("list")}
-                  className={`p-1.5 rounded-lg text-xs font-mono transition-all flex items-center gap-1 cursor-pointer ${
+                  className={`p-1.5 rounded-lg text-xs font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] flex items-center gap-1 cursor-pointer ${
                     viewMode === "list"
                       ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
                       : "text-zinc-500 hover:text-zinc-300"
@@ -206,7 +206,7 @@ export default function AchievementsPanel() {
                     <div
                       key={ach.id}
                       onClick={() => setInspectedAch(ach)}
-                      className={`relative rounded-2xl border p-3 flex flex-col justify-between items-center text-center transition-all duration-200 cursor-pointer select-none group hover:-translate-y-0.5 hover:shadow-xl ${
+                      className={`relative rounded-2xl border p-3 flex flex-col justify-between items-center text-center transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 cursor-pointer select-none group hover:-translate-y-0.5 hover:shadow-xl ${
                         canClaim
                           ? "border-amber-400 bg-amber-950/30 shadow-[0_0_15px_rgba(245,158,11,0.25)] ring-1 ring-amber-400/50 animate-pulse"
                           : earned
@@ -326,7 +326,7 @@ export default function AchievementsPanel() {
                               if (r?.success) store.addToast(r.message, "success");
                             }}
                             disabled={!earned}
-                            className={`text-[10px] px-2 py-1 rounded-lg font-mono font-bold transition-all cursor-pointer ${
+                            className={`text-[10px] px-2 py-1 rounded-lg font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                               isSelectedFrame
                                 ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
                                 : earned
@@ -345,7 +345,7 @@ export default function AchievementsPanel() {
                             if (r?.success) store.addToast(r.message, "success");
                           }}
                           disabled={!earned}
-                          className={`text-[10px] px-2 py-1 rounded-lg font-mono font-bold transition-all cursor-pointer ${
+                          className={`text-[10px] px-2 py-1 rounded-lg font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer ${
                             isSelectedTitle
                               ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                               : earned
@@ -363,7 +363,7 @@ export default function AchievementsPanel() {
                           <button
                             disabled={!canClaim || store.actionLoading}
                             onClick={() => handleClaim(ach.id)}
-                            className={`text-[10px] px-3 py-1.5 rounded-lg font-mono font-bold transition-all shrink-0 ${
+                            className={`text-[10px] px-3 py-1.5 rounded-lg font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shrink-0 ${
                               canClaim
                                 ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-zinc-950 shadow-[0_0_10px_rgba(245,158,11,0.3)] active:scale-95 cursor-pointer"
                                 : "bg-zinc-900 text-zinc-650 border border-zinc-850 cursor-not-allowed"
@@ -491,7 +491,7 @@ export default function AchievementsPanel() {
                           setInspectedAch(null);
                         }}
                         disabled={store.actionLoading}
-                        className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-zinc-950 font-mono font-bold text-xs shadow-lg active:scale-98 transition-all cursor-pointer"
+                        className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-zinc-950 font-mono font-bold text-xs shadow-lg active:scale-98 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
                       >
                         Nhận Phần Thưởng Ngay
                       </button>
@@ -506,7 +506,7 @@ export default function AchievementsPanel() {
                             const r = await store.selectTitleFrame(newTitle, selectedFrame);
                             if (r?.success) store.addToast(r.message, "success");
                           }}
-                          className={`py-2 px-3 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer border ${
+                          className={`py-2 px-3 rounded-xl text-xs font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer border ${
                             isSelectedTitle
                               ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
                               : "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800"
@@ -523,7 +523,7 @@ export default function AchievementsPanel() {
                               const r = await store.selectTitleFrame(selectedTitle, newFrame);
                               if (r?.success) store.addToast(r.message, "success");
                             }}
-                            className={`py-2 px-3 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer border ${
+                            className={`py-2 px-3 rounded-xl text-xs font-mono font-bold transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer border ${
                               isSelectedFrame
                                 ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
                                 : "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800"
@@ -586,7 +586,7 @@ function DailyMissionsPanel({ missions, resetAt, onClaim }: {
                 <span className="text-[10px] text-amber-300 whitespace-nowrap">+{mission.reward} {rewardLabel}</span>
               </div>
               <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                <div className="h-full bg-amber-400 transition-all" style={{ width: `${pct}%` }} />
+                <div className="h-full bg-amber-400 transition-[width]" style={{ width: `${pct}%` }} />
               </div>
               <div className="flex items-center justify-between text-[10px]">
                 <span className="text-zinc-500">{Math.min(mission.progress, mission.target)} / {mission.target}</span>
@@ -663,7 +663,7 @@ function MainQuestsPanel() {
               return (
                 <div
                   key={q.id}
-                  className={`p-3.5 rounded-2xl border text-xs flex flex-col justify-between gap-3 transition-all duration-300 hover:scale-[1.01] ${
+                  className={`p-3.5 rounded-2xl border text-xs flex flex-col justify-between gap-3 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 hover:scale-[1.01] ${
                     isDone
                       ? "bg-emerald-950/10 border-emerald-950/20 opacity-70"
                       : canClaim
@@ -698,7 +698,7 @@ function MainQuestsPanel() {
                       onClick={async () => {
                         await store.completeQuest(q.id);
                       }}
-                      className={`px-4 py-1.5 rounded-xl text-xs font-bold font-mono transition-all shrink-0 cursor-pointer whitespace-nowrap ${
+                      className={`px-4 py-1.5 rounded-xl text-xs font-bold font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shrink-0 cursor-pointer whitespace-nowrap ${
                         isDone
                           ? "bg-zinc-900/60 text-zinc-650 border border-zinc-950 cursor-not-allowed"
                           : canClaim

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Compass, MapPin, X, Search, Shield, Skull, Crown, Sparkles, Bug, Package, Layers } from "lucide-react";
 import type { Region } from "@/store/useGameStore";
@@ -198,10 +198,55 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
   const [detailsCache, setDetailsCache] = useState<Record<string, RegionDetailsData>>({});
   const loadingDetails = false;
   const [mounted, setMounted] = useState(false);
+  const dialogRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const getControls = () => dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])'
+    );
+    const frame = requestAnimationFrame(() => (getControls()[0] || dialog).focus());
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = getControls();
+      if (!controls.length) {
+        event.preventDefault();
+        dialog.focus();
+      } else if (event.shiftKey && document.activeElement === controls[0]) {
+        event.preventDefault();
+        controls[controls.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === controls[controls.length - 1]) {
+        event.preventDefault();
+        controls[0].focus();
+      }
+    };
+    dialog.addEventListener("keydown", onKeyDown);
+    return () => {
+      cancelAnimationFrame(frame);
+      dialog.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [mounted]);
 
   const selectedMajorRegion = majorRegions.find((region) => region.id === selectedMajorRegionId) ?? currentMajorRegion;
   const mapRegion = majorRegions.find((region) => region.id === zoomedRegionId);
@@ -339,15 +384,17 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] h-[100dvh] flex items-center justify-center bg-black/80 backdrop-blur-md md:px-6 md:py-4"
+      className="fixed inset-0 z-[100] h-[100dvh] flex items-center justify-center overscroll-contain bg-black/80 backdrop-blur-md md:px-6 md:py-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="world-atlas-title"
+        tabIndex={-1}
         className="mmo-panel-theme mmo-paper-theme mmo-paper-surface flex h-full max-h-full w-full flex-col overflow-hidden text-[#49331f] md:h-[min(90dvh,900px)] md:max-h-[90dvh] md:max-w-6xl md:rounded-xl"
       >
         {/* Header */}
@@ -376,19 +423,21 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                 aria-label="Tìm khu vực, quái, vật phẩm hoặc Cổ"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-8 w-36 sm:w-44 lg:w-56 rounded-lg border border-cyan-900/60 bg-[#302318] pl-8 pr-7 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-cyan-400 focus:outline-none"
+                className="min-h-11 w-36 rounded-lg border border-cyan-900/60 bg-[#302318] pl-8 pr-11 text-xs text-zinc-100 placeholder:text-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300 sm:w-44 lg:w-56"
               />
               {searchQuery && (
                 <button
+                  type="button"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200"
+                  aria-label="Xóa nội dung tìm kiếm"
+                  className="absolute right-0 top-1/2 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center text-zinc-400 hover:text-zinc-200"
                 >
                   <X className="h-3 w-3" />
                 </button>
               )}
               {cleanSearch && <div className="absolute right-0 top-full z-30 mt-1 max-h-64 w-[min(80vw,340px)] overflow-y-auto rounded-lg border border-[#a88952]/60 bg-[#211a12] p-1 shadow-xl">
                 <div className="px-2 py-1 text-[10px] text-[#b9a584]">{searchResults.length} khu vực phù hợp</div>
-                {searchResults.slice(0, 40).map((region) => <button key={region.id} type="button" onClick={() => selectSearchResult(region)} className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-[#f1dfb8] hover:bg-[#665033]/70">
+                {searchResults.slice(0, 40).map((region) => <button key={region.id} type="button" onClick={() => selectSearchResult(region)} className="flex min-h-11 w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-[#f1dfb8] hover:bg-[#665033]/70">
                   <span className="truncate">{region.name}</span><span className="shrink-0 text-[9px] text-[#b9a584]">C{region.min_rank}–C{region.max_rank}</span>
                 </button>)}
                 {searchResults.length > 40 && <div className="px-2 py-1 text-[10px] text-[#b9a584]">Nhập cụ thể hơn để xem thêm kết quả.</div>}
@@ -396,9 +445,10 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
             </div>
 
             <button
+              type="button"
               onClick={onClose}
               aria-label="Đóng bản đồ"
-              className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-zinc-400 transition hover:bg-rose-500/20 hover:text-rose-200"
+              className="grid h-11 w-11 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-zinc-400 transition hover:bg-rose-500/20 hover:text-rose-200"
             >
               <X className="h-4 w-4" />
             </button>
@@ -491,7 +541,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
 
                 {/* 1. Large 5 Major Regions view (Bố cục Ngũ Vực Chuẩn Cổ Chân Nhân) */}
                 {!mapRegion && (
-                  <g className="transition-all duration-300">
+                  <g className="transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300">
                     {/* Background Domain Polygons */}
                     {majorRegions.map((region) => {
                       const layout = GREAT_DOMAINS[region.id];
@@ -519,7 +569,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                               setInspectedSubRegionId(regions.find((child) => child.parent_id === region.id && child.is_active)?.id ?? region.id);
                             }
                           }}
-                          className={`cursor-pointer transition-all duration-200 hover:brightness-125 ${!isMatched ? "opacity-30" : "opacity-100"}`}
+                          className={`cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 hover:brightness-125 ${!isMatched ? "opacity-30" : "opacity-100"}`}
                         >
                           <path
                             d={layout.path}
@@ -527,7 +577,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                             stroke={isSelected ? "#f59e0b" : isCurrent ? "#ef4444" : layout.strokeColor}
                             strokeWidth={isSelected ? 4 : isCurrent ? 3.5 : 2}
                             strokeOpacity={isSelected || isCurrent ? 1 : 0.6}
-                            className="transition-all duration-200"
+                            className="transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200"
                           />
 
                           {/* Domain Center Label Group */}

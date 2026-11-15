@@ -37,14 +37,18 @@ export const TrackingRadarDrawer: React.FC = () => {
         <div className="flex items-center gap-1">
           <button
             onClick={() => fetchTrackedTargets()}
+            type="button"
+            aria-label="Làm mới mục tiêu bị truy tung"
             title="Làm mới"
-            className="rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded text-neutral-400 hover:bg-neutral-800 hover:text-white"
           >
             <RefreshCw className="h-4 w-4" />
           </button>
           <button
+            type="button"
             onClick={() => toggleRadarDrawer(false)}
-            className="rounded p-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+            aria-label="Đóng radar truy tung"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded text-neutral-400 hover:bg-neutral-800 hover:text-white"
           >
             <X className="h-4 w-4" />
           </button>

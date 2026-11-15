@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useId } from "react";
 import { useGameStore } from "@/store/useGameStore";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import {
   Landmark,
   X,
@@ -22,6 +23,12 @@ export const InheritanceAltarModal: React.FC = () => {
   const claimAltar = useGameStore((state) => state.claimAltar);
   const altarLoading = useGameStore((state) => state.altarLoading);
   const player = useGameStore((state) => state.player);
+  const titleId = useId();
+  const isOpen = altarModalOpen && Boolean(selectedAltarInfo);
+  const { dialogRef, onKeyDown } = useAccessibleDialog<HTMLDivElement>(
+    () => setAltarModalOpen(false),
+    isOpen
+  );
 
   if (!altarModalOpen || !selectedAltarInfo) {
     return null;
@@ -75,12 +82,13 @@ export const InheritanceAltarModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 border border-amber-500/50 rounded-3xl p-6 shadow-[0_0_50px_rgba(245,158,11,0.25)] text-left">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain p-4 bg-black/80 backdrop-blur-sm animate-fade-in" onKeyDown={onKeyDown}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="relative w-full max-w-xl max-h-[90dvh] overflow-y-auto overscroll-contain bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 border border-amber-500/50 rounded-3xl p-6 shadow-[0_0_50px_rgba(245,158,11,0.25)] text-left">
         {/* Close Button */}
         <button
           onClick={() => setAltarModalOpen(false)}
-          className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60 rounded-full transition-all"
+          aria-label="Đóng truyền thừa"
+          className="absolute top-4 right-4 flex min-h-11 min-w-11 items-center justify-center text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60 rounded-full transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]"
         >
           <X className="w-5 h-5" />
         </button>
@@ -92,7 +100,7 @@ export const InheritanceAltarModal: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold font-serif text-amber-100 tracking-wide">
+              <h2 id={titleId} className="text-xl font-bold font-serif text-amber-100 tracking-wide">
                 {altar_name}
               </h2>
               <span
@@ -279,7 +287,7 @@ export const InheritanceAltarModal: React.FC = () => {
           <button
             onClick={handleClaim}
             disabled={!canClaim || altarLoading}
-            className={`px-6 py-2.5 text-xs font-bold rounded-xl transition-all shadow-lg flex items-center gap-2 ${
+            className={`px-6 py-2.5 text-xs font-bold rounded-xl transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shadow-lg flex items-center gap-2 ${
               already_claimed
                 ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
                 : canClaim
