@@ -156,7 +156,7 @@ Ví hiển thị số dư và giao dịch. Top-up tạo order và chờ kết qu
 
 ## Hoạt động phụ và tương tác xã hội
 
-- **Khám phá và chiến đấu:** bản đồ mở trong popup từ Lobby; di chuyển có thể gặp quái và mở combat theo lượt. Auto farm ưu tiên tìm quái trong 2 ô, nếu chưa có thì tuần tra quanh vị trí hiện tại; cần bật tự xử lý encounter tại Lobby → Cài Đặt → Chiến thuật turn-based. Đóng popup sẽ dừng gửi request mới.
+- **Khám phá và chiến đấu:** bản đồ mở trong popup từ Lobby, có nền địa hình theo Đại Vực; đổi khu vực sẽ tải lại grid tương ứng. Khi Hạ Khiếu, map chuyển sang lưới Tiên Khiếu và di chuyển bị giới hạn trong ranh giới instance. Di chuyển có thể gặp quái và mở combat theo lượt. Auto farm ưu tiên tìm quái trong 2 ô, nếu chưa có thì tuần tra quanh vị trí hiện tại; cần bật tự xử lý encounter tại Lobby → Cài Đặt → Chiến thuật turn-based. Đóng popup sẽ dừng gửi request mới.
 
 - **Võ Đài:** challenge, leaderboard và shop phần thưởng.
 - **Tháp Chiến Thuật:** leo tower theo encounter theo lượt; xem trạng thái và leaderboard. Hạn mức/ghi nhận thất bại theo chu kỳ do server quản lý.

@@ -232,8 +232,17 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 	}
 	if instanceID.Valid {
 		region := ZoneByID(player.CurrentRegion)
-		if region == nil || region.ZoneType != ZoneTypeSecret || !zoneContains(region, x, y) {
-			return "Ranh giới bí cảnh không cho phép di chuyển tới tọa độ này.", false, nil
+		insideInstance := region != nil && (region.ZoneType == ZoneTypeSecret || region.ZoneType == ZoneTypeAperture) && zoneContains(region, x, y)
+		if region == nil && player.CurrentRegion == "aperture_interior" {
+			var zoneType string
+			var minX, minY, maxX, maxY int
+			if err := tx.QueryRow(`SELECT zone_type, min_x, min_y, max_x, max_y FROM regions WHERE id = $1`, player.CurrentRegion).Scan(&zoneType, &minX, &minY, &maxX, &maxY); err != nil {
+				return "", false, fmt.Errorf("load aperture bounds: %w", err)
+			}
+			insideInstance = strings.EqualFold(zoneType, ZoneTypeAperture) && x >= minX && x <= maxX && y >= minY && y <= maxY
+		}
+		if !insideInstance {
+			return "Ranh giới khu vực hiện tại không cho phép di chuyển tới tọa độ này.", false, nil
 		}
 	}
 

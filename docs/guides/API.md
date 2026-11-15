@@ -56,7 +56,7 @@ Combat được xử lý theo lượt. `/combat/start` chạy tự động; `/co
 
 | Prefix | Route chính |
 | --- | --- |
-| `/explore` | GET `/grid`, `/regions`, `/cells/rect`; POST `/move` |
+| `/explore` | GET `/grid`, `/regions`, `/cells/rect`; POST `/move` (di chuyển trong ranh giới instance bí cảnh hoặc Tiên Khiếu hiện tại) |
 | `/world` | GET `/map-objects`, `/monsters`, `/drops`; POST `/portal/transfer`, `/drops/:id/loot` |
 | `/teleport` | GET `/templates`, `/effect-options`, `/mine`, `/directory`; POST `/preview`, `/build`, `/travel`, `/manage`, `/repair`, `/withdraw`, `/dismantle` |
 | `/immortal-aperture` | GET aperture, nodes, points, world-points, workers, portal, guests, swarms, refinement queue, settlements, NPCs; POST/DELETE quản lý nodes, resource points/workers, time rate/labor, portals/guest, Gu swarms, refinement, settlements, NPCs |

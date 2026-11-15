@@ -61,6 +61,8 @@ const (
 	ZoneTypeNamed   = "KHU_VUC"
 )
 
+const ZoneTypeAperture = "APERTURE"
+
 // zoneTypePriority ranks zone types from highest (most specific) to lowest.
 // When a point falls inside overlapping zones, the zone with the highest
 // priority wins; ties are broken by smallest area (innermost). Unknown zone

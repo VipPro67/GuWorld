@@ -26,6 +26,7 @@ interface GridCell {
 }
 
 interface GridData {
+  region_id: string;
   x: number;
   y: number;
   vision_radius: number;
@@ -45,6 +46,16 @@ interface MapPlayer {
   x: number;
   y: number;
 }
+
+const GREAT_REGION_BACKGROUND_PANEL: Record<string, number> = {
+  dai_vuc_nam_cuong: 0,
+  dai_vuc_trung_chau: 1,
+  dai_vuc_bac_nguyen: 2,
+  dai_vuc_tay_mac: 3,
+  dai_vuc_dong_hai: 4,
+  dai_vuc_hac_thien: 5,
+  dai_vuc_bach_thien: 6,
+};
 
 export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const regions = useGameStore((state) => state.regions);
@@ -74,7 +85,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const myTeleportArrays = useGameStore((state) => state.myTeleportArrays);
   const fetchMyTeleportArrays = useGameStore((state) => state.fetchMyTeleportArrays);
 
-  const [gridData, setGridData] = useState<GridData | null>(null);
+  const [gridSnapshot, setGridSnapshot] = useState<GridData | null>(null);
+  const gridRequestRevision = useRef(0);
   const [preferredRadius, setPreferredRadius] = useState<number>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("gu_explore_vision_radius");
@@ -96,6 +108,11 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const [selectedManageArray, setSelectedManageArray] = useState<TeleportArray | null>(null);
   const lastMoveTimeRef = useRef(0);
   const setView = useUIStore((state) => state.setView);
+  const gridData = gridSnapshot?.region_id === player.current_region
+    && gridSnapshot.x === player.x
+    && gridSnapshot.y === player.y
+    ? gridSnapshot
+    : null;
 
   useEffect(() => () => {
     autoFarmRunningRef.current = false;
@@ -128,10 +145,22 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   }, [regionsLoaded, fetchRegions]);
 
   const loadGrid = useCallback(async () => {
+    const requestRevision = ++gridRequestRevision.current;
+    const requestedPlayer = useGameStore.getState().player;
+    if (!requestedPlayer) return null;
     const data = await fetchGrid(preferredRadius);
-    if (data && Array.isArray(data.cells)) {
-      setGridData(data as GridData);
-    }
+    const currentPlayer = useGameStore.getState().player;
+    if (!data || !Array.isArray(data.cells) || !currentPlayer
+      || currentPlayer.id !== requestedPlayer.id
+      || currentPlayer.current_region !== requestedPlayer.current_region
+      || currentPlayer.x !== requestedPlayer.x
+      || currentPlayer.y !== requestedPlayer.y
+      || data.x !== requestedPlayer.x
+      || data.y !== requestedPlayer.y) return null;
+
+    const snapshot = { ...data, region_id: requestedPlayer.current_region } as GridData;
+    if (requestRevision === gridRequestRevision.current) setGridSnapshot(snapshot);
+    return snapshot;
   }, [fetchGrid, preferredRadius]);
 
   const handleRadiusChange = (newRadius: number) => {
@@ -144,7 +173,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   useEffect(() => {
     void loadGrid();
   }, [player.current_region, player.x, player.y, loadGrid]);
-  usePolling(loadGrid, 10000);
+  usePolling(() => loadGrid().then(() => undefined), 10000);
   useEffect(() => { void fetchWorldMonsters(); }, [player.current_region, player.x, player.y, fetchWorldMonsters]);
   usePolling(() => fetchWorldMonsters().then(() => undefined), 5000);
 
@@ -156,6 +185,24 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const isMemberNotLeader = Boolean(player.party_id) && (party === null || party.leader_id !== player.id);
   const currentRegion = regions.find((r) => r.id === player.current_region);
   const regionName = currentRegion?.name || "Thế Giới Cổ Sư";
+  const greatRegion = useMemo(() => {
+    let region = currentRegion;
+    const visited = new Set<string>();
+    while (region && !visited.has(region.id)) {
+      visited.add(region.id);
+      if (region.zone_type === "NGU_VUC") return region;
+      region = region.parent_id ? regions.find((item) => item.id === region?.parent_id) : undefined;
+    }
+    return undefined;
+  }, [currentRegion, regions]);
+  const backgroundPanel = greatRegion ? GREAT_REGION_BACKGROUND_PANEL[greatRegion.id] : undefined;
+  const mapBackgroundStyle: React.CSSProperties = {
+    backgroundColor: "#111812",
+    backgroundImage: `linear-gradient(180deg, rgba(7, 12, 12, .48), rgba(7, 10, 12, .68)), url('/assets/world/${backgroundPanel === undefined ? "ground-moss.webp" : "great-regions-atlas.png"}')`,
+    backgroundSize: backgroundPanel === undefined ? "auto, cover" : "auto, 700% 100%",
+    backgroundPosition: backgroundPanel === undefined ? "center, center" : `center, ${(backgroundPanel / 6) * 100}% center`,
+    backgroundRepeat: "no-repeat",
+  };
 
   const handleCellClick = async (x: number, y: number, isMovable: boolean, cell?: GridCell, marker?: { kind: string; id: string; isMine?: boolean; name?: string }, resourcePointId?: string) => {
     if (autoFarmRunningRef.current) return;
@@ -272,8 +319,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       addToast("Auto farm chỉ hoạt động ngoài vùng an toàn.", "error");
       return;
     }
-    const latestGridResponse = await useGameStore.getState().fetchGrid(preferredRadius);
-    let latestGrid = latestGridResponse as GridData | null;
+    let latestGrid = await loadGrid();
     if (!latestGrid || !Array.isArray(latestGrid.cells)) {
       addToast("Không thể tải bản đồ để bắt đầu auto farm.", "error");
       return;
@@ -299,7 +345,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     let patrolIndex = 0;
     autoFarmRunningRef.current = true;
     setAutoFarmRunning(true);
-    setGridData(latestGrid);
+    setGridSnapshot(latestGrid);
     addToast("Auto farm đã bắt đầu: sẽ tìm quái trong tầm nhìn, nếu chưa có thì tuần tra quanh vị trí hiện tại.", "info");
 
     while (autoFarmRunningRef.current) {
@@ -329,10 +375,10 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
         addToast("Auto farm đã dừng vì không thể tiếp tục di chuyển trên tuyến này.", "error");
         break;
       }
-      const refreshedGrid = await useGameStore.getState().fetchGrid(preferredRadius);
-      if (refreshedGrid && Array.isArray(refreshedGrid.cells)) {
-        latestGrid = refreshedGrid as GridData;
-        setGridData(latestGrid);
+      const refreshedGrid = await loadGrid();
+      if (refreshedGrid) {
+        latestGrid = refreshedGrid;
+        setGridSnapshot(latestGrid);
       } else {
         addToast("Auto farm đã dừng vì không tải lại được bản đồ.", "error");
         break;
@@ -562,7 +608,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
           </div>
         </section>
       )}
-      <div className="relative bg-zinc-950/90 border border-zinc-900 rounded-3xl p-2 sm:p-3 shadow-2xl overflow-hidden flex flex-col items-center justify-center">
+      <div className="relative border border-zinc-900 rounded-3xl p-2 sm:p-3 shadow-2xl overflow-hidden flex flex-col items-center justify-center" style={mapBackgroundStyle}>
         {gridData ? (
           <div
             className={`grid gap-px w-full ${maxContainerWidth} aspect-square transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300`}

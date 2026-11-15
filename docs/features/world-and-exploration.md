@@ -16,6 +16,8 @@ Trong **Lobby → Cài Đặt → Chiến thuật turn-based**, bật **Tự đ�
 
 Mở **Khám Phá Dã Ngoại** từ Lobby để dùng bản đồ trong popup. **Auto farm quanh vị trí hiện tại** ưu tiên nhắm quái đang thấy trong phạm vi 2 ô; khi chưa thấy mục tiêu, nhân vật tuần tra theo vòng nhỏ bán kính 2 ô để tìm encounter. Auto farm gửi tuần tự lệnh di chuyển qua API hiện có; nhấn Dừng hoặc đóng popup để ngừng gửi request mới. Cần bật `skip_battle`; tính năng chạy trên tab đang mở và dừng khi request lỗi, không tải được bản đồ hoặc nhân vật không thể tiến thêm. Request đang chạy sẽ hoàn tất trước khi dừng hẳn.
 
+Lưới bản đồ gắn với khu vực và tọa độ đã tải; khi player đổi vùng hoặc vị trí, phản hồi grid cũ bị bỏ qua. Nền của khu vực con lấy địa hình từ Đại Vực cha trong `great-regions-atlas.png`; khu vực không thuộc Đại Vực như Tiên Khiếu dùng nền rừng mặc định.
+
 ## Luật, chi phí và giới hạn
 
 ### Xác suất ambush
@@ -24,6 +26,7 @@ Mở **Khám Phá Dã Ngoại** từ Lobby để dùng bản đồ trong popup. 
 
 - Mỗi request đi tối đa 5 ô; từng ô được kiểm tra hợp lệ.
 - Trigger trên các ô trung gian vẫn chạy. Nếu combat bắt đầu, phần đường còn lại không được thực hiện.
+- Instance bí cảnh và Tiên Khiếu chỉ cho di chuyển trong hình chữ nhật của vùng instance hiện tại.
 - Vùng, portal, teleport và resource node lấy tọa độ/quyền truy cập từ map hoặc cấu hình runtime.
 - Realtime chỉ hỗ trợ movement/presence và đồng bộ ngoài combat; không mô phỏng combat.
 
@@ -43,7 +46,7 @@ Map/region và portal data quyết định địa hình, vùng, ô vào và đi�
 
 - Backend: `backend/internal/handlers/exploration_move.go`, `movement.go`, `world.go`, `portal_transfer.go`, `ground_drops.go`.
 - Frontend: `frontend/src/components/ExplorationMap.tsx`, `frontend/src/store/slices/worldSlice.ts`.
-- UI: `frontend/src/app/page.tsx`, `frontend/src/components/ExplorationMap.tsx`; cài đặt: `frontend/src/components/LobbySettingsPanel.tsx`, `frontend/src/store/slices/combatSlice.ts`; API `GET/PUT /api/player/combat-settings`.
+- UI: `frontend/src/app/page.tsx`, `frontend/src/components/ExplorationMap.tsx`; asset nền: `frontend/public/assets/world/great-regions-atlas.png`, `ground-moss.webp`; cài đặt: `frontend/src/components/LobbySettingsPanel.tsx`, `frontend/src/store/slices/combatSlice.ts`; API `GET/PUT /api/player/combat-settings`.
 
 ## API liên quan
 
