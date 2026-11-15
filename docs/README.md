@@ -13,6 +13,7 @@ Các tài liệu bên dưới mô tả hành vi hiện có trong mã nguồn. C�
 | [Triển khai production](guides/PRODUCTION_DEPLOY.md) | Operator | Cấu hình triển khai, TLS và realtime transport |
 | [Kiến trúc](architecture/ARCHITECTURE.md) | Developer | Thành phần runtime và ranh giới module |
 | [Miền Player](architecture/PLAYER_DOMAIN.md) | Developer | Quyền sở hữu dữ liệu player, snapshot và mutation |
+| [Concept effect chiến đấu](wayfinder/workmaps/effect-concept-design/map.md) | Designer, developer | Bản thiết kế concept; chưa phải tính năng hiện hành |
 | [Wiki gameplay](../WIKI.md) | Người chơi, tester | Mô tả các hệ thống gameplay đang có |
 | [Trạng thái dự án](../PROJECT.md) | Cả nhóm | Tóm tắt codebase và feature inventory |
 

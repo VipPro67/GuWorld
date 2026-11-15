@@ -4,6 +4,8 @@
 
 Inventory lưu các Gu instance, vật phẩm và nguyên liệu của player. Màn Túi Đồ cho phép đọc trạng thái từng instance, cho ăn, trang bị, chọn Bản Mệnh, đổi trạng thái, dùng Gu hỗ trợ/tiêu hao và xử lý durability. Các thay đổi quan trọng do server xác thực và đồng bộ lại qua response/player events.
 
+UI tại `frontend/src/components/GuInventory.tsx` dùng minh họa theo tab Cổ Trùng/Vật Phẩm ở phần đầu kho; ảnh chỉ tạo không khí, còn dữ liệu item và Gu vẫn lấy từ dictionary/inventory hiện có.
+
 ## Điều kiện mở và quyền truy cập
 
 - Nhóm `/inventory` yêu cầu đăng nhập và onboarding.

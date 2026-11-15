@@ -674,8 +674,10 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   return (
     <div className="relative glass-panel-gold rounded-3xl p-3 sm:p-6 w-full space-y-4 sm:space-y-6 overflow-hidden">
       {/* Header */}
-      <div className="relative flex flex-col gap-3 border-b border-amber-900/30 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="relative isolate flex flex-col gap-3 overflow-hidden rounded-2xl border border-amber-900/25 bg-gradient-to-r from-amber-950/35 via-zinc-950/35 to-transparent px-3 pb-4 pt-3 sm:flex-row sm:items-center sm:justify-between">
+        <img src={selectedTab === "material" ? "/assets/items/preview.webp" : "/assets/world/spirit-beast.webp"} alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute -right-4 -top-8 h-36 w-48 object-contain opacity-20 sm:h-44 sm:w-60" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-zinc-950/20 via-zinc-950/20 to-zinc-950/75" />
+        <div className="relative z-[1] flex min-w-0 items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-orange-950/60 shadow-[inset_0_1px_0_rgba(255,255,255,.08)]">
             <Sparkles className="w-5 h-5 text-amber-300" />
           </div>
@@ -688,7 +690,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
             {hungryTotal > 0 && <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-rose-900/50 bg-rose-950/30 px-2 py-0.5 text-[9px] font-semibold text-rose-300"><Wine className="h-3 w-3" />{hungryTotal} Cổ trùng cần cho ăn</span>}
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-1.5 sm:flex sm:gap-2">
+        <div className="relative z-[1] grid grid-cols-3 gap-1.5 sm:flex sm:gap-2">
           <div className="rounded-xl border border-amber-900/30 bg-zinc-950/55 px-2.5 py-2 text-center sm:min-w-[86px]">
             <div className="text-sm font-bold font-mono text-amber-300">{guList.length}</div>
             <div className="text-[8px] uppercase tracking-wider text-zinc-500">Cổ trùng</div>

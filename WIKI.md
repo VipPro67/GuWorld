@@ -9,6 +9,8 @@ Tài liệu này hướng dẫn các hệ thống người chơi có thể mở 
 3. Vào lobby để mở Nhân Vật, Túi Đồ, Luyện Cổ và Khám Phá Dã Ngoại. Các vùng xuất phát gồm Nam Cương, Trung Châu, Bắc Nguyên, Tây Mạc và Đông Hải.
 4. Dùng nhiệm vụ/tài nguyên trong game để phát triển. Khi nhân vật đạt Rank 6, Tiên Khiếu được mở.
 
+Các lối vào hoạt động nằm trong lưới Điểm Đến Cổ Giới ở lobby; một số thẻ dùng tranh nền theo chủ đề. Trong Túi Đồ, minh họa đầu kho thay đổi theo tab Cổ Trùng hoặc Vật Phẩm.
+
 Việc chọn trong màn hình khởi đầu chỉ gửi lựa chọn cho server; server xác nhận quyền sở hữu, điều kiện và trạng thái nhân vật.
 
 ## Nhân vật và tu luyện

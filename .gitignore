@@ -28,3 +28,5 @@
 
 # Production TLS certificates (bind-mounted into the backend container).
 /certs/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/

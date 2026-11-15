@@ -45,9 +45,9 @@ Các concept chỉ mượn mô-típ rộng như ý chí độc hành, biến chu
 #### 3. Hồi Phong Hộ Mệnh
 
 - **Vai trò:** Sát Chiêu phòng thủ khẩn cấp, hy sinh nhịp tấn công để chống một lượt bùng nổ.
-- **Vòng chơi:** Khi kích hoạt, gỡ một debuff nhẹ trên bản thân và tạo lá chắn; lượng lá chắn giảm nếu chủ nhân đã dùng một hành động tấn công trong lượt đó.
+- **Vòng chơi:** Dùng hết hành động trong lượt để gỡ debuff trên bản thân và tạo lá chắn ngắn hạn; người chơi chọn nhịp phòng thủ thay cho gây sát thương.
 - **Đối sách:** Đối thủ có thể nhử Sát Chiêu trước đợt sát thương lớn hoặc dùng phá khiên.
-- **Khả năng triển khai:** CLEANSE và SHIELD đã thuộc bộ operation hiện có, nhưng điều kiện “đã tấn công trong lượt” cần condition field mà combat executor hỗ trợ. Nếu chưa có, bản đầu bỏ điều kiện này và cân bằng bằng mana/cooldown hiện hành; không thêm condition mới chỉ cho concept.
+- **Khả năng triển khai:** CLEANSE và SHIELD đã có trong bộ operation; cần xác minh composition/context của Sát Chiêu cho phép ghép cả hai trong cùng action. Có thể cân bằng bằng mana và chi phí lượt hiện hành, chưa cần thêm condition hoặc cooldown mới.
 
 #### 4. Thiên Kích Liên Hoàn
 

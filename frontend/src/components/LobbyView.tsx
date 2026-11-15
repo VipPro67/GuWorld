@@ -45,6 +45,7 @@ interface HubItem {
   glow: string;
   borderColor: string;
   iconColor: string;
+  artwork?: string;
   locked?: boolean;
 }
 
@@ -403,7 +404,22 @@ export const LobbyView: React.FC = () => {
   const orderLobbyItems = (items: HubItem[]) => items
     .filter((item) => !hiddenLobbyItems.includes(item.id))
     .sort((a, b) => lobbyItems.indexOf(a.id) - lobbyItems.indexOf(b.id));
-  const visibleLobbyItems = orderLobbyItems([...managementItems, ...activityItems]);
+  const lobbyArtwork: Record<string, string> = {
+    character: "/assets/world/form-reckless-savage.webp",
+    inventory: "/assets/items/preview.webp",
+    refine: "/assets/world/spirit-herb.webp",
+    explore: "/assets/world/great-regions-atlas.png",
+    "dream-realm": "/assets/world/spirit-beast.webp",
+    "spatial-realms": "/assets/world/ground-moss.webp",
+    sect: "/assets/world/cultivator.webp",
+    arena: "/assets/world/form-six-arm-ice-demon.webp",
+    "infinite-tower": "/assets/world/form-reckless-savage.webp",
+    pets: "/assets/world/spirit-beast.webp",
+  };
+  const visibleLobbyItems = orderLobbyItems([...managementItems, ...activityItems]).map((item) => ({
+    ...item,
+    artwork: lobbyArtwork[item.id],
+  }));
 
   const getRankName = (rank: number, sub: number, aperture?: ImmortalAperture | null): string => {
     const ranks = ["Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"];
@@ -616,15 +632,22 @@ export const LobbyView: React.FC = () => {
                 onClick={() => handleItemClick(item)}
                 aria-label={item.locked ? `${item.label} (đã khóa)` : item.label}
                 title={item.locked ? `${item.label} — chưa mở khóa` : item.label}
-                className={`mmo-game-tile group relative flex min-h-[72px] items-center gap-3 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-all duration-200 sm:min-h-[82px] sm:px-3.5 ${
+                className={`mmo-game-tile group relative flex min-h-[92px] items-center gap-3 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-all duration-200 sm:min-h-[108px] sm:px-3.5 ${
                   item.locked
                     ? "cursor-not-allowed opacity-55"
                     : "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
                 }`}
                 data-locked={item.locked || undefined}
               >
+                {item.artwork && (
+                  <>
+                    <img src={item.artwork} alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute inset-y-0 right-0 h-full w-[58%] object-cover object-center opacity-35 transition duration-300 group-hover:scale-105 group-hover:opacity-50" />
+                    <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[var(--mmo-menu-bg,#211810)] via-[var(--mmo-menu-bg,#211810)]/85 to-transparent" />
+                    <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-amber-300/45 via-amber-200/10 to-transparent" />
+                  </>
+                )}
                 <div
-                  className={`mmo-game-tile-icon relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border shadow-md transition-transform duration-200 sm:h-12 sm:w-12 sm:rounded-2xl ${
+                  className={`mmo-game-tile-icon relative z-[1] grid h-10 w-10 shrink-0 place-items-center rounded-xl border shadow-md transition-transform duration-200 sm:h-12 sm:w-12 sm:rounded-2xl ${
                     item.locked
                       ? "border-zinc-800 bg-zinc-950"
                       : "group-hover:scale-105"
@@ -637,14 +660,14 @@ export const LobbyView: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <span className={`min-w-0 flex-1 font-serif text-[11px] font-semibold leading-snug tracking-wide transition-colors sm:text-xs ${
+                <span className={`relative z-[1] min-w-0 flex-1 font-serif text-[11px] font-semibold leading-snug tracking-wide transition-colors sm:text-xs ${
                   item.locked
                     ? "text-zinc-500"
                     : "text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]"
                 }`}>
                   {item.label}
                 </span>
-                {!item.locked && <ChevronRight className="h-4 w-4 shrink-0 text-amber-500/45 transition-transform group-hover:translate-x-0.5 group-hover:text-amber-300" />}
+                {!item.locked && <ChevronRight className="relative z-[1] h-4 w-4 shrink-0 text-amber-500/65 transition-transform group-hover:translate-x-0.5 group-hover:text-amber-300" />}
               </button>
             );
           })}
