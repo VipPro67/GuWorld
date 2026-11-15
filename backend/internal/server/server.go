@@ -425,6 +425,7 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 	worker.SetWorkerEventRecorder(monitor.RecordWorkerEvent)
 
 	gin.DefaultWriter = logger.GinWriter()
+	gin.DefaultErrorWriter = logger.GinWriter()
 	r := gin.New()
 	r.Use(gin.Recovery())
 

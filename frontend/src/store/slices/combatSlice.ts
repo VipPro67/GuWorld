@@ -40,12 +40,23 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
   combatHistoryLoading: false,
 
   startCombatSession: async (loadout) => {
-    const response = await authFetch(`${BACKEND_URL}/api/combat/session/start`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ loadout }),
-    });
-    const data = await response.json();
-    if (!response.ok) { get().addToast(data.error || "Không thể bắt đầu phiên chiến đấu.", "error"); return null; }
-    return data;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/combat/session/start`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ loadout }),
+      });
+      const body = await response.text();
+      let data: ApiResponseData = {};
+      try { data = body ? JSON.parse(body) : {}; } catch { /* Recovery responses may not be JSON. */ }
+      if (!response.ok) {
+        get().addToast(data.error || `Không thể bắt đầu phiên chiến đấu (HTTP ${response.status}).`, "error");
+        return null;
+      }
+      return data;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Không thể bắt đầu phiên chiến đấu.";
+      get().addToast(message, "error");
+      return null;
+    }
   },
   fetchCombatSession: async (sessionId) => {
     const sessionPath = sessionId ? `/session/${encodeURIComponent(sessionId)}` : "/session";

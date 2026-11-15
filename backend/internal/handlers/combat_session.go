@@ -665,6 +665,7 @@ func StartCombatSession(c *gin.Context) {
 		}
 	}
 	isVirtual := player.ActiveCombat.CombatMode == "virtual"
+	combatMode := player.ActiveCombat.CombatMode
 	if isVirtual {
 		req.Loadout.AutoHealHP = false
 		req.Loadout.AutoRestoreMana = false
@@ -723,7 +724,7 @@ func StartCombatSession(c *gin.Context) {
 		deadlineAt = &deadline
 	}
 	err = tx.QueryRow(`INSERT INTO combat_sessions (player_id, participant_id, mode, status, initial_state, loadout, commands, pending_actor, deadline_at)
-		VALUES ($1, $2, $3, $4, $5, $6, '[]', $7, $8) RETURNING id`, playerID, participantID, player.ActiveCombat.CombatMode, row.Status, initialJSON, loadoutJSON, state.Interactive.PendingActor, deadlineAt).Scan(&row.ID)
+		VALUES ($1, $2, $3, $4, $5, $6, '[]', $7, $8) RETURNING id`, playerID, participantID, combatMode, row.Status, initialJSON, loadoutJSON, state.Interactive.PendingActor, deadlineAt).Scan(&row.ID)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Could not create combat session"})
 		return
