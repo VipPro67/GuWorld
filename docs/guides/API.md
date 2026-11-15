@@ -38,7 +38,7 @@ Base path: `/api`. Route được đăng ký trong `backend/internal/server/serv
 
 | Prefix | Route chính |
 | --- | --- |
-| `/cultivate` | POST `/break-wall`, `/use-relic-gu`; GET `/ascension/session`; POST `/ascension/shatter`, `/ascension/temper`, `/ascension/calamity/engage`, `/ascension/release` |
+| `/cultivate` | POST `/break-wall`, `/use-relic-gu`; GET `/ascension/session`; POST `/ascension/shatter`, `/ascension/temper`, `/ascension/calamity/engage`, `/ascension/calamity/engage/:instanceId`, `/ascension/release` |
 | `/quest` | GET `/`; POST `/complete` |
 | `/achievements` | GET `/`; POST `/claim`, `/select` |
 | `/daily-missions` | GET `/`; POST `/claim` |

@@ -319,6 +319,7 @@ export const TradeRoomModal: React.FC = () => {
       }}
       title="Không Gian Giao Dịch Thông Thiên"
       description="Được liên kết an toàn qua tần số Thông Thiên Cổ"
+      artwork="/assets/world/cultivator.webp"
       size="6xl"
       showCloseButton={true}
     >

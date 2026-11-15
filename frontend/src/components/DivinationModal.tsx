@@ -176,18 +176,18 @@ export const DivinationModal: React.FC = () => {
   const gStatus = activeGuDivinationReport?.status_type;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#080907]/85 p-2 backdrop-blur-md sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#080907]/70 p-2 backdrop-blur-sm sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="divination-title"
-        className="relative flex h-[calc(100dvh-1rem)] max-h-[820px] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-amber-500/35 bg-[#15120e] shadow-[0_24px_100px_rgba(0,0,0,0.7),0_0_48px_rgba(190,130,38,0.12)] md:h-auto md:max-h-[88vh]"
+        className="relative flex h-[calc(100dvh-1rem)] max-h-[820px] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-amber-500/25 bg-[#1b1712] shadow-[0_18px_64px_rgba(0,0,0,0.52),0_0_32px_rgba(190,130,38,0.08)] md:h-auto md:max-h-[88vh]"
       >
         {/* Header */}
-        <div className="relative flex shrink-0 items-center justify-between overflow-hidden border-b border-amber-500/20 bg-[radial-gradient(ellipse_at_0%_0%,rgba(139,91,36,0.25),transparent_55%),linear-gradient(110deg,#21190f,#151311_60%,#171321)] px-4 py-3.5 sm:px-6 sm:py-4">
-          <div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-20 h-48 w-48 rounded-full border border-amber-200/10 shadow-[0_0_0_18px_rgba(224,175,88,0.025),0_0_0_38px_rgba(224,175,88,0.02)]" />
-          <div className="relative flex min-w-0 items-center gap-3">
-            <div className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-amber-300/40 bg-gradient-to-br from-amber-500/25 via-violet-950/60 to-indigo-950/70 shadow-[0_0_22px_rgba(202,144,47,0.15)]">
+        <div className="relative isolate flex shrink-0 items-center justify-between overflow-hidden border-b border-amber-500/15 bg-[linear-gradient(110deg,rgba(33,25,15,.88),rgba(21,19,17,.82)_60%,rgba(23,19,33,.82))] px-4 py-3.5 sm:px-6 sm:py-4">
+          <img src="/assets/items/icons/eye.webp" alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute right-14 top-1/2 h-20 w-24 -translate-y-1/2 object-contain opacity-20 sm:right-20 sm:h-24 sm:w-28" />
+          <div className="relative z-[1] flex min-w-0 items-center gap-3">
+            <div className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-amber-300/30 bg-amber-900/25 shadow-[0_0_18px_rgba(202,144,47,0.08)]">
               <Compass className="h-5 w-5 text-amber-200" />
               <Sparkles className="absolute -right-1 -top-1 h-3.5 w-3.5 text-violet-200" />
             </div>
@@ -208,7 +208,7 @@ export const DivinationModal: React.FC = () => {
             onClick={closeDivinationModal}
             type="button"
             aria-label="Đóng Thiên Cơ Các"
-            className="relative ml-3 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-black/20 text-neutral-400 transition hover:border-amber-400/40 hover:bg-amber-950/40 hover:text-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+            className="relative z-[1] ml-3 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-black/15 text-neutral-400 transition hover:border-amber-400/40 hover:bg-amber-950/25 hover:text-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
           >
             <X className="h-4 w-4" />
           </button>

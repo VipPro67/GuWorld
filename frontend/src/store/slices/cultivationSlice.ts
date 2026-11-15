@@ -419,7 +419,7 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       if (data.zone_id && data.instance_id) {
         get().setPlayerFromServer({
           world_zone_id: data.zone_id,
-          world_instance_id: `combat:${data.instance_id}`,
+          world_instance_id: "",
         });
         get().requestWorldReconnect();
         get().setView("mmo-world");

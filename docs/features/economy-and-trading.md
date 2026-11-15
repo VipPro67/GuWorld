@@ -22,6 +22,7 @@ Bảo Hoàng MARKET thu phí listing 4% tổng giá và commission 6%; AUCTION c
 
 - Shop có rotation theo giờ.
 - Merchant thay đổi supply/demand theo thời gian và khoảng cách.
+- **Thương Nhân Tân Thủ (Tân Thủ Cốc):** Các vùng SAFE_ZONE Tân Thủ Cốc (`tan_thu_coc_*`) được bố trí thương nhân cố định ("Thương Nhân Tân Thủ", profile `tan_thu_merchant`) tại tọa độ trung tâm an toàn `(500, 500)`. Thương nhân này cung cấp đan dược hồi phục sơ cấp, thức ăn Cổ trùng các loại, nguyên liệu cấp 1 và Cổ trùng khởi đầu Chuyển 1; đồng thời thu mua tài nguyên, vật phẩm, công thức và Cổ trùng đến Chuyển 3 với cơ chế giá động công bằng. Tọa độ tương tác thương nhân tại Tân Thủ Cốc được mở rộng bán kính 15 ô để Cổ sư trong khu vực an toàn dễ dàng giao dịch, đồng thời hiển thị biểu tượng thương nhân tương tác được trên bản đồ thám hiểm.
 - P2P trade phải đi qua state machine initiate/accept/offer/lock/unlock/confirm; không coi lời mời đơn lẻ là giao dịch hoàn tất.
 - Gu bị reserved, dead, equipped hoặc không thuộc người chơi có thể không được đưa vào offer/listing.
 - Phí, giá, quota và trạng thái cuối do server response xác định.

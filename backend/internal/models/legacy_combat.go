@@ -33,6 +33,7 @@ type CombatState struct {
 	WorldMonsterRegionID    string               `json:"world_monster_region_id,omitempty"`
 	WorldMonsterID          string               `json:"world_monster_id,omitempty"`
 	WorldMonsterEncounterID string               `json:"world_monster_encounter_id,omitempty"`
+	AscensionCalamity       bool                 `json:"ascension_calamity,omitempty"`
 	WorldBossCellRegionID   string               `json:"world_boss_cell_region_id,omitempty"`
 	WorldBossCellX          int                  `json:"world_boss_cell_x,omitempty"`
 	WorldBossCellY          int                  `json:"world_boss_cell_y,omitempty"`

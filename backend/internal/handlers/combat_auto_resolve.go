@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -366,6 +367,28 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 			logs = append(logs, defLogs...)
 		}
 	}
+	ascensionCalamity := player.ActiveCombat != nil && player.ActiveCombat.AscensionCalamity
+	var ascensionActor cache.WorldMonster
+	if ascensionCalamity {
+		ascensionActor, _, _ = cache.GetWorldMonster(context.Background(), player.ActiveCombat.WorldMonsterRegionID, player.ActiveCombat.WorldMonsterID)
+		if alliesAlive {
+			if err := completeAscensionCalamity(tx, player.ID); err != nil {
+				return nil, fmt.Errorf("complete ascension calamity: %w", err)
+			}
+		} else if simState.FledBy == "" {
+			session, err := loadAscensionSession(tx, player)
+			if err != nil {
+				return nil, fmt.Errorf("load ascension session after calamity defeat: %w", err)
+			}
+			if session == nil {
+				return nil, fmt.Errorf("load ascension session after calamity defeat: no active session")
+			}
+			if err := failAscensionSession(tx, player, session, "Địa Tai Bản Yếu đánh bại"); err != nil {
+				return nil, fmt.Errorf("fail ascension session after calamity defeat: %w", err)
+			}
+			logs = append(logs, simulator.CombatLog{Turn: simState.Turn, Action: "ASCENSION_PENALTY", Detail: fmt.Sprintf("Nghi thức thất bại, Nhân Khí tổn thất %.0f%%.", AscensionFailQiLoss*100)})
+		}
+	}
 
 	var pvpDefenderRespawn *RespawnResult
 	logs, err = finalizeAutoCombatOutcome(tx, player, simState, isVirtual, isTribulation, alliesAlive, finalMana, before, logs)
@@ -453,6 +476,12 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 		StonesSpent:   stonesSpent,
 	}
 	res.AfterCommit = func() {
+		if ascensionCalamity && (alliesAlive || simState.FledBy == "") {
+			if err := cache.DeleteWorldMonster(context.Background(), ascensionActor); err != nil {
+				logger.S.Errorf("delete ascension calamity actor %s: %v", ascensionActor.InstanceID, err)
+			}
+			PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated, PlayerDomain, AscensionDomain)
+		}
 		if parsedTarget, parseErr := uuid.Parse(targetPlayerID); parseErr == nil && isLivePvp {
 			PublishPlayerCombatDelta(parsedTarget, CombatEventEnded, nil)
 			if pvpDefenderRespawn != nil {

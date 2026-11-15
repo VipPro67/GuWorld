@@ -202,6 +202,46 @@ func aperturePortalMarkersInRegion(regionID string, authID uuid.UUID, mySectID *
 	return out
 }
 
+// merchantMarkersInRegion returns active placed merchants located on the map
+// (e.g. novice valley merchants at safe zones or roaming traders).
+func merchantMarkersInRegion(regionID string) []MapMarkerView {
+	if db.DB == nil {
+		return nil
+	}
+	rows, err := db.DB.Query(`
+		SELECT m.id, p.name, m.x, m.y
+		FROM merchants m
+		JOIN merchant_profiles p ON p.id = m.profile_id
+		WHERE m.region_id = $1 AND m.is_active AND p.enabled
+		  AND (m.expires_at IS NULL OR m.expires_at > NOW())
+		  AND (m.x > 0 OR m.y > 0)`, regionID)
+	if err != nil {
+		logger.S.Warnf("Failed to load merchant markers for region %s: %v", regionID, err)
+		return nil
+	}
+	defer rows.Close()
+
+	out := make([]MapMarkerView, 0)
+	for rows.Next() {
+		var (
+			id, name string
+			x, y     int
+		)
+		if err := rows.Scan(&id, &name, &x, &y); err != nil {
+			continue
+		}
+		out = append(out, MapMarkerView{
+			ID:       id,
+			Kind:     "merchant",
+			RegionID: regionID,
+			X:        x,
+			Y:        y,
+			Name:     name,
+		})
+	}
+	return out
+}
+
 // GetZoneMapObjects returns static structure markers for one map. The client
 // merges this with the cells feed and the realtime snapshot into a single
 // marker view-model, so the map and the radar cannot drift apart.
@@ -230,11 +270,14 @@ func GetZoneMapObjects(c *gin.Context) {
 		return
 	}
 
+	_ = ensureRegionMerchants(regionID)
+
 	mySectID := getPlayerSectID(nil, authID)
 
 	out := make([]MapMarkerView, 0)
 	out = append(out, sectMarkersInRegion(regionID, mySectID)...)
 	out = append(out, teleportMarkersInRegion(regionID, authID, mySectID)...)
 	out = append(out, aperturePortalMarkersInRegion(regionID, authID, mySectID)...)
+	out = append(out, merchantMarkersInRegion(regionID)...)
 	c.JSON(http.StatusOK, out)
 }

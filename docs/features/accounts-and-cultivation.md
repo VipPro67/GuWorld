@@ -41,7 +41,7 @@ Tài khoản tạo danh tính đăng nhập. Nhân vật giữ rank, chỉ số,
 1. Đọc checklist/trạng thái bằng `GET /cultivate/ascension/session`.
 2. Gửi `/ascension/shatter` để thử nát khiếu. Mỗi lần tốn phần Chân Nguyên tối đa được cấu hình; xác suất tăng theo số lần thử đến mức trần.
 3. Khi mở bước Dẫn Khí, chọn một phương án ở từng tầng. Mỗi lựa chọn trừ Soul HP, Chân Nguyên hoặc Nguyên Thạch theo lựa chọn.
-4. Gọi `/ascension/calamity/engage` để tạo encounter tai kiếp tại thế giới. Combat theo lượt; thắng chuyển session sang Thả Cổ.
+4. Gọi `/ascension/calamity/engage` để triệu hồi một world actor riêng cạnh nhân vật, ngoài lưới khám phá. Actor xuất hiện trong danh sách thực thể ngoài grid của `ExplorationMap`; chọn Nghênh chiến gọi `/ascension/calamity/engage/:instanceId`, mở combat simulator theo lượt. Thắng chuyển session sang Thả Cổ và dọn actor; thua kết thúc nghi thức, mất 20% Nhân Khí và dọn actor; rút lui không mất Nhân Khí, actor vẫn ở đó để đánh lại trong thời hạn.
 5. Chọn các Cổ Rank 5 đủ điều kiện để hiến tế qua `/ascension/release`.
 
 ## Luật, chi phí và giới hạn
@@ -108,15 +108,15 @@ Các mốc hiện trong handler: tối thiểu 100.000 Human Qi, deadline 2 gi�
 
 ## Mã nguồn liên quan
 
-- Frontend: `frontend/src/components/Registration.tsx`, `LevelZeroView.tsx`, `OnboardingModal.tsx`, `Aperture.tsx`; store slices `authSlice.ts`, `cultivationSlice.ts`, `profileSlice.ts`.
-- Backend: `backend/internal/handlers/player_auth_login.go`, `player_auth_register.go`, `player_validation.go`, `cultivate.go` (tiến độ/chance), `ascension.go` (nát khiếu/grade), `legacy_engage_tribulation.go`, `legacy_resolve_tribulation.go`, `player_profile.go`.
+- Frontend: `frontend/src/components/Registration.tsx`, `LevelZeroView.tsx`, `OnboardingModal.tsx`, `Aperture.tsx`, `ExplorationMap.tsx`; store slices `authSlice.ts`, `cultivationSlice.ts`, `profileSlice.ts`, `frontend/src/store/useWorldStore.ts` (actor world và tương tác Địa Tai).
+- Backend: `backend/internal/handlers/player_auth_login.go`, `player_auth_register.go`, `player_validation.go`, `cultivate.go` (tiến độ/chance), `ascension.go` (nghi thức và summon/engage Địa Tai), `combat_auto_resolve.go` (settlement thắng/thua), `world_monsters.go` (AOI actor), `legacy_engage_tribulation.go`, `legacy_resolve_tribulation.go`, `player_profile.go`.
 - Middleware/schema: `backend/internal/middleware/onboarding.go`, `backend/internal/db/schema_players.go`, `schema_aperture.go`, `backend/internal/playerstate/`.
 
 ## API liên quan
 
 - Auth: `/auth/config`, `/auth/send-otp`, `/auth/register`, `/auth/login`, `/auth/logout`, `/auth/me`, `/auth/claim-tab`, `/auth/google/*`.
 - Player setup/profile: `/player/complete-tutorial`, `/player/complete-onboarding`, `/player/stats`, `/player/profile/:username`, `/player/profile/settings`, `/player/avatar`.
-- Tu luyện: `/cultivate/break-wall`, `/cultivate/use-relic-gu`, `/cultivate/ascension/session`, `/cultivate/ascension/shatter`, `/cultivate/ascension/temper`, `/cultivate/ascension/calamity/engage`, `/cultivate/ascension/release`.
+- Tu luyện: `/cultivate/break-wall`, `/cultivate/use-relic-gu`, `/cultivate/ascension/session`, `/cultivate/ascension/shatter`, `/cultivate/ascension/temper`, `/cultivate/ascension/calamity/engage`, `/cultivate/ascension/calamity/engage/:instanceId`, `/cultivate/ascension/release`.
 - Route guards và auth tổng quát: [API.md](../guides/API.md).
 
 ## Ví dụ flow

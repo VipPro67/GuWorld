@@ -19,6 +19,7 @@ import (
 type WorldMonster struct {
 	InstanceID        string    `json:"instance_id"`
 	SpawnID           string    `json:"spawn_id"`
+	OwnerPlayerID     string    `json:"owner_player_id,omitempty"`
 	MonsterTemplateID string    `json:"monster_template_id"`
 	IsBoss            bool      `json:"is_boss,omitempty"`
 	IsElite           bool      `json:"is_elite,omitempty"`
@@ -36,6 +37,13 @@ type WorldMonster struct {
 	LastUpdateAt      time.Time `json:"last_update_at"`
 	RespawnAt         time.Time `json:"respawn_at,omitempty"`
 	RespawnSeconds    int       `json:"respawn_seconds"`
+}
+
+// DeleteWorldMonster removes a temporary or persistent actor from its AOI and
+// boss indexes. The spawn pointer is removed only when it still points at this
+// actor, so deleting an expired actor cannot unlink its replacement.
+func DeleteWorldMonster(ctx context.Context, monster WorldMonster) error {
+	return deleteWorldBossMember(ctx, monster.RegionID, monster.InstanceID, monster.SpawnID, monster.X, monster.Y)
 }
 
 func worldMonsterKey(regionID, instanceID string) string {

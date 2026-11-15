@@ -2175,6 +2175,9 @@ func seedRegionsFromCSV(filename string) error {
 	if err := seedSpatialRealmEntryPortals(activeCSVImportDB()); err != nil {
 		return fmt.Errorf("seed spatial realm entry portals: %w", err)
 	}
+	if err := SeedMerchantDefaults(); err != nil {
+		logger.S.Warnf("seed merchant defaults after regions import: %v", err)
+	}
 
 	logger.S.Infof("Regions seeded from %s (%d seeded)", filename, seeded)
 	return nil

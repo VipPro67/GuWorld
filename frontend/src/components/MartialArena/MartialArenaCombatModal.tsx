@@ -77,6 +77,7 @@ export default function MartialArenaCombatModal({ matchId, onClose }: MartialAre
       onClose={onClose}
       size="5xl"
       title={match ? `Chiến Báo Trận Đấu - Vòng ${match.round_number}` : "Chiến Báo Trận Đấu"}
+      artwork="/assets/world/form-six-arm-ice-demon.webp"
     >
       {loading ? (
         <div className="py-12 text-center text-gray-400 animate-pulse">

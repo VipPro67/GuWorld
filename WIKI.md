@@ -11,6 +11,8 @@ Tài liệu này hướng dẫn các hệ thống người chơi có thể mở 
 
 Các lối vào hoạt động nằm trong lưới Điểm Đến Cổ Giới ở lobby; thẻ được phân biệt bằng tranh nền theo chủ đề. Trong Túi Đồ, minh họa đầu kho thay đổi theo tab Cổ Trùng hoặc Vật Phẩm. Popup cập nhật sau đăng nhập tóm tắt các thay đổi mới nhất bằng thẻ màu để dễ lướt.
 
+Các bảng chức năng mở dạng popup dùng tranh chủ đề nhỏ ở thanh tiêu đề; lớp phủ nền đã được làm nhẹ để vẫn nhận ra lobby phía sau. Popup Thiên Cơ Các có minh họa riêng và nền dịu hơn.
+
 Việc chọn trong màn hình khởi đầu chỉ gửi lựa chọn cho server; server xác nhận quyền sở hữu, điều kiện và trạng thái nhân vật.
 
 ## Nhân vật và tu luyện
@@ -26,6 +28,8 @@ Phá vách tiêu hao Chân Nguyên để tăng tiến độ vách khiếu. Khi �
 ### Thăng Tiên và độ kiếp
 
 Thăng Tiên là một nghi thức nhiều bước chứ không phải một nút thăng cấp. Màn hình phiên cho biết giai đoạn hiện tại. Người chơi cần đạt điều kiện rank, tiểu cảnh giới, tiến độ, tài nguyên và Cổ cần thiết; sau đó lần lượt vượt khảo nghiệm, đối đầu tai kiếp và hoàn tất bước Thả Cổ. Thất bại hoặc hết hạn có thể kết thúc phiên và áp dụng hậu quả tương ứng.
+
+Địa Tai Bản Yếu được triệu hồi thành thực thể riêng cạnh nhân vật, ngoài lưới khám phá. Người chơi chọn thực thể trên bản đồ để mở combat theo lượt; thắng hoàn tất bước này, thua kết thúc nghi thức và mất 20% Nhân Khí, còn rút lui không mất Nhân Khí và có thể nghênh chiến lại trong thời hạn.
 
 ### Nhiệm vụ, nhiệm vụ ngày và thành tựu
 
@@ -136,7 +140,7 @@ Tông Môn hỗ trợ xem danh sách, xin gia nhập, tạo môn phái khi đủ
 
 ### Cửa Hàng và merchant
 
-Cửa hàng bán/mua lại vật phẩm theo danh mục dữ liệu. Merchant có thể có stock, quote, giới hạn cung/cầu và phạm vi tương tác riêng. UI có thể yêu cầu đứng trong làng hoặc ở gần merchant lưu động.
+Cửa hàng bán/mua lại vật phẩm theo danh mục dữ liệu. Merchant có thể có stock, quote, giới hạn cung/cầu và phạm vi tương tác riêng. UI có thể yêu cầu đứng trong làng hoặc ở gần merchant lưu động. Tại các vùng an toàn Tân Thủ Cốc (`tan_thu_coc_*`), có thương nhân cố định ("Thương Nhân Tân Thủ") đóng tại tọa độ `(500, 500)` để cung cấp đan dược hồi phục, thức ăn Cổ trùng, nguyên liệu cấp 1 và Cổ Chuyển 1, đồng thời thu mua tài nguyên cho tân thủ Cổ Sư với bán kính tương tác rộng và đánh dấu trên bản đồ.
 
 ### Bảo Hoàng Thiên
 

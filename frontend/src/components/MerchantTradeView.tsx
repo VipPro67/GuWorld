@@ -123,7 +123,7 @@ export const MerchantTradeView: React.FC<MerchantTradeViewProps> = ({ player, ac
       {merchants.length === 0 ? (
         <div className="py-10 flex flex-col items-center gap-2 text-zinc-600">
           <Store className="w-8 h-8 text-zinc-700" />
-          <span className="text-xs font-mono text-center">Không có thương nhân lang thang gần đây.<br />Họ xuất hiện ngẫu nhiên ngoài hoang dã — hãy đi tuần để tìm.</span>
+          <span className="text-xs font-mono text-center">Không có thương nhân nào gần đây.<br />Hãy tới thôn làng / Tân Thủ Cốc hoặc tìm Thương Nhân Lang Thang ngoài hoang dã.</span>
         </div>
       ) : (
         <>

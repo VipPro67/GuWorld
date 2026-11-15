@@ -37,6 +37,10 @@ const (
 
 type WorldMonster = cache.WorldMonster
 
+func worldMonsterVisibleToPlayer(monster WorldMonster, playerID string) bool {
+	return monster.OwnerPlayerID == "" || monster.OwnerPlayerID == playerID
+}
+
 var (
 	worldMonstersInBucket    = cache.WorldMonstersInBucket
 	materializeWorldMonster  = cache.MaterializeWorldMonster
@@ -564,6 +568,9 @@ func GetWorldMonsters(c *gin.Context) {
 		}
 		for _, coord := range coords {
 			for _, monster := range buckets[coord] {
+				if !worldMonsterVisibleToPlayer(monster, playerID.String()) {
+					continue
+				}
 				monster = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
 				if monster.State == MonsterStateDefeated || math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) > float64(radius) {
 					continue

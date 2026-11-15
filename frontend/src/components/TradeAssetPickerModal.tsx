@@ -292,6 +292,7 @@ export function TradeAssetPickerModal({
           : "Tìm kiếm vật phẩm, cổ trùng hoặc bí phương mà bạn muốn người khác cung cấp."
       }
       variant={isOffer ? "success" : "warning"}
+      artwork="/assets/items/icons/chest.webp"
       footer={
         <div className="flex items-center justify-between w-full">
           <div className="text-xs">

@@ -367,6 +367,36 @@ export default function Home() {
     utilities: "Tiện ích",
   };
 
+  const viewArtwork: Record<string, string> = {
+    character: "/assets/world/form-reckless-savage.webp",
+    inventory: "/assets/world/spirit-beast.webp",
+    "inventory-gu": "/assets/world/spirit-beast.webp",
+    refine: "/assets/world/spirit-herb.webp",
+    cultivation: "/assets/world/spirit-herb.webp",
+    aperture: "/assets/world/ground-moss.webp",
+    "premium-store": "/assets/items/icons/chest.webp",
+    "premium-shop": "/assets/items/icons/crystal.webp",
+    shop: "/assets/items/icons/gourd.webp",
+    auction: "/assets/items/icons/crystal.webp",
+    pets: "/assets/world/spirit-beast.webp",
+    sect: "/assets/world/cultivator.webp",
+    arena: "/assets/world/form-six-arm-ice-demon.webp",
+    "infinite-tower": "/assets/world/form-reckless-savage.webp",
+    "death-arena": "/assets/world/form-six-arm-ice-demon.webp",
+    "martial-arena": "/assets/world/form-reckless-savage.webp",
+    achievements: "/assets/items/icons/star.webp",
+    utilities: "/assets/items/icons/formation.webp",
+    gacha: "/assets/items/icons/star.webp",
+    leaderboard: "/assets/items/icons/star.webp",
+    "dream-realm": "/assets/world/spirit-beast.webp",
+    dungeon: "/assets/world/great-regions-atlas.png",
+    feedback: "/assets/items/icons/scroll.webp",
+    "audit-logs": "/assets/items/icons/map.webp",
+    "combat-history": "/assets/items/icons/blade.webp",
+    party: "/assets/world/spirit-beast.webp",
+    topup: "/assets/items/icons/coin.webp",
+  };
+
   return (
     <div className="mmo-paper-theme h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden p-0 relative">
       {/* Top Header Navigation */}
@@ -541,7 +571,7 @@ export default function Home() {
               </div>
             )}
             {!isExploreView && currentView !== "dashboard" && (
-              <div className={`absolute inset-0 z-40 flex items-center justify-center ${isFullBleedView ? "" : "bg-black/75 backdrop-blur-sm md:p-4"}`}>
+              <div className={`absolute inset-0 z-40 flex items-center justify-center ${isFullBleedView ? "" : "bg-black/55 backdrop-blur-[2px] md:p-4"}`}>
                 <section
                   role="dialog"
                   aria-modal="true"
@@ -549,12 +579,13 @@ export default function Home() {
                   className={`mmo-panel-theme mmo-paper-theme mmo-paper-surface relative flex h-full w-full flex-col overflow-hidden text-[var(--text-primary,#f4e8cb)] ${isFullBleedView ? "" : `md:h-[min(90dvh,900px)] md:max-h-[90dvh] md:rounded-2xl ${isWideFeatureView ? "md:w-[min(76vw,1100px)]" : "md:w-[min(64vw,820px)]"}`}`}
                 >
                   {!isFullBleedView && (
-                  <div className="mmo-paper-heading flex min-h-14 shrink-0 items-center justify-between gap-3 px-4 sm:px-5">
-                    <div className="min-w-0">
+                  <div className="mmo-paper-heading relative isolate flex min-h-14 shrink-0 items-center justify-between gap-3 overflow-hidden px-4 sm:px-5">
+                    {viewArtwork[currentView] && <img src={viewArtwork[currentView]} alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute right-12 top-0 h-full w-20 object-contain opacity-25 sm:right-16 sm:w-24" />}
+                    <div className="relative z-[1] min-w-0">
                       <div className="truncate font-serif text-base font-semibold text-[var(--text-primary,#f4e8cb)]">{viewTitles[currentView] || "Chức năng"}</div>
                       <div className="hidden text-[10px] uppercase tracking-[.2em] text-[#795a34] sm:block">Cổ Giới · Bảng điều khiển</div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="relative z-[1] flex shrink-0 items-center gap-2">
                       <button
                         onClick={() => setView("dashboard")}
                         aria-label="Đóng bảng điều khiển"

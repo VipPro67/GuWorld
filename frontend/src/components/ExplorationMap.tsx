@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Compass, Sparkles, DoorOpen, Landmark, ShieldAlert, Map as MapIcon, Package, Eye, Mountain, Waypoints } from "lucide-react";
+import { Compass, Sparkles, DoorOpen, Landmark, ShieldAlert, Map as MapIcon, Package, Eye, Mountain, Waypoints, Store } from "lucide-react";
 import { useGameStore, Player } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
 import { usePolling } from "@/lib/usePolling";
@@ -60,6 +60,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const resourcePoints = useWorldStore((state) => state.resourcePoints);
   const resourcePointsRegion = useWorldStore((state) => state.resourcePointsRegion);
   const fetchWorldResourcePoints = useWorldStore((state) => state.fetchWorldResourcePoints);
+  const worldMonsters = useWorldStore((state) => state.worldMonsters);
+  const fetchWorldMonsters = useWorldStore((state) => state.fetchWorldMonsters);
+  const engageAscensionWorldMonster = useWorldStore((state) => state.engageAscensionWorldMonster);
   const collectWorldResourcePoint = useWorldStore((state) => state.collectWorldResourcePoint);
   const lootGroundDrop = useGameStore((state) => state.lootGroundDrop);
   const addToast = useGameStore((state) => state.addToast);
@@ -136,6 +139,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     void loadGrid();
   }, [player.current_region, player.x, player.y, loadGrid]);
   usePolling(loadGrid, 10000);
+  useEffect(() => { void fetchWorldMonsters(); }, [player.current_region, player.x, player.y, fetchWorldMonsters]);
+  usePolling(() => fetchWorldMonsters().then(() => undefined), 5000);
 
   useEffect(() => {
     if (mapMarkersRegion !== player.current_region) void fetchZoneMarkers(player.current_region);
@@ -150,6 +155,11 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     const playerOnCell = gridData?.players_on_map?.find((target) => target.x === x && target.y === y && target.id !== player.id);
     if (playerOnCell) {
       setSelectedPvpTarget(playerOnCell);
+      return;
+    }
+    if (marker?.kind === "merchant" && Math.hypot(x - player.x, y - player.y) <= 2) {
+      void useGameStore.getState().fetchMerchants();
+      useUIStore.getState().setView("shop");
       return;
     }
     if (marker?.kind === "aperture_portal" && !marker.isMine && Math.hypot(x - player.x, y - player.y) <= 3) {
@@ -407,6 +417,16 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
         </div>
       </div>
 
+      {worldMonsters.filter((actor) => actor.owner_player_id === player.id && actor.monster_template_id === "monster_earth_calamity_boss").map((actor) => (
+        <section key={actor.instance_id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-700/50 bg-rose-950/20 p-3 shadow-lg">
+          <div className="flex items-center gap-2">
+            <MonsterSprite templateId={actor.monster_template_id} alt="Địa Tai Bản Yếu" className="h-10 w-10 object-contain" />
+            <div><div className="text-xs font-bold text-rose-200">Địa Tai Bản Yếu · Chuyển 5.4</div><div className="text-[10px] text-zinc-400">Thực thể ngoài grid · ({Math.round(actor.x)}, {Math.round(actor.y)}) · HP {Math.round(actor.hp)}/{Math.round(actor.max_hp)}</div></div>
+          </div>
+          <button disabled={actionLoading || Boolean(player.active_combat)} onClick={() => void engageAscensionWorldMonster(actor)} className="rounded-lg bg-rose-700 px-4 py-2 text-xs font-bold text-white hover:bg-rose-600 disabled:opacity-50">Nghênh chiến</button>
+        </section>
+      ))}
+
       {/* Exploration Grid Canvas */}
       {selectedPvpTarget && (
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-purple-700/50 bg-purple-950/30 p-4">
@@ -441,16 +461,18 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
               const primaryMarker = markersOnCell.find((marker) => marker.kind === "aperture_portal")
                 || markersOnCell.find((marker) => marker.kind === "teleport")
                 || markersOnCell.find((marker) => marker.kind === "sect")
+                || markersOnCell.find((marker) => marker.kind === "merchant")
                 || markersOnCell[0];
               const portalMarker = markersOnCell.find((marker) => marker.kind === "aperture_portal");
               const teleportMarker = markersOnCell.find((marker) => marker.kind === "teleport");
+              const merchantMarker = markersOnCell.find((marker) => marker.kind === "merchant");
               const resourcePoint = markersOnCell.find((marker) => marker.kind === "resource_point");
               const markerTitle = markersOnCell.map((marker) => marker.name).join(", ");
 
               return (
                 <div
                   key={`${x},${y}`}
-                  onClick={() => handleCellClick(x, y, isMovable, cellData, portalMarker || teleportMarker || primaryMarker, resourcePoint?.id)}
+                  onClick={() => handleCellClick(x, y, isMovable, cellData, portalMarker || teleportMarker || merchantMarker || primaryMarker, resourcePoint?.id)}
                   className={`aspect-square rounded-md border flex flex-col justify-center items-center relative transition-all duration-200 ${
                     isPlayerCell
                       ? "bg-emerald-500/25 border-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.35)] z-20"
@@ -486,13 +508,18 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                         )}
                       </div>
                     )}
-                    {!isOutOfBounds && !isPlayerCell && getCellIcon(cellData.cell_type, cellData.content)}
+                    {!isOutOfBounds && !isPlayerCell && (getCellIcon(cellData.cell_type, cellData.content) || (
+                      primaryMarker?.kind === "merchant" ? (
+                        <Store className="w-6 h-6 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)] animate-pulse" />
+                      ) : null
+                    ))}
                     {primaryMarker && (
                       <span className="absolute right-0.5 top-0.5 rounded-full bg-zinc-950/90 border border-zinc-600/70 p-0.5 shadow" title={markerTitle}>
                         {primaryMarker.kind === "sect" ? <ShieldAlert className="w-3.5 h-3.5 text-amber-300" />
                           : primaryMarker.kind === "teleport" ? <Waypoints className="w-3.5 h-3.5 text-sky-300" />
                             : primaryMarker.kind === "aperture_portal" ? <DoorOpen className="w-3.5 h-3.5 text-violet-300" />
-                              : <Mountain className="w-3.5 h-3.5 text-lime-300" />}
+                              : primaryMarker.kind === "merchant" ? <Store className="w-3.5 h-3.5 text-amber-400" />
+                                : <Mountain className="w-3.5 h-3.5 text-lime-300" />}
                       </span>
                     )}
                     {markersOnCell.length > 1 && (

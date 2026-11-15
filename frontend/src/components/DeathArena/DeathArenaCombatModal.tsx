@@ -138,6 +138,7 @@ export default function DeathArenaCombatModal({ matchId, onClose }: DeathArenaCo
       onClose={onClose}
       size="5xl"
       title={match ? getRoundTitle(match.round_number) : "Chiến Báo Trận Đấu"}
+      artwork="/assets/world/form-six-arm-ice-demon.webp"
     >
       {loading ? (
         <div className="py-12 text-center text-gray-400 animate-pulse">

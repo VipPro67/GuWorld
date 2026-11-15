@@ -108,6 +108,14 @@ func SeedMerchantDefaults() error {
 			period:   "HOUR",
 			buyRatio: 1.00, floor: 0.10, markup: 1, quota: 100,
 		},
+		{
+			// Type 3 — fixed novice merchant in Tân Thủ Cốc safe zones.
+			id: "tan_thu_merchant", name: "Thương Nhân Tân Thủ", kind: "FIXED",
+			desc:     "Thương nhân tại Tân Thủ Cốc, chuyên cung cấp đan dược, thức ăn cổ trùng và thu mua tài nguyên cho tân thủ Cổ Sư.",
+			tags:     `{"types":["Gu","Material","Consumable","Recipe"],"max_rank":3}`,
+			period:   "DAY",
+			buyRatio: 0.60, floor: 0.20, markup: 1.15, quota: 100,
+		},
 	}
 	for _, p := range profiles {
 		if _, err := schemaDB().Exec(`
@@ -134,5 +142,57 @@ func SeedMerchantDefaults() error {
 		ON CONFLICT (id) DO NOTHING`); err != nil {
 		return err
 	}
+	// Fixed novice merchant in every existing tan_thu_coc SAFE_ZONE region.
+	if _, err := schemaDB().Exec(`
+		INSERT INTO merchants (id, profile_id, region_id, x, y, is_active)
+		SELECT 'merchant_'||r.id, 'tan_thu_merchant', r.id, 500, 500, TRUE
+		FROM regions r WHERE r.id LIKE 'tan_thu_coc_%' AND r.zone_type = 'SAFE_ZONE'
+		ON CONFLICT (id) DO UPDATE SET
+			profile_id = EXCLUDED.profile_id,
+			x = EXCLUDED.x,
+			y = EXCLUDED.y,
+			is_active = TRUE`); err != nil {
+		return err
+	}
+	// Seed novice merchant stock for all tan_thu_merchant instances.
+	if err := SeedTanThuMerchantStock(schemaDB()); err != nil {
+		return err
+	}
 	return nil
+}
+
+// SeedTanThuMerchantStock seeds starter inventory into merchant_stock for tan_thu_merchant.
+func SeedTanThuMerchantStock(exec csvImportExecutor) error {
+	_, err := exec.Exec(`
+		INSERT INTO merchant_stock (merchant_id, item_id, rank, price, stock, sort_order)
+		SELECT m.id, s.item_id, s.rank, s.price, s.stock, s.sort_order
+		FROM merchants m
+		CROSS JOIN (VALUES
+			('ITEM_HEALING_PELLET_SMALL', 1, 1.0, 99, 1),
+			('ITEM_MEDICINAL_PASTE', 1, 1.0, 99, 2),
+			('boar_meat', 1, 1.0, 99, 10),
+			('fresh_blood', 1, 1.0, 99, 11),
+			('green_bamboo_wine', 1, 1.0, 99, 12),
+			('bitter_water', 1, 1.0, 99, 13),
+			('sweet_wine', 1, 1.0, 99, 14),
+			('moon_orchid_petal', 1, 1.0, 99, 15),
+			('water_weed', 1, 1.0, 99, 16),
+			('starlight_firefly', 1, 1.0, 99, 17),
+			('copper_ore', 1, 1.0, 50, 20),
+			('iron_ore', 1, 1.0, 50, 21),
+			('earth_qi', 1, 1.0, 50, 22),
+			('GU_MOONLIGHT', 1, 200.0, 5, 30),
+			('GU_WHITE_BOAR', 1, 200.0, 3, 31),
+			('GU_BLACK_BOAR', 1, 200.0, 3, 32),
+			('GU_STONE_SKIN', 1, 200.0, 4, 33),
+			('GU_LITTLE_LIGHT', 1, 200.0, 5, 34),
+			('GU_BOOKWORM', 1, 200.0, 2, 35),
+			('GU_CLEANSING_WATER', 1, 200.0, 2, 36)
+		) AS s(item_id, rank, price, stock, sort_order)
+		WHERE m.profile_id = 'tan_thu_merchant'
+		ON CONFLICT (merchant_id, item_id, rank) DO UPDATE SET
+			price = EXCLUDED.price,
+			stock = EXCLUDED.stock,
+			sort_order = EXCLUDED.sort_order`)
+	return err
 }

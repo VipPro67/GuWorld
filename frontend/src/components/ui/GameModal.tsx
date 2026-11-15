@@ -33,6 +33,7 @@ export interface GameModalProps {
   closeOnOverlayClick?: boolean;
   closeOnEscape?: boolean;
   showCloseButton?: boolean;
+  artwork?: string;
   className?: string;
   portalContainer?: HTMLElement | null;
 }
@@ -72,6 +73,7 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
       closeOnOverlayClick = true,
       closeOnEscape = true,
       showCloseButton = true,
+      artwork,
       className = "",
       portalContainer,
       ...props
@@ -118,7 +120,7 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
         aria-labelledby={title ? titleId : undefined}
       >
         <div
-          className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm transition-opacity"
+          className="absolute inset-0 bg-zinc-950/65 backdrop-blur-[2px] transition-opacity"
           onClick={closeOnOverlayClick ? onClose : undefined}
           aria-hidden="true"
         />
@@ -137,8 +139,9 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
           {...props}
         >
           {(title || showCloseButton) && (
-            <div className="mmo-paper-heading flex items-start justify-between gap-4 p-5">
-              <div className="flex-1 min-w-0">
+            <div className="mmo-paper-heading relative isolate flex items-start justify-between gap-4 overflow-hidden p-5">
+              {artwork && <img src={artwork} alt="" aria-hidden="true" loading="lazy" className="pointer-events-none absolute right-14 top-1/2 h-20 w-28 -translate-y-1/2 object-contain opacity-25" />}
+              <div className="relative z-[1] min-w-0 flex-1">
                 {title && (
                   <h2
                     id={titleId}
@@ -157,7 +160,7 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-shrink-0 p-1.5 rounded-xl text-text-muted hover:text-text-primary hover:bg-zinc-900/50 transition-colors"
+                  className="relative z-[1] flex-shrink-0 p-1.5 rounded-xl text-text-muted hover:text-text-primary hover:bg-zinc-900/50 transition-colors"
                   aria-label="Đóng"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

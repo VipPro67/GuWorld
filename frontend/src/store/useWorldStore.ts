@@ -52,6 +52,18 @@ export interface WorldChangedEvent {
   y?: number;
 }
 
+export interface WorldMonsterActor {
+  instance_id: string;
+  owner_player_id?: string;
+  monster_template_id: string;
+  region_id: string;
+  x: number;
+  y: number;
+  hp: number;
+  max_hp: number;
+  is_boss?: boolean;
+}
+
 interface WorldStoreState {
   nearbyCells: NearbyCell[];
   zoneMarkers: MapMarkerView[];
@@ -59,6 +71,7 @@ interface WorldStoreState {
   /** Public mines of the current region (WORLD-scope resource points). */
   resourcePoints: ApertureResourcePoint[];
   resourcePointsRegion: string | null;
+  worldMonsters: WorldMonsterActor[];
   /** Last rectangle queried for cells; world events reuse it to refetch. */
   lastCellsViewport: { x: number; y: number; radius: number } | null;
   loading: boolean;
@@ -67,6 +80,8 @@ interface WorldStoreState {
   fetchNearbyCells: (x: number, y: number, radius: number) => Promise<boolean>;
   fetchZoneMarkers: (regionId: string) => Promise<boolean>;
   fetchWorldResourcePoints: (regionId: string) => Promise<boolean>;
+  fetchWorldMonsters: () => Promise<boolean>;
+  engageAscensionWorldMonster: (actor: WorldMonsterActor) => Promise<boolean>;
   collectWorldResourcePoint: (pointId: string) => Promise<boolean>;
   transplantWorldResourcePoint: (pointId: string) => Promise<boolean>;
   harvestVein: (veinId: string) => Promise<boolean>;
@@ -116,6 +131,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   zoneMarkersRegion: null,
   resourcePoints: [],
   resourcePointsRegion: null,
+  worldMonsters: [],
   lastCellsViewport: null,
   loading: false,
   error: null,
@@ -179,6 +195,36 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       return true;
     } catch (err) {
       console.warn("fetchWorldResourcePoints failed:", err);
+      return false;
+    }
+  },
+
+  fetchWorldMonsters: async () => {
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/world/monsters`);
+      if (!res.ok) return false;
+      const data = await res.json();
+      set({ worldMonsters: Array.isArray(data.monsters) ? data.monsters as WorldMonsterActor[] : [] });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  engageAscensionWorldMonster: async (actor) => {
+    const game = useGameStore.getState();
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/cultivate/ascension/calamity/engage/${encodeURIComponent(actor.instance_id)}?region=${encodeURIComponent(actor.region_id)}`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        game.addToast(data.error || "Không thể nghênh chiến Địa Tai.", "error");
+        return false;
+      }
+      if (data.active_combat) game.setPlayerFromServer({ active_combat: data.active_combat });
+      game.addToast(data.message || "Địa Tai đã nhận lời nghênh chiến.", "info");
+      return true;
+    } catch (err) {
+      game.addToast(err instanceof Error ? err.message : "Không thể nghênh chiến Địa Tai.", "error");
       return false;
     }
   },

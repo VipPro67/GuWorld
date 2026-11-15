@@ -652,6 +652,7 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 			cultivate.POST("/ascension/shatter", handlers.AscensionShatter)
 			cultivate.POST("/ascension/temper", handlers.AscensionTemper)
 			cultivate.POST("/ascension/calamity/engage", handlers.AscensionEngageCalamity)
+			cultivate.POST("/ascension/calamity/engage/:instanceId", handlers.AscensionStartCalamityCombat)
 			cultivate.POST("/ascension/release", handlers.AscensionRelease)
 		}
 

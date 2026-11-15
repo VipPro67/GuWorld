@@ -226,7 +226,7 @@ func merchantResolveBase(q queryer, itemID, itemType string, rank int) (float64,
 // ensureRegionMerchants lazily creates the fixed village merchant for a region
 // that qualifies (HUB / SAFE_ZONE). Idempotent via deterministic ids.
 func ensureRegionMerchants(regionID string) error {
-	if regionID == "" {
+	if regionID == "" || db.DB == nil {
 		return nil
 	}
 	var zoneType string
@@ -239,6 +239,22 @@ func ensureRegionMerchants(regionID string) error {
 	if _, err := db.DB.Exec(`INSERT INTO merchants (id, profile_id, region_id, is_active)
 		VALUES ('village_'||$1, 'village_general', $1, TRUE) ON CONFLICT (id) DO NOTHING`, regionID); err != nil {
 		return err
+	}
+	if strings.HasPrefix(regionID, "tan_thu_coc_") {
+		merchantID := "merchant_" + regionID
+		if _, err := db.DB.Exec(`
+			INSERT INTO merchants (id, profile_id, region_id, x, y, is_active)
+			VALUES ($1, 'tan_thu_merchant', $2, 500, 500, TRUE)
+			ON CONFLICT (id) DO UPDATE SET
+				profile_id = EXCLUDED.profile_id,
+				x = EXCLUDED.x,
+				y = EXCLUDED.y,
+				is_active = TRUE`, merchantID, regionID); err != nil {
+			return err
+		}
+		if err := db.SeedTanThuMerchantStock(db.DB); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -279,6 +295,9 @@ type merchantDTO struct {
 const roamingTradeRadius = 2
 
 func loadMerchantStock(merchantID string) []merchantStockItem {
+	if db.DB == nil {
+		return []merchantStockItem{}
+	}
 	rows, err := db.DB.Query(`
 		SELECT s.item_id, COALESCE(i.name, g.name, s.item_id),
 		       CASE WHEN g.id IS NOT NULL THEN 'Gu' ELSE COALESCE(i.item_type,'Material') END,
@@ -321,6 +340,7 @@ func GetMerchants(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"region": region, "zone_type": "", "at_village": false, "merchants": []merchantDTO{}})
 		return
 	}
+	_ = ensureRegionMerchants(region)
 	entry, err := loadRegionMerchantCache(region)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể tải thương nhân", err))
@@ -366,7 +386,11 @@ type merchantRowData struct {
 func (r merchantRowData) toDTO(px, py int) (merchantDTO, bool) {
 	dx, dy := r.X-px, r.Y-py
 	sq := dx*dx + dy*dy
-	if sq > roamingTradeRadius*roamingTradeRadius {
+	radius := roamingTradeRadius
+	if r.Kind == "FIXED" || r.ProfileID == "tan_thu_merchant" {
+		radius = 15
+	}
+	if sq > radius*radius {
 		return merchantDTO{}, false
 	}
 	m := merchantDTO{
@@ -424,7 +448,8 @@ func loadRegionMerchantCache(region string) (merchantRegionCacheEntry, error) {
 		SELECT `+merchantRowColumns+`
 		FROM merchants m
 		JOIN merchant_profiles p ON p.id = m.profile_id
-		WHERE m.region_id = $1 AND m.is_active AND p.enabled AND p.kind = 'ROAMING'
+		WHERE m.region_id = $1 AND m.is_active AND p.enabled
+		  AND (p.kind = 'ROAMING' OR p.id = 'tan_thu_merchant' OR (m.id NOT LIKE 'village_%' AND (m.x > 0 OR m.y > 0)))
 		  AND (m.expires_at IS NULL OR m.expires_at > NOW())
 		ORDER BY m.id`, region)
 	if err != nil {
