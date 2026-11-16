@@ -28,6 +28,7 @@ import { GamePanel, GameTabs, GameButton, GameCard, GameInput, GameBadge, Search
 import { TradeAssetPickerModal, type AssetTab } from "./TradeAssetPickerModal";
 import { buildBuyOrderExecution, reconcileGuSelection, toggleGuSelection } from "./marketplaceGuSelection";
 import { getItemIconUrl } from "@/lib/item-icons";
+import { getGuIconUrl } from "@/lib/gu-icons";
 import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
 interface RecipeData {
@@ -221,22 +222,6 @@ export function BaoHoangMarket({
   const hasDivineSense = Array.isArray(guInventory) && guInventory.some(
     (g) => g.gu_id === "GU_DIVINE_SENSE" && g.status !== "DEAD"
   );
-
-  if (!hasConnectingHeaven || !hasDivineSense) {
-    return (
-      <div className="w-full mx-auto glass-panel-gold p-6 rounded-3xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <AlertCircle className="w-16 h-16 text-amber-500 mb-6 animate-pulse" />
-          <h3 className="text-xl font-serif font-bold text-amber-200 mb-2">Chưa Thể Kết Nối Bảo Hoàng Thiên</h3>
-          <p className="text-sm text-zinc-400 font-serif max-w-md leading-relaxed">
-            Đạo hữu cần sở hữu đồng thời <strong className="text-amber-300">Thông Thiên Cổ (`GU_CONNECTING_HEAVEN`)</strong> VÀ <strong className="text-amber-300">Thần Niệm Cổ (`GU_DIVINE_SENSE`)</strong> còn sống trong túi đồ để mở kết nối Thần Niệm với Bảo Hoàng Thiên.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   const handleCreateBuybackSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -505,7 +490,7 @@ export function BaoHoangMarket({
     return sellableGus.filter((g) => g.gu_id === target.gu_id && g.rank === Number(target.rank));
   };
 
-  const getListingDetails = (listing: Listing): { title: string; subtitle?: string } => {
+  const getListingDetails = (listing: Listing): { title: string; subtitle?: string; imageUrl?: string } => {
     let parsedData: Record<string, unknown> | string | null = listing.item_data as Record<string, unknown> | string | null;
     if (typeof parsedData === "string") {
       try {
@@ -524,6 +509,7 @@ export function BaoHoangMarket({
         return {
           title: `${name} (Hạng ${g.rank})`,
           subtitle: `Độ no: ${g.hunger}%`,
+          imageUrl: getGuArtworkUrl(g.gu_id, name, spec?.image_url),
         };
       }
       return { title: "Cổ Trùng" };
@@ -534,6 +520,7 @@ export function BaoHoangMarket({
       return {
         title: name,
         subtitle: `Số lượng: ${listing.quantity}`,
+        imageUrl: getItemIconUrl(spec ?? { id: matId, name, item_type: "Material" }),
       };
     } else if (listing.item_type === "Recipe") {
       const recObj = (parsedData && typeof parsedData === "object") ? (parsedData as Record<string, unknown>) : null;
@@ -547,10 +534,47 @@ export function BaoHoangMarket({
     return { title: "Bảo Vật" };
   };
 
+  const getGuArtworkUrl = (guId: string, guName?: string, imageUrl?: string) => {
+    const customUrl = imageUrl?.trim();
+    return customUrl && (/^https?:\/\//i.test(customUrl) || (customUrl.startsWith("/") && !customUrl.startsWith("//")))
+      ? customUrl
+      : getGuIconUrl(guId, guName);
+  };
+
+  const renderAssetArtwork = (itemType: "Gu" | "Material" | "Recipe", imageUrl?: string, size = "h-14 w-14") => (
+    <div className={`${size} shrink-0 rounded-xl border border-amber-500/15 bg-gradient-to-br from-amber-500/10 to-zinc-950 p-2 flex items-center justify-center`}>
+      {imageUrl ? <img src={imageUrl} alt="" className="h-full w-full object-contain" /> : itemType === "Gu" ? <Bug className="h-6 w-6 text-emerald-300" /> : itemType === "Recipe" ? <ScrollText className="h-6 w-6 text-violet-300" /> : <Package className="h-6 w-6 text-cyan-300" />}
+    </div>
+  );
+
+  const renderSelectedAsset = (itemType: "Gu" | "Material" | "Recipe", id: string, name: string, imageUrl?: string, detail?: string) => id ? (
+    <div className="mt-2 flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2.5">
+      {renderAssetArtwork(itemType, imageUrl, "h-10 w-10")}
+      <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-zinc-100">{name}</p><p className="truncate text-[10px] text-zinc-500">{detail || id}</p></div>
+      <CheckCircle className="h-4 w-4 shrink-0 text-emerald-400" />
+    </div>
+  ) : null;
+
+  if (!hasConnectingHeaven || !hasDivineSense) {
+    return (
+      <div className="w-full mx-auto glass-panel-gold p-6 rounded-3xl border border-amber-500/20 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <AlertCircle className="w-16 h-16 text-amber-500 mb-6 animate-pulse" />
+          <h3 className="text-xl font-serif font-bold text-amber-200 mb-2">Chưa Thể Kết Nối Bảo Hoàng Thiên</h3>
+          <p className="text-sm text-zinc-400 font-serif max-w-md leading-relaxed">
+            Đạo hữu cần sở hữu đồng thời <strong className="text-amber-300">Thông Thiên Cổ (`GU_CONNECTING_HEAVEN`)</strong> VÀ <strong className="text-amber-300">Thần Niệm Cổ (`GU_DIVINE_SENSE`)</strong> còn sống trong túi đồ để mở kết nối Thần Niệm với Bảo Hoàng Thiên.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <GamePanel variant="gold" className="rounded-3xl p-3 sm:p-6 border border-amber-500/20 shadow-2xl relative overflow-hidden">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-amber-500/10 pb-5 mb-6">
-        <div>
+        <div className="flex flex-col gap-4 border-b border-amber-500/10 pb-5 mb-6 md:flex-row md:flex-wrap md:items-center md:justify-between">
+        <div className="md:min-w-[24rem] md:flex-1">
           <h2 className="text-2xl font-bold font-serif text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-300 to-amber-500 tracking-wider flex items-center gap-2">
             <Sparkles className="w-6 h-6 text-amber-400 animate-pulse" />
             BẢO HOÀNG THIÊN
@@ -560,20 +584,19 @@ export function BaoHoangMarket({
           </p>
         </div>
 
-        <div className="flex items-center gap-3 bg-zinc-950/60 px-4 py-2.5 rounded-2xl border border-zinc-800/80 font-mono text-xs">
-          <div className="flex items-center gap-1.5 pr-3 border-r border-zinc-850">
-            <Coins className="w-4 h-4 text-amber-500" />
-            <span className="text-zinc-400">Nguyên Thạch:</span>
-            <span className="text-amber-400 font-bold text-sm">{player.primeval_stones}</span>
+        <div className="grid w-full grid-cols-2 gap-2 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 p-2 font-mono text-xs md:w-[33rem] md:shrink-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center md:gap-3 md:px-4 md:py-2.5">
+          <div className="flex min-w-0 flex-col gap-1 rounded-xl bg-black/20 p-2 md:bg-transparent md:p-0 md:pr-3 md:border-r md:border-zinc-800">
+            <span className="flex items-center gap-1.5 text-zinc-400"><Coins className="h-4 w-4 shrink-0 text-amber-500" />Nguyên Thạch</span>
+            <span className="break-words text-xs font-bold tabular-nums text-amber-400">{Number(player.primeval_stones).toLocaleString("vi-VN", { maximumFractionDigits: 3 })}</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-cyan-400" />
-            <span className="text-zinc-400">Tiên Nguyên:</span>
-            <span className="text-cyan-400 font-bold text-sm">{player.immortal_stones}</span>
+          <div className="flex min-w-0 flex-col gap-1 rounded-xl bg-black/20 p-2 md:bg-transparent md:p-0">
+            <span className="flex items-center gap-1.5 text-zinc-400"><Sparkles className="h-4 w-4 shrink-0 text-cyan-400" />Tiên Nguyên</span>
+            <span className="break-words text-xs font-bold tabular-nums text-cyan-400">{Number(player.immortal_stones).toLocaleString("vi-VN", { maximumFractionDigits: 3 })}</span>
           </div>
           <GameButton
             size="xs"
             variant="ghost"
+            className="col-span-2 w-full md:col-span-1 md:w-auto"
             onClick={() => {
               fetchBuybackOrders();
               fetchTradeOffers();
@@ -602,8 +625,8 @@ export function BaoHoangMarket({
         {/* TAB 1: CHỢ LỆNH (ORDER BOOK - RAO BÁN & THU MUA) */}
         {tab === "orderBook" && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
                 <GameButton
                   size="xs"
                   variant={orderBookFilter === "all" ? "primary" : "ghost"}
@@ -627,7 +650,7 @@ export function BaoHoangMarket({
                 </GameButton>
               </div>
 
-              <div className="relative w-64">
+              <div className="relative w-full sm:w-64">
                 <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <GameInput
                   placeholder="Tìm kiếm trong chợ lệnh..."
@@ -643,16 +666,21 @@ export function BaoHoangMarket({
                 Chưa có đơn rao bán hay thu mua nào khớp với bộ lọc. Hãy tạo đơn mới!
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
                 {filteredOrderBook.map((order) => {
                   const isSellOrder = order.order_type === "SELL";
                   let targetName = "Vật phẩm";
+                  let targetImage: string | undefined;
                   if (order.item_type === "Material" && typeof order.item_target === "string") {
-                    targetName = itemDictionary[order.item_target]?.name || order.item_target;
+                    const item = itemDictionary[order.item_target];
+                    targetName = item?.name || order.item_target;
+                    targetImage = getItemIconUrl(item ?? { id: order.item_target, name: targetName, item_type: "Material" });
                   } else if (order.item_type === "Gu" && typeof order.item_target === "object" && order.item_target !== null) {
                     const t = order.item_target as { gu_id?: string; rank?: number };
                     if (t.gu_id) {
-                      targetName = guSpecFor(t.gu_id, t.rank || 1)?.name || t.gu_id;
+                      const gu = guSpecFor(t.gu_id, t.rank || 1);
+                      targetName = gu?.name || t.gu_id;
+                      targetImage = getGuArtworkUrl(t.gu_id, targetName, gu?.image_url);
                     }
                   } else if (order.item_type === "Recipe") {
                     const recId = typeof order.item_target === "string" ? order.item_target : String(order.item_target);
@@ -664,8 +692,8 @@ export function BaoHoangMarket({
                   const remaining = order.quantity_requested - order.quantity_filled;
 
                   return (
-                    <GameCard key={order.id} variant="vital" className="p-4 space-y-3 relative overflow-hidden">
-                      <div className="flex items-start justify-between">
+                    <GameCard key={order.id} variant="vital" className="p-4 space-y-3 relative overflow-hidden transition-transform duration-200 hover:-translate-y-0.5">
+                      <div className="flex items-start justify-between gap-3">
                         <div>
                           <span
                             className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded border ${
@@ -676,7 +704,13 @@ export function BaoHoangMarket({
                           >
                             {isSellOrder ? "Rao Bán" : "Thu Mua"}: {order.item_type}
                           </span>
-                          <h4 className="text-base font-bold font-serif text-amber-100 mt-1">{targetName}</h4>
+                          <div className="mt-2 flex items-center gap-3">
+                            {renderAssetArtwork(order.item_type, targetImage)}
+                            <div className="min-w-0">
+                              <h4 className="text-base font-bold font-serif text-amber-100">{targetName}</h4>
+                              <p className="text-xs text-zinc-500 font-mono">{order.item_type === "Gu" ? "Cổ trùng" : order.item_type === "Recipe" ? "Bí phương" : "Nguyên liệu"}</p>
+                            </div>
+                          </div>
                           <p className="text-xs text-zinc-500 font-mono">
                             Chủ đơn: {order.buyer_username}
                           </p>
@@ -787,7 +821,7 @@ export function BaoHoangMarket({
                 </GameButton>
               </div>
 
-              <div className="relative w-64">
+              <div className="relative w-full sm:w-64">
                 <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <GameInput
                   placeholder="Tìm kiếm đơn trao đổi..."
@@ -1007,17 +1041,20 @@ export function BaoHoangMarket({
                 Hiện không có bảo vật nào đang được đấu giá khớp tìm kiếm.
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
                 {activeAuctionListings.map((listing) => {
                   const details = getListingDetails(listing);
                   return (
-                    <GameCard key={listing.id} variant="vital" className="p-4 space-y-3">
+                    <GameCard key={listing.id} variant="vital" className="p-4 space-y-3 transition-transform duration-200 hover:-translate-y-0.5">
                       <div className="flex items-start justify-between">
                         <div>
                           <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                             Đấu Giá: {listing.item_type}
                           </span>
-                          <h4 className="text-base font-bold font-serif text-amber-100 mt-1">{details.title}</h4>
+                          <div className="mt-2 flex items-center gap-3">
+                            {renderAssetArtwork(listing.item_type, details.imageUrl)}
+                            <h4 className="text-base font-bold font-serif text-amber-100">{details.title}</h4>
+                          </div>
                           {details.subtitle && (
                             <p className="text-xs text-zinc-400 font-mono mt-0.5">{details.subtitle}</p>
                           )}
@@ -1071,42 +1108,30 @@ export function BaoHoangMarket({
 
         {/* TAB 4: ĐĂNG ĐƠN MỚI */}
         {tab === "create" && (
-          <GameCard variant="vital" className="p-6 max-w-2xl mx-auto space-y-6">
-            <div className="flex items-center gap-2 border-b border-zinc-800 pb-4 overflow-x-auto">
-              <GameButton
-                size="sm"
-                variant={createMode === "buyback" ? "primary" : "ghost"}
-                onClick={() => setCreateMode("buyback")}
-              >
-                Tạo Đơn Thu Mua
-              </GameButton>
-              <GameButton
-                size="sm"
-                variant={createMode === "sellOrder" ? "primary" : "ghost"}
-                onClick={() => setCreateMode("sellOrder")}
-              >
-                Đăng Đơn Bán
-              </GameButton>
-              <GameButton
-                size="sm"
-                variant={createMode === "tradeOffer" ? "primary" : "ghost"}
-                onClick={() => setCreateMode("tradeOffer")}
-              >
-                Đăng Trao Đổi Auto
-              </GameButton>
-              <GameButton
-                size="sm"
-                variant={createMode === "auction" ? "primary" : "ghost"}
-                onClick={() => setCreateMode("auction")}
-              >
-                Đăng Đấu Giá
-              </GameButton>
+          <GameCard variant="vital" className="w-full space-y-6 p-4 sm:p-6">
+            <div className="grid grid-cols-2 gap-2 border-b border-zinc-800 pb-4 sm:grid-cols-4">
+              {([
+                { id: "buyback", label: "Thu mua", hint: "Đặt giá muốn mua", icon: <ShoppingCart className="h-4 w-4" /> },
+                { id: "sellOrder", label: "Đăng bán", hint: "Bán vật phẩm trong túi", icon: <Tag className="h-4 w-4" /> },
+                { id: "tradeOffer", label: "Trao đổi", hint: "Đổi tài sản tự động", icon: <ArrowRightLeft className="h-4 w-4" /> },
+                { id: "auction", label: "Đấu giá", hint: "Mời người chơi trả giá", icon: <Gavel className="h-4 w-4" /> },
+              ] as const).map((mode) => (
+                <button key={mode.id} type="button" aria-pressed={createMode === mode.id} onClick={() => setCreateMode(mode.id)}
+                  className={`flex min-w-0 items-center gap-2 rounded-xl border p-2.5 text-left transition-colors ${createMode === mode.id ? "border-amber-400/50 bg-amber-500/10 text-amber-200" : "border-zinc-800 bg-zinc-950/50 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"}`}>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/30 text-amber-300">{mode.icon}</span>
+                  <span className="min-w-0"><span className="block text-xs font-semibold">{mode.label}</span><span className="block truncate text-[10px] text-zinc-500">{mode.hint}</span></span>
+                </button>
+              ))}
             </div>
 
             {/* FORM 1: BUYBACK ORDER (THU MUA) */}
             {createMode === "buyback" && (
               <form onSubmit={handleCreateBuybackSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center gap-3 rounded-xl border border-amber-500/15 bg-amber-500/5 p-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-300"><ShoppingCart className="h-5 w-5" /></span>
+                  <div><h3 className="text-sm font-semibold text-amber-100">Tạo đơn thu mua</h3><p className="text-xs text-zinc-500">Đặt giá và số lượng bạn muốn nhận từ người chơi khác.</p></div>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-xs text-zinc-400 block mb-1">Loại Vật Phẩm Cần Mua</label>
                     <select
@@ -1143,6 +1168,7 @@ export function BaoHoangMarket({
                       onChange={setBbTargetMat}
                       clearable={true}
                     />
+                    {renderSelectedAsset("Material", bbTargetMat, itemDictionary[bbTargetMat]?.name || bbTargetMat, bbTargetMat ? getItemIconUrl(itemDictionary[bbTargetMat] ?? { id: bbTargetMat, name: bbTargetMat, item_type: "Material" }) : undefined)}
                   </div>
                 )}
 
@@ -1155,6 +1181,7 @@ export function BaoHoangMarket({
                         value={bbTargetGu}
                         onChange={(e) => setBbTargetGu(e.target.value)}
                       />
+                    {renderSelectedAsset("Gu", bbTargetGu, guSpecFor(bbTargetGu, bbTargetRank)?.name || bbTargetGu, bbTargetGu ? getGuArtworkUrl(bbTargetGu, guSpecFor(bbTargetGu, bbTargetRank)?.name, guSpecFor(bbTargetGu, bbTargetRank)?.image_url) : undefined, `Hạng ${bbTargetRank}`)}
                     </div>
                     <div>
                       <label className="text-xs text-zinc-400 block mb-1">Chuyển (Hạng)</label>
@@ -1180,10 +1207,11 @@ export function BaoHoangMarket({
                       onChange={setBbTargetRecipe}
                       clearable={true}
                     />
+                    {renderSelectedAsset("Recipe", bbTargetRecipe, buybackRecipeOptions.find((option) => option.value === bbTargetRecipe)?.label || bbTargetRecipe, undefined, bbTargetRecipe)}
                   </div>
                 )}
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div>
                     <label className="text-xs text-zinc-400 block mb-1">Đơn Giá Mua</label>
                     <GameInput type="number" min={1} value={bbUnitPrice} onChange={(e) => setBbUnitPrice(Number(e.target.value))} />
@@ -1213,7 +1241,11 @@ export function BaoHoangMarket({
             {/* FORM 2: SELL ORDER (ĐĂNG ĐƠN BÁN) */}
             {createMode === "sellOrder" && (
               <form onSubmit={handleCreateSellOrderSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center gap-3 rounded-xl border border-cyan-500/15 bg-cyan-500/5 p-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-300"><Tag className="h-5 w-5" /></span>
+                  <div><h3 className="text-sm font-semibold text-cyan-100">Đăng đơn rao bán</h3><p className="text-xs text-zinc-500">Chọn tài sản trong túi, đặt giá và xem trước phí trước khi đăng.</p></div>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-xs text-zinc-400 block mb-1">Loại Vật Phẩm Bán</label>
                     <select
@@ -1255,6 +1287,7 @@ export function BaoHoangMarket({
                       onChange={setSellMatID}
                       clearable={true}
                     />
+                    {renderSelectedAsset("Material", sellMatID, itemDictionary[sellMatID]?.name || sellMatID, sellMatID ? getItemIconUrl(itemDictionary[sellMatID] ?? { id: sellMatID, name: sellMatID, item_type: "Material" }) : undefined, sellMatID ? `Trong túi: ${player.materials_inventory?.[sellMatID] || 0}` : undefined)}
                   </div>
                 ) : sellItemType === "Gu" ? (
                   <div className="space-y-2">
@@ -1274,6 +1307,8 @@ export function BaoHoangMarket({
                       clearable={true}
                     />
                     {selectedSellGroup && (
+                      <>
+                      {renderSelectedAsset("Gu", selectedSellGroup.key, guSpecFor(selectedSellGroup.guId, selectedSellGroup.rank)?.name || selectedSellGroup.guId, getGuArtworkUrl(selectedSellGroup.guId, guSpecFor(selectedSellGroup.guId, selectedSellGroup.rank)?.name, guSpecFor(selectedSellGroup.guId, selectedSellGroup.rank)?.image_url), `Hạng ${selectedSellGroup.rank} · Đã chọn ${sellGuInstIDs.length}/${sellGuGroup.length}`)}
                       <div className="max-h-40 overflow-y-auto space-y-1 rounded-xl border border-zinc-800 bg-zinc-950 p-2">
                         {sellGuGroup.map((g) => {
                           const checked = sellGuInstIDs.includes(g.instance_id);
@@ -1290,6 +1325,7 @@ export function BaoHoangMarket({
                           );
                         })}
                       </div>
+                      </>
                     )}
                   </div>
                 ) : (
@@ -1303,10 +1339,11 @@ export function BaoHoangMarket({
                       onChange={setSellRecipeID}
                       clearable={true}
                     />
+                    {renderSelectedAsset("Recipe", sellRecipeID, sellRecipeOptions.find((option) => option.value === sellRecipeID)?.label || sellRecipeID, undefined, sellRecipeID)}
                   </div>
                 )}
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div>
                     <label className="text-xs text-zinc-400 block mb-1">Đơn Giá Bán</label>
                     <GameInput type="number" min={1} value={sellUnitPrice} onChange={(e) => setSellUnitPrice(Number(e.target.value))} />

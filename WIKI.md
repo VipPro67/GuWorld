@@ -144,11 +144,11 @@ Cửa hàng bán/mua lại vật phẩm theo danh mục dữ liệu. Merchant c�
 
 ### Bảo Hoàng Thiên
 
-Chợ hỗ trợ đăng listing, mua, đấu giá/bid, hủy và settlement; ngoài ra có order book buyback và trade offer không đồng thời. Giá, thời hạn, quyền hủy và thanh toán theo trạng thái listing hiện tại.
+Chợ hỗ trợ đăng listing, mua, đấu giá/bid, hủy và settlement; ngoài ra có order book buyback và trade offer không đồng thời. Trong mục đăng đơn, chọn Thu mua để đặt giá muốn mua hoặc Đăng bán để chọn tài sản trong túi; thẻ đơn hiển thị ảnh vật phẩm/Cổ trùng và tiến độ giao dịch. Giá, thời hạn, quyền hủy và thanh toán theo trạng thái listing hiện tại.
 
 ### Giao dịch trực tiếp
 
-P2P trade có thể bắt đầu từ người chơi trên bản đồ khi cùng khu vực và cách tối đa 10 ô, hoặc từ chat ở bất kỳ khoảng cách nào khi cả hai có Thông Thiên Cổ và Thần Niệm Cổ. Giao dịch tạo phiên, chấp nhận/từ chối, cập nhật offer, lock/unlock và xác nhận. Hai bên cần kiểm tra offer trước khi confirm; thay đổi offer có thể yêu cầu lock lại. Realtime chỉ thông báo/đồng bộ trạng thái, còn server xử lý giao dịch và ownership.
+P2P trade có thể bắt đầu từ người chơi trên bản đồ khi cùng khu vực và cách tối đa 10 ô, hoặc từ chat ở bất kỳ khoảng cách nào khi cả hai có Thông Thiên Cổ và Thần Niệm Cổ. Trong phòng giao dịch, mở bộ chọn tài sản để xem Cổ trùng theo cá thể, vật phẩm theo số lượng khả dụng hoặc bí phương theo độ hoàn thiện. Giao dịch tạo phiên, chấp nhận/từ chối, cập nhật offer, lock/unlock và xác nhận. Hai bên cần kiểm tra offer trước khi confirm; thay đổi offer có thể yêu cầu lock lại. Realtime chỉ thông báo/đồng bộ trạng thái, còn server xử lý giao dịch và ownership.
 
 ### Ví, nạp và Cát Bảo Các
 

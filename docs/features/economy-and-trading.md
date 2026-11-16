@@ -10,7 +10,7 @@ Các thao tác cần đăng nhập, tài sản hợp lệ và currency phù hợ
 
 ## Cách sử dụng
 
-Mua/bán tại shop hoặc merchant; dùng marketplace để đăng listing, bid, cancel hoặc settle; dùng P2P trade để tạo phòng, đưa offer, lock tài sản rồi hai bên confirm. Trên bản đồ, chọn người chơi cùng khu vực trong phạm vi 10 ô để mở giao dịch tại chỗ mà không cần Cổ liên lạc. Khởi tạo giao dịch từ chat là giao dịch từ xa và yêu cầu cả hai người chơi có Thông Thiên Cổ cùng Thần Niệm Cổ. BaoHoang hỗ trợ listing/bid/cancel/settlement theo lifecycle riêng.
+Mua/bán tại shop hoặc merchant; dùng marketplace để đăng listing, bid, cancel hoặc settle; dùng P2P trade để tạo phòng, đưa offer, lock tài sản rồi hai bên confirm. Trong phòng P2P, bộ chọn tài sản mở thành popup: Cổ trùng được nhóm theo loại và chọn từng cá thể, vật phẩm hiển thị ảnh cùng số lượng khả dụng để điều chỉnh trước khi thêm, bí phương hiển thị độ hoàn thiện. Trong Bảo Hoàng Thiên, mục Chợ Lệnh lọc đơn thu mua/rao bán; mục Đăng Đơn Mới tách lựa chọn Thu mua, Đăng bán, Trao đổi và Đấu giá. Thẻ chợ và đấu giá dùng ảnh nhận diện vật phẩm/Cổ trùng khi có asset, kèm biểu tượng loại tài sản. Trên bản đồ, chọn người chơi cùng khu vực trong phạm vi 10 ô để mở giao dịch tại chỗ mà không cần Cổ liên lạc. Khởi tạo giao dịch từ chat là giao dịch từ xa và yêu cầu cả hai người chơi có Thông Thiên Cổ cùng Thần Niệm Cổ. BaoHoang hỗ trợ listing/bid/cancel/settlement theo lifecycle riêng.
 
 ## Luật, chi phí và giới hạn
 

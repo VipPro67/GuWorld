@@ -4,9 +4,11 @@ import React, { useEffect, useState } from "react";
 import { useGameStore, GuInstance, formatRecipeName, guSpecFor } from "@/store/useGameStore";
 import {
   X, Coins, Sparkles, Lock, Unlock, CheckCircle2,
-  Trash2, Plus, Minus, RefreshCw, User, ShieldAlert
+  Trash2, Plus, Minus, RefreshCw, User, ShieldAlert, ScrollText
 } from "lucide-react";
 import { GameModal, GameTabs, GameButton, GameCard, GameBadge, GameInput } from "@/components/ui";
+import { getGuIconUrl } from "@/lib/gu-icons";
+import { getItemIconUrl } from "@/lib/item-icons";
 // UI migrated to shared components
 
 export const TradeRoomModal: React.FC = () => {
@@ -34,7 +36,8 @@ export const TradeRoomModal: React.FC = () => {
   const [selectedMat, setSelectedMat] = useState<string>("");
   const [selectedMatQty, setSelectedMatQty] = useState<number>(1);
   const [selectedRecipe, setSelectedRecipe] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<"stones" | "gus" | "materials" | "recipes">("stones");
+  const [activeTab, setActiveTab] = useState<"stones" | "gus" | "materials" | "recipes">("gus");
+  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   const [expandedGus, setExpandedGus] = useState<Record<string, boolean>>({});
   const [tradeFilterRank, setTradeFilterRank] = useState<number | "all">("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -381,8 +384,10 @@ export const TradeRoomModal: React.FC = () => {
                     {(myOffer.gus as string[]).map((instId: string) => {
                       const guName = getGuName(instId);
                       const guRank = getGuRank(instId);
+                      const guId = activeTrade.gu_details?.[instId] || player.gu_inventory?.find((g) => g.instance_id === instId)?.gu_id || instId;
                       return (
                         <span key={instId} className="text-xs px-2.5 py-1 rounded-xl bg-emerald-950/30 border border-emerald-900/40 text-emerald-400 flex items-center gap-1.5">
+                          <img src={getGuIconUrl(guId, guName)} alt="" className="h-6 w-6 rounded-md bg-zinc-950 object-contain p-0.5" />
                           <span className="max-w-full truncate">{guName}</span>
                           <span className="text-[9px] font-mono opacity-80 px-1 bg-emerald-900/20 border border-emerald-800/35 rounded text-emerald-300">
                             Rank {guRank}
@@ -406,6 +411,7 @@ export const TradeRoomModal: React.FC = () => {
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(myOffer.materials as Record<string, number>).map(([matId, qty]) => (
                       <span key={matId} className="text-xs px-2.5 py-1 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 flex items-center gap-1.5 max-w-full truncate">
+                        <img src={getItemIconUrl(itemDictionary[matId] ?? { id: matId, name: getMatName(matId), item_type: "Material" })} alt="" className="h-5 w-5 shrink-0 rounded object-contain" />
                         {getMatName(matId)} (x{qty})
                         {!myLocked && (
                           <div className="flex items-center gap-1 border-l border-zinc-800 pl-1.5 ml-1">
@@ -433,6 +439,7 @@ export const TradeRoomModal: React.FC = () => {
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(myOffer.recipes as Record<string, number>).map(([recipeId, rate]) => (
                       <span key={recipeId} className="text-xs px-2.5 py-1 rounded-xl bg-violet-950/30 border border-violet-500/30 text-violet-300 flex items-center gap-1.5 max-w-full truncate">
+                        <ScrollText className="h-4 w-4 shrink-0" />
                         {getRecipeName(recipeId)} ({rate.toFixed(0)}%)
                         {!myLocked && (
                           <button type="button" aria-label={`Bỏ ${getRecipeName(recipeId)} khỏi đề nghị`} onClick={() => removeRecipe(recipeId)} className="ml-1 flex min-h-11 min-w-11 items-center justify-center hover:text-red-400 cursor-pointer">
@@ -450,7 +457,31 @@ export const TradeRoomModal: React.FC = () => {
               )}
             </div>
 
-            {/* Asset Selectors Panel (Disabled if locked) */}
+            {!myLocked && (
+              <button
+                type="button"
+                onClick={() => setAssetPickerOpen(true)}
+                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-950/15 p-4 text-left transition-colors hover:border-emerald-400/50 hover:bg-emerald-950/25"
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-300"><Plus className="h-5 w-5" /></span>
+                  <span className="min-w-0"><span className="block text-sm font-semibold text-emerald-200">Thêm tài sản vào giao dịch</span><span className="block truncate text-xs text-zinc-500">Chọn Cổ trùng, vật phẩm, bí phương hoặc tiền tệ</span></span>
+                </span>
+                <span className="shrink-0 rounded-lg border border-emerald-500/20 px-2.5 py-1 text-[10px] font-mono text-emerald-300">{(myOffer?.gus?.length || 0) + Object.keys(myOffer?.materials || {}).length + Object.keys(myOffer?.recipes || {}).length} tài sản</span>
+              </button>
+            )}
+
+            {/* Asset picker dialog */}
+            {assetPickerOpen && (
+              <GameModal
+                open={assetPickerOpen}
+                onClose={() => setAssetPickerOpen(false)}
+                title="Chọn tài sản giao dịch"
+                description="Chọn từng cá thể Cổ trùng, đặt số lượng vật phẩm hoặc chọn bí phương. Thay đổi được áp dụng ngay vào đề nghị; Hoàn Tất chỉ đóng bộ chọn."
+                size="5xl"
+                variant="success"
+                footer={<GameButton variant="primary" onClick={() => setAssetPickerOpen(false)}>Hoàn Tất</GameButton>}
+              >
             {activeTab !== "stones" && (
               <input
                 type="text"
@@ -505,7 +536,7 @@ export const TradeRoomModal: React.FC = () => {
               </div>
 
               {/* Selector Content Area */}
-              <div className="flex-1 p-4 overflow-y-auto max-h-[250px]">
+              <div className="flex-1 p-4 overflow-y-auto max-h-[55dvh]">
                 {myLocked ? (
                   <div className="h-full flex items-center justify-center text-center flex-col gap-1 text-zinc-500 font-serif">
                     <Lock className="w-5 h-5 text-zinc-650" />
@@ -709,6 +740,7 @@ export const TradeRoomModal: React.FC = () => {
                                     className="p-3 flex justify-between items-center cursor-pointer hover:bg-zinc-950/80 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] select-none font-serif text-xs"
                                   >
                                     <div className="flex items-center gap-2 flex-wrap">
+                                      <img src={getGuIconUrl(guId, name)} alt="" className="h-9 w-9 rounded-lg border border-emerald-500/15 bg-zinc-900 object-contain p-1" />
                                       <span className="font-bold text-zinc-200">{name}</span>
                                       <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-zinc-900 border border-zinc-850 text-zinc-400">
                                         x{list.length}
@@ -837,51 +869,50 @@ export const TradeRoomModal: React.FC = () => {
                             </button>
                           </div>
                         )}
-                        <div className="flex gap-2">
-                          <select
-                            value={selectedMat}
-                            onChange={(e) => setSelectedMat(e.target.value)}
-                            className="flex-grow bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none font-serif cursor-pointer"
-                          >
-                            <option value="">-- Chọn Nguyên Liệu --</option>
-                            {filteredMaterials.map((matId) => (
-                              <option key={matId} value={matId}>
-                                {getMatName(matId)} (x{player.materials_inventory[matId] - (myOffer?.materials?.[matId] || 0)})
-                              </option>
-                            ))}
-                          </select>
+                        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(15rem,1fr)]">
+                          <div className="max-h-[34dvh] space-y-1.5 overflow-y-auto pr-1">
+                            {filteredMaterials.map((matId) => {
+                              const item = itemDictionary[matId];
+                              const available = player.materials_inventory[matId] - (myOffer?.materials?.[matId] || 0);
+                              return (
+                                <button
+                                  key={matId}
+                                  type="button"
+                                  onClick={() => { setSelectedMat(matId); setSelectedMatQty(1); }}
+                                  className={`flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors ${selectedMat === matId ? "border-violet-400/50 bg-violet-500/10" : "border-zinc-900 bg-zinc-950/50 hover:border-zinc-700"}`}
+                                >
+                                  <img src={getItemIconUrl(item ?? { id: matId, name: getMatName(matId), item_type: "Material" })} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-zinc-800 bg-zinc-900 object-contain p-1" />
+                                  <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-zinc-200">{getMatName(matId)}</span><span className="block truncate text-[10px] font-mono text-zinc-500">{matId}</span></span>
+                                  <span className="shrink-0 text-right"><span className="block text-xs font-mono text-violet-300">Còn {available}</span><span className="block text-[10px] text-zinc-600">/ {player.materials_inventory[matId]} trong túi</span></span>
+                                </button>
+                              );
+                            })}
+                          </div>
 
-                          {selectedMat && (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                min={1}
-                                max={player.materials_inventory[selectedMat] - (myOffer?.materials?.[selectedMat] || 0)}
-                                value={selectedMatQty}
-                                onChange={(e) => setSelectedMatQty(Math.max(1, parseInt(e.target.value) || 1))}
-                                className="w-16 bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-xs text-center font-mono text-zinc-300 focus:outline-none"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const maxAvailable = player.materials_inventory[selectedMat] - (myOffer?.materials?.[selectedMat] || 0);
-                                  setSelectedMatQty(Math.max(1, maxAvailable));
-                                }}
-                                className="px-2 py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[10px] font-mono font-bold text-amber-400 rounded-xl cursor-pointer"
-                                title="Chọn toàn bộ"
-                              >
-                                Max
-                              </button>
-                            </div>
+                          {selectedMat ? (() => {
+                            const item = itemDictionary[selectedMat];
+                            const available = player.materials_inventory[selectedMat] - (myOffer?.materials?.[selectedMat] || 0);
+                            return (
+                              <div className="flex flex-col justify-between gap-4 rounded-2xl border border-violet-500/20 bg-violet-950/10 p-4">
+                                <div className="flex items-center gap-3">
+                                  <img src={getItemIconUrl(item ?? { id: selectedMat, name: getMatName(selectedMat), item_type: "Material" })} alt="" className="h-14 w-14 rounded-xl border border-violet-500/20 bg-zinc-950 object-contain p-2" />
+                                  <div className="min-w-0"><p className="truncate text-sm font-semibold text-zinc-100">{getMatName(selectedMat)}</p><p className="text-xs text-zinc-500">Khả dụng: {available} / {player.materials_inventory[selectedMat]}</p></div>
+                                </div>
+                                <div className="space-y-2">
+                                  <label htmlFor="trade-material-quantity" className="text-xs font-medium text-zinc-300">Số lượng muốn đưa</label>
+                                  <div className="flex items-center gap-2">
+                                    <button type="button" aria-label="Giảm số lượng vật phẩm" disabled={selectedMatQty <= 1} onClick={() => setSelectedMatQty((qty) => Math.max(1, qty - 1))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 disabled:opacity-40"><Minus className="h-4 w-4" /></button>
+                                    <input id="trade-material-quantity" type="number" min={1} max={available} value={selectedMatQty} onChange={(e) => setSelectedMatQty(Math.max(1, Math.min(available, parseInt(e.target.value) || 1)))} className="h-10 min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-center text-sm font-mono text-zinc-100" />
+                                    <button type="button" aria-label="Tăng số lượng vật phẩm" disabled={selectedMatQty >= available} onClick={() => setSelectedMatQty((qty) => Math.min(available, qty + 1))} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 disabled:opacity-40"><Plus className="h-4 w-4" /></button>
+                                    <button type="button" onClick={() => setSelectedMatQty(available)} className="h-10 shrink-0 rounded-lg border border-amber-500/20 bg-amber-950/20 px-3 text-xs font-bold text-amber-300">Tối đa</button>
+                                  </div>
+                                </div>
+                                <GameButton variant="primary" onClick={addMaterial} disabled={available <= 0}>Thêm vào giao dịch</GameButton>
+                              </div>
+                            );
+                          })() : (
+                            <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-500">Chọn vật phẩm để xem ảnh, số lượng khả dụng và điều chỉnh số lượng trao đổi.</div>
                           )}
-
-                          <button
-                            onClick={addMaterial}
-                            disabled={!selectedMat}
-                            className="px-4 bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-900 disabled:text-zinc-600 text-zinc-100 rounded-xl text-xs font-serif font-bold transition-colors cursor-pointer"
-                          >
-                            Thêm
-                          </button>
                         </div>
 
                         {availableMaterials.length === 0 && (
@@ -957,28 +988,18 @@ export const TradeRoomModal: React.FC = () => {
                             </button>
                           </div>
                         )}
-                        <div className="flex gap-2">
-                          <select
-                            value={selectedRecipe}
-                            onChange={(e) => setSelectedRecipe(e.target.value)}
-                            className="flex-grow bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-xs text-zinc-300 focus:outline-none font-serif cursor-pointer"
-                          >
-                            <option value="">-- Chọn Bí Phương --</option>
-                            {filteredRecipes
-                              .map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  {getRecipeName(r.id)} ({r.completion_rate ?? 100}%)
-                                </option>
-                              ))}
-                          </select>
-
-                          <button
-                            onClick={addRecipe}
-                            disabled={!selectedRecipe}
-                            className="px-4 bg-pink-600 hover:bg-pink-500 disabled:bg-zinc-900 disabled:text-zinc-600 text-zinc-100 rounded-xl text-xs font-serif font-bold transition-colors cursor-pointer"
-                          >
-                            Thêm
-                          </button>
+                        <div className="max-h-[38dvh] space-y-2 overflow-y-auto pr-1">
+                          {filteredRecipes.map((recipe) => {
+                            const selected = selectedRecipe === recipe.id;
+                            const targetGu = recipe.target_gu_id ? guSpecFor(recipe.target_gu_id, recipe.target_rank || 1)?.name : "";
+                            return (
+                              <div key={recipe.id} className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${selected ? "border-pink-400/40 bg-pink-500/10" : "border-zinc-900 bg-zinc-950/50"}`}>
+                                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-pink-500/15 bg-pink-500/5 text-pink-300"><ScrollText className="h-5 w-5" /></span>
+                                <button type="button" onClick={() => setSelectedRecipe(recipe.id)} className="min-w-0 flex-1 text-left"><span className="block truncate text-xs font-semibold text-zinc-100">{getRecipeName(recipe.id)}</span><span className="block truncate text-[10px] text-zinc-500">{targetGu ? `Cổ trùng đích: ${targetGu} · ` : ""}{recipe.id}</span><span className="mt-1 inline-flex rounded-md bg-pink-950/40 px-1.5 py-0.5 text-[10px] font-mono text-pink-300">Hoàn thiện {recipe.completion_rate ?? 100}%</span></button>
+                                <GameButton size="xs" variant="secondary" disabled={!selected} onClick={addRecipe}>Thêm</GameButton>
+                              </div>
+                            );
+                          })}
                         </div>
 
                         {filteredRecipes.length === 0 && (
@@ -989,7 +1010,9 @@ export const TradeRoomModal: React.FC = () => {
                   </>
                 )}
               </div>
-            </div>
+              </GameModal>
+            )}
+          </div>
 
           {/* RIGHT SIDE: Opponent (Partner) */}
           <div className="p-6 flex flex-col gap-5 bg-zinc-950/20">
@@ -1044,8 +1067,10 @@ export const TradeRoomModal: React.FC = () => {
                     {(oppOffer.gus as string[]).map((instId: string, index: number) => {
                       const guName = getGuName(instId);
                       const guRank = getGuRank(instId);
+                      const guId = activeTrade.gu_details?.[instId] || instId;
                       return (
                         <span key={index} className="text-xs px-2.5 py-1 rounded-xl bg-emerald-950/20 border border-emerald-900/20 text-emerald-400 select-none flex items-center gap-1.5">
+                          <img src={getGuIconUrl(guId, guName)} alt="" className="h-6 w-6 rounded-md bg-zinc-950 object-contain p-0.5" />
                           <span>{guName}</span>
                           <span className="text-[9px] font-mono opacity-80 px-1 bg-emerald-900/20 border border-emerald-800/35 rounded text-emerald-300">
                             Rank {guRank}
@@ -1064,6 +1089,7 @@ export const TradeRoomModal: React.FC = () => {
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(oppOffer.materials as Record<string, number>).map(([matId, qty]) => (
                       <span key={matId} className="text-xs px-2.5 py-1 rounded-xl bg-zinc-900 border border-zinc-850 text-zinc-300 select-none">
+                        <img src={getItemIconUrl(itemDictionary[matId] ?? { id: matId, name: getMatName(matId), item_type: "Material" })} alt="" className="mr-1 inline h-5 w-5 rounded object-contain align-middle" />
                         {getMatName(matId)} (x{qty})
                       </span>
                     ))}
@@ -1078,6 +1104,7 @@ export const TradeRoomModal: React.FC = () => {
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(oppOffer.recipes as Record<string, number>).map(([recipeId, rate]) => (
                       <span key={recipeId} className="text-xs px-2.5 py-1 rounded-xl bg-violet-950/20 border border-violet-500/20 text-violet-300 select-none">
+                        <ScrollText className="mr-1 inline h-4 w-4 align-middle" />
                         {getRecipeName(recipeId)} ({rate.toFixed(0)}%)
                       </span>
                     ))}
