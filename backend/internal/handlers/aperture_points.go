@@ -1055,8 +1055,8 @@ func GetWorldResourcePoints(c *gin.Context) {
 	defer tx.Rollback()
 
 	var regionID string
-	var worldX, worldY float64
-	err = tx.QueryRow(`SELECT COALESCE(current_region, ''), COALESCE(world_x, 0), COALESCE(world_y, 0) FROM players WHERE id = $1`, playerID).Scan(&regionID, &worldX, &worldY)
+	var playerX, playerY float64
+	err = tx.QueryRow(`SELECT COALESCE(current_region, ''), x, y FROM players WHERE id = $1`, playerID).Scan(&regionID, &playerX, &playerY)
 	if err != nil || regionID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa đặt chân vào thế giới thực"})
 		return
@@ -1115,7 +1115,7 @@ func GetWorldResourcePoints(c *gin.Context) {
 	// re-checked here as well as on the transplant call itself. Done after the
 	// points are touched so every writer locks the point row before the ritual
 	// row (the transplant handler does the same, avoiding a lock inversion).
-	ritualAborted, err := abortPointTransplantWithoutPresence(tx, playerID, regionID, worldX, worldY)
+	ritualAborted, err := abortPointTransplantWithoutPresence(tx, playerID, regionID, playerX, playerY)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra nghi thức di dời", err))
 		return
@@ -1192,7 +1192,7 @@ func CollectWorldResourcePoint(c *gin.Context) {
 	// 1. Presence: the player must be physically at the point.
 	var playerRegion string
 	var px, py float64
-	if err := tx.QueryRow(`SELECT COALESCE(current_region, ''), COALESCE(world_x, 0), COALESCE(world_y, 0) FROM players WHERE id = $1`, playerID).Scan(&playerRegion, &px, &py); err != nil {
+	if err := tx.QueryRow(`SELECT COALESCE(current_region, ''), x, y FROM players WHERE id = $1`, playerID).Scan(&playerRegion, &px, &py); err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi vị trí đạo hữu", err))
 		return
 	}
@@ -1678,7 +1678,7 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 	var playerRegion string
 	var playerX, playerY float64
 	if err := tx.QueryRow(`
-		SELECT rank, COALESCE(current_mana, 0), COALESCE(current_region, ''), COALESCE(world_x, 0), COALESCE(world_y, 0)
+		SELECT rank, COALESCE(current_mana, 0), COALESCE(current_region, ''), x, y
 		FROM players WHERE id = $1
 	`, playerID).Scan(&rank, &currentMana, &playerRegion, &playerX, &playerY); err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi vị trí đạo hữu", err))

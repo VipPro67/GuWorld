@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compass, Sparkles, DoorOpen, Droplets, Footprints, Landmark, ShieldAlert, Map as MapIcon, Package, Eye, Mountain, Swords, Waypoints, Store, UserRound, LogOut } from "lucide-react";
 import { useGameStore, Player, GroundDrop, ApertureResourcePoint } from "@/store/useGameStore";
-import { useWorldStore } from "@/store/useWorldStore";
+import { useWorldStore, type WorldMonsterActor } from "@/store/useWorldStore";
 import { usePolling } from "@/lib/usePolling";
 import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 import { applyWorldPosition, type WorldPositionEvent } from "@/lib/realtime/worldPositions";
@@ -116,6 +116,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const [lastLog, setLastLog] = useState<string | null>(null);
   const [selectedPvpTarget, setSelectedPvpTarget] = useState<MapPlayer | null>(null);
   const [selectedGroundDrop, setSelectedGroundDrop] = useState<GroundDrop | null>(null);
+  const [selectedCalamityActor, setSelectedCalamityActor] = useState<WorldMonsterActor | null>(null);
   const [selectedAperturePoint, setSelectedAperturePoint] = useState<ApertureResourcePoint | null>(null);
   const [autoFarmRunning, setAutoFarmRunning] = useState(false);
   const autoFarmRunningRef = useRef(false);
@@ -245,6 +246,14 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
 
   const handleCellClick = async (x: number, y: number, isMovable: boolean, cell?: GridCell, marker?: { kind: string; id: string; isMine?: boolean; name?: string }, resourcePointId?: string) => {
     if (autoFarmRunningRef.current) return;
+    const monsterActor = worldMonsters.find((actor) => Math.round(actor.x) === x && Math.round(actor.y) === y && actor.monster_template_id === "monster_earth_calamity_boss");
+    if (monsterActor) {
+      setSelectedPvpTarget(null);
+      setSelectedGroundDrop(null);
+      setSelectedAperturePoint(null);
+      setSelectedCalamityActor(monsterActor);
+      return;
+    }
     const playerOnCell = gridData?.players_on_map?.find((target) => target.x === x && target.y === y && target.id !== player.id);
     const dropOnCell = gridData?.ground_drops?.find((drop) => drop.x === x && drop.y === y);
     if (playerOnCell) {
@@ -662,35 +671,38 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
         </p>
       )}
 
-      {worldMonsters.filter((actor) => actor.owner_player_id && actor.monster_template_id === "monster_earth_calamity_boss").map((actor) => (
-        <section key={actor.instance_id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-700/50 bg-rose-950/20 p-3 shadow-lg">
-          <div className="flex items-center gap-2">
-            <MonsterSprite templateId={actor.monster_template_id} alt="Địa Tai Bản Yếu" className="h-10 w-10 object-contain" />
-            <div>
-              <div className="text-xs font-bold text-rose-200">Địa Tai Bản Yếu · Chuyển 5.4</div>
-              <div className="text-[10px] text-zinc-400">Thực thể ngoài grid · ({Math.round(actor.x)}, {Math.round(actor.y)}) · HP {Math.round(actor.hp)}/{Math.round(actor.max_hp)}</div>
-              {actor.owner_player_id !== player.id && <div className="text-[10px] text-amber-300">Người độ kiếp cần nghênh chiến; thành viên tổ đội cùng khu vực sẽ tham chiến cùng.</div>}
-            </div>
-          </div>
-          {actor.owner_player_id === player.id && (
-            <button disabled={actionLoading || Boolean(player.active_combat)} onClick={() => void engageAscensionWorldMonster(actor)} className="rounded-lg bg-rose-700 px-4 py-2 text-xs font-bold text-white hover:bg-rose-600 disabled:opacity-50">Nghênh chiến</button>
-          )}
-        </section>
-      ))}
-
       {/* Exploration Grid Canvas */}
       <GameModal
-        open={Boolean(selectedPvpTarget || selectedGroundDrop || selectedAperturePoint)}
+        open={Boolean(selectedPvpTarget || selectedGroundDrop || selectedAperturePoint || selectedCalamityActor)}
         onClose={() => {
           setSelectedPvpTarget(null);
           setSelectedGroundDrop(null);
           setSelectedAperturePoint(null);
+          setSelectedCalamityActor(null);
         }}
-        title={selectedAperturePoint ? "Mỏ tài nguyên Tiên Khiếu" : selectedPvpTarget && selectedGroundDrop ? "Tương tác tại vị trí" : selectedPvpTarget ? "Cổ sư trên bản đồ" : "Chiến lợi phẩm"}
+        title={selectedCalamityActor ? "Địa Tai Bản Yếu" : selectedAperturePoint ? "Mỏ tài nguyên Tiên Khiếu" : selectedPvpTarget && selectedGroundDrop ? "Tương tác tại vị trí" : selectedPvpTarget ? "Cổ sư trên bản đồ" : "Chiến lợi phẩm"}
         size="lg"
         className="border-zinc-700 bg-zinc-950"
       >
         <div className="space-y-5">
+          {selectedCalamityActor && (
+            <section className="rounded-2xl border border-rose-500/40 bg-rose-950/30 p-4">
+              <div className="flex items-center gap-4">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-rose-400/40 bg-zinc-950/70">
+                  <MonsterSprite templateId={selectedCalamityActor.monster_template_id} alt="Địa Tai Bản Yếu" className="h-16 w-16 object-contain" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-rose-100">Địa Tai Bản Yếu · Chuyển 5.4</h3>
+                  <p className="mt-1 text-xs text-zinc-300">Tọa độ ({Math.round(selectedCalamityActor.x)}, {Math.round(selectedCalamityActor.y)}) · HP {Math.round(selectedCalamityActor.hp)}/{Math.round(selectedCalamityActor.max_hp)}</p>
+                </div>
+              </div>
+              {selectedCalamityActor.owner_player_id === player.id ? (
+                <button type="button" disabled={actionLoading || Boolean(player.active_combat)} onClick={() => void engageAscensionWorldMonster(selectedCalamityActor)} className="mt-4 min-h-11 w-full rounded-xl bg-rose-700 px-4 py-2 text-sm font-bold text-white hover:bg-rose-600 disabled:opacity-50">Nghênh chiến</button>
+              ) : (
+                <p className="mt-4 text-xs leading-relaxed text-amber-200">Người độ kiếp cần nghênh chiến; thành viên tổ đội cùng khu vực sẽ tham chiến hỗ trợ.</p>
+              )}
+            </section>
+          )}
           {selectedAperturePoint && (
             <section className="rounded-2xl border border-lime-500/30 bg-lime-950/20 p-4">
               <h3 className="font-bold text-lime-100">{selectedAperturePoint.name}</h3>
@@ -964,7 +976,12 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                         ))}
                       </span>
                     )}
-                    {monsterActorOnCell && !isPlayerCell && (
+                    {monsterActorOnCell && !isPlayerCell && monsterActorOnCell.monster_template_id === "monster_earth_calamity_boss" && (
+                      <button type="button" aria-label={`Mở hành động: ${getEntityName("Monster", monsterActorOnCell.monster_template_id)}`} onClick={(event) => { event.stopPropagation(); setSelectedCalamityActor(monsterActorOnCell); }} className="absolute bottom-1 right-1 z-10 rounded border border-rose-400/70 bg-zinc-950/90 p-0.5 transition-transform hover:scale-125" title={`Mở hành động: ${getEntityName("Monster", monsterActorOnCell.monster_template_id)}`}>
+                        <MonsterSprite templateId={monsterActorOnCell.monster_template_id} alt="Quái" className="h-4 w-4 object-contain" />
+                      </button>
+                    )}
+                    {monsterActorOnCell && !isPlayerCell && monsterActorOnCell.monster_template_id !== "monster_earth_calamity_boss" && (
                       <span className="absolute bottom-1 right-1 z-10 rounded border border-rose-400/70 bg-zinc-950/90 p-0.5" title={getEntityName("Monster", monsterActorOnCell.monster_template_id)}>
                         <MonsterSprite templateId={monsterActorOnCell.monster_template_id} alt="Quái" className="h-4 w-4 object-contain" />
                       </span>

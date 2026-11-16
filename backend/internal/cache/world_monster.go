@@ -354,6 +354,36 @@ func WorldBossesInRegion(ctx context.Context, regionID string) ([]WorldMonster, 
 	return out, nil
 }
 
+// FindWorldBossBySpawnID finds a live boss actor by its stable spawn identity.
+// The pointer stores only the instance ID, so region boss sets are the index
+// used to resolve an actor that may have moved to another region.
+func FindWorldBossBySpawnID(ctx context.Context, spawnID string) (WorldMonster, bool, error) {
+	if Client == nil {
+		return WorldMonster{}, false, errors.New("redis unavailable")
+	}
+	instanceID, err := Client.Get(ctx, worldMonsterSpawnKey(spawnID)).Result()
+	if errors.Is(err, redis.Nil) {
+		return WorldMonster{}, false, nil
+	}
+	if err != nil {
+		return WorldMonster{}, false, err
+	}
+	regions, err := WorldBossRegionIDs(ctx)
+	if err != nil {
+		return WorldMonster{}, false, err
+	}
+	for _, regionID := range regions {
+		monster, exists, err := GetWorldMonster(ctx, regionID, instanceID)
+		if err != nil {
+			return WorldMonster{}, false, err
+		}
+		if exists && monster.SpawnID == spawnID {
+			return monster, true, nil
+		}
+	}
+	return WorldMonster{}, false, nil
+}
+
 type worldBossSetMember struct {
 	id      string
 	monster WorldMonster
@@ -544,6 +574,44 @@ func CASWorldMonster(ctx context.Context, previous, monster WorldMonster, expect
 		if ARGV[5] == '1' then redis.call('SADD', KEYS[4], ARGV[3]); redis.call('PEXPIRE', KEYS[4], ARGV[4]) end
 		return 1
 	`, []string{key, worldMonsterBucketKey(monster.RegionID, oldBucketX, oldBucketY), worldMonsterBucketKey(monster.RegionID, bucketX, bucketY), worldBossSetKey(monster.RegionID), worldMonsterSpawnKey(monster.SpawnID)}, expectedRevision, data, monster.InstanceID, ttl.Milliseconds(), boolInt(monster.IsBoss)).Int()
+	return result == 1, err
+}
+
+// RelocateWorldMonster moves one actor between AOI buckets and regions while
+// retaining its instance and stable spawn identity.
+func RelocateWorldMonster(ctx context.Context, previous, monster WorldMonster, expectedRevision int64, oldBucketX, oldBucketY, bucketX, bucketY int, ttl time.Duration) (bool, error) {
+	if Client == nil {
+		return false, errors.New("redis unavailable")
+	}
+	data, err := json.Marshal(monster)
+	if err != nil {
+		return false, err
+	}
+	keys := []string{
+		worldMonsterKey(previous.RegionID, previous.InstanceID),
+		worldMonsterKey(monster.RegionID, monster.InstanceID),
+		worldMonsterSpawnKey(monster.SpawnID),
+		worldMonsterBucketKey(previous.RegionID, oldBucketX, oldBucketY),
+		worldMonsterBucketKey(monster.RegionID, bucketX, bucketY),
+		worldBossSetKey(previous.RegionID),
+		worldBossSetKey(monster.RegionID),
+	}
+	result, err := Client.Eval(ctx, `
+		local raw = redis.call('GET', KEYS[1]); if not raw then return 0 end
+		local current = cjson.decode(raw)
+		if current.revision ~= tonumber(ARGV[1]) or current.instance_id ~= ARGV[2] or current.spawn_id ~= ARGV[3] then return -1 end
+		local pointer = redis.call('GET', KEYS[3])
+		if pointer and pointer ~= ARGV[2] then return -1 end
+		if KEYS[1] ~= KEYS[2] and redis.call('EXISTS', KEYS[2]) == 1 then return -1 end
+		redis.call('DEL', KEYS[1])
+		redis.call('SET', KEYS[2], ARGV[4], 'PX', ARGV[5])
+		redis.call('SET', KEYS[3], ARGV[2], 'PX', ARGV[5])
+		redis.call('SREM', KEYS[4], ARGV[2])
+		redis.call('SADD', KEYS[5], ARGV[2]); redis.call('PEXPIRE', KEYS[5], ARGV[5])
+		if KEYS[6] ~= KEYS[7] then redis.call('SREM', KEYS[6], ARGV[2]) end
+		if ARGV[6] == '1' then redis.call('SADD', KEYS[7], ARGV[2]); redis.call('PEXPIRE', KEYS[7], ARGV[5]) end
+		return 1
+	`, keys, expectedRevision, previous.InstanceID, previous.SpawnID, data, ttl.Milliseconds(), boolInt(monster.IsBoss)).Int()
 	return result == 1, err
 }
 

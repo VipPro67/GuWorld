@@ -41,7 +41,7 @@ Tài khoản tạo danh tính đăng nhập. Nhân vật giữ rank, chỉ số,
 1. Đọc checklist/trạng thái bằng `GET /cultivate/ascension/session`.
 2. Gửi `/ascension/shatter` để thử nát khiếu. Mỗi lần tốn phần Chân Nguyên tối đa được cấu hình; xác suất tăng theo số lần thử đến mức trần.
 3. Khi mở bước Dẫn Khí, chọn một phương án ở từng tầng. Mỗi lựa chọn trừ Soul HP, Chân Nguyên hoặc Nguyên Thạch theo lựa chọn.
-4. Gọi `/ascension/calamity/engage` để triệu hồi một world actor cạnh nhân vật, ngoài lưới khám phá. Người chơi gần đó nhìn thấy actor trong danh sách thực thể ngoài grid của `ExplorationMap`, kể cả trên map khu vực riêng. Người triệu hồi khởi chiến qua `/ascension/calamity/engage/:instanceId`; thành viên tổ đội còn sống, cùng khu vực và chưa bận combat sẽ tự tham chiến. Chỉ phiên của người triệu hồi được chuyển sang Thả Cổ khi thắng; thua kết thúc nghi thức và mất 20% Nhân Khí; rút lui không mất Nhân Khí, actor vẫn ở đó để đánh lại trong thời hạn.
+4. Gọi `/ascension/calamity/engage` để triệu hồi một world actor cạnh nhân vật theo tọa độ ô `x/y` trong vùng hiện tại, ngoài lưới khám phá. Nếu actor của phiên đã tồn tại, gọi lại endpoint sẽ chuyển actor đến cạnh vị trí hiện tại thay vì tạo bản sao. Người chơi gần đó thấy marker actor trên bản đồ khu vực; bấm marker mở popup thông tin và nút hành động. Người triệu hồi khởi chiến qua `/ascension/calamity/engage/:instanceId`; thành viên tổ đội còn sống, cùng khu vực và chưa bận combat sẽ tự tham chiến. Chỉ phiên của người triệu hồi được chuyển sang Thả Cổ khi thắng; nếu thua hoặc rút lui, phiên và actor vẫn tồn tại để đánh lại trước hạn. Hết thời hạn thì nghi thức thất bại theo luật chung.
 5. Chọn các Cổ Rank 5 đủ điều kiện để hiến tế qua `/ascension/release`.
 
 ## Luật, chi phí và giới hạn

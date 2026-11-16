@@ -409,7 +409,7 @@ func EnterSpatialRealm(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hữu đã ở trong một bí cảnh"})
 		return
 	}
-	_, err = tx.ExecContext(c.Request.Context(), `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=$4,world_zone_id=$5,world_instance_id=$6,world_x=$7,world_y=$8,world_safe_x=$7,world_safe_y=$8,world_location_revision=world_location_revision+1,last_mana_update=NOW(),version=version+1 WHERE id=$9`, regionID, entryX, entryY, instanceID, realmZoneID, "realm:"+instanceID.String(), entryX, entryY, playerID)
+	_, err = tx.ExecContext(c.Request.Context(), `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=$4,world_zone_id=$5,world_instance_id=$6,world_safe_x=$2,world_safe_y=$3,world_location_revision=world_location_revision+1,last_mana_update=NOW(),version=version+1 WHERE id=$7`, regionID, entryX, entryY, instanceID, realmZoneID, "realm:"+instanceID.String(), playerID)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể chuyển nhân vật vào bí cảnh", err))
 		return
@@ -478,7 +478,7 @@ func ExitSpatialRealm(c *gin.Context) {
 		return
 	}
 	returnZone := realtimeMapID(region, returnZoneType, returnMap)
-	result, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=NULL,world_zone_id=$6,world_instance_id='',world_x=$7,world_y=$8,world_safe_x=$7,world_safe_y=$8,world_location_revision=world_location_revision+1,last_mana_update=NOW(),version=version+1 WHERE id=$4 AND map_instance_id=$5`, region, x, y, playerID, instanceID, returnZone, x, y)
+	result, err := tx.ExecContext(c.Request.Context(), `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=NULL,world_zone_id=$6,world_instance_id='',world_safe_x=$2,world_safe_y=$3,world_location_revision=world_location_revision+1,last_mana_update=NOW(),version=version+1 WHERE id=$4 AND map_instance_id=$5`, region, x, y, playerID, instanceID, returnZone)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể đưa nhân vật về vị trí cũ", err))
 		return
@@ -538,7 +538,7 @@ func closeSpatialRealmTx(ctx context.Context, tx *sql.Tx, instanceID uuid.UUID, 
 	}
 	rows.Close()
 	for _, m := range members {
-		if _, err := tx.ExecContext(ctx, `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=NULL,world_zone_id=$6,world_instance_id='',world_x=$7,world_y=$8,world_safe_x=$7,world_safe_y=$8,world_location_revision=world_location_revision+1,last_mana_update=NOW(),version=version+1 WHERE id=$4 AND map_instance_id=$5`, m.region, m.x, m.y, m.id, instanceID, m.zone, m.x, m.y); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE players SET current_region=$1,x=$2,y=$3,map_instance_id=NULL,world_zone_id=$6,world_instance_id='',world_safe_x=$2,world_safe_y=$3,world_location_revision=world_location_revision+1,last_mana_update=NOW(),version=version+1 WHERE id=$4 AND map_instance_id=$5`, m.region, m.x, m.y, m.id, instanceID, m.zone); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE shared_spatial_instance_members SET exited_at=NOW(),exit_reason=$1 WHERE player_id=$2 AND instance_id=$3 AND exited_at IS NULL`, reason, m.id, instanceID); err != nil {

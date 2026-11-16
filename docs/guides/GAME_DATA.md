@@ -60,4 +60,6 @@ Các đợt effect theo lưu phái thêm block `PATH_SIGNATURE_*` trong `Gu.csv`
 4. Nếu cần rollout dữ liệu thủ công, tạo/điều chỉnh script rõ ràng; `InitSchema` không thay cho migration vận hành.
 5. Cập nhật tài liệu và kiểm tra package backend liên quan.
 
+Vị trí ô hiện tại của player được lưu ở `players.x/y`, cùng `current_region` và các trường instance/scope. Không thêm cặp `world_x/world_y` riêng cho cùng vị trí; các handler cần tọa độ phải đọc `x/y`. `schemaPlayers` xóa hai cột world tọa độ cũ trên DB hiện có.
+
 `combat_sessions` cũ có `state` và ràng buộc `UNIQUE(player_id)`. Khi khởi động, `schemaCombat` bổ sung các cột cho phiên chiến đấu hiện tại, đánh dấu phiên kiểu cũ là `abandoned` (snapshot cũ không thể phát lại bằng simulator hiện tại), và bỏ ràng buộc unique cũ. Chỉ phiên `active` mới được giới hạn một phiên mỗi người chơi qua partial index.

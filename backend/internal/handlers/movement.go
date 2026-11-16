@@ -253,7 +253,7 @@ type SpatialTransitionResult struct {
 //  1. Validates guards via checkMovement.
 //  2. Updates in-memory player coordinates & applies the regional wall debuff if crossing regions.
 //  3. Authoritatively updates the players row (coordinates, region, stones, statuses, world_zone_id,
-//     world_x/y, world_location_revision, version).
+//     world_location_revision, version).
 //  4. Upserts player_world_state_v2 to keep the MMO realtime projection synchronized.
 //  5. Synchronizes party members if in a party.
 //  6. Returns a SpatialTransitionResult containing the post-commit publisher.
@@ -269,11 +269,11 @@ func ExecuteSpatialTransition(ctx context.Context, tx *sql.Tx, player *models.Pl
 		UPDATE players
 		SET current_region = $1, x = $2, y = $3, primeval_stones = $4, immortal_stones = $5, statuses = $6,
 		    world_zone_id = $1, world_instance_id = '', map_instance_id = NULL,
-		    world_x = $7, world_y = $8, world_safe_x = $7, world_safe_y = $8,
+		    world_safe_x = $2, world_safe_y = $3,
 		    world_location_revision = world_location_revision + 1, version = version + 1
-		WHERE id = $9
+		WHERE id = $7
 	`, player.CurrentRegion, player.X, player.Y, player.PrimevalStones, player.ImmortalStones, player.Statuses,
-		float64(player.X), float64(player.Y), player.ID); err != nil {
+		player.ID); err != nil {
 		return nil, fmt.Errorf("update player location on transition: %w", err)
 	}
 
@@ -302,10 +302,10 @@ func RelocatePlayerRespawn(ctx context.Context, tx *sql.Tx, playerID uuid.UUID, 
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE players SET hp=1,current_region=$1,world_zone_id=$1,world_instance_id='',map_instance_id=NULL,
-			x=$2,y=$3,world_x=$4,world_y=$5,world_safe_x=$6,world_safe_y=$7,
+			x=$2,y=$3,world_safe_x=$2,world_safe_y=$3,
 			world_location_revision=world_location_revision+1,version=version+1
-		WHERE id=$8
-	`, region, x, y, float64(x), float64(y), float64(x), float64(y), playerID); err != nil {
+		WHERE id=$4
+	`, region, x, y, playerID); err != nil {
 		return fmt.Errorf("update player location on respawn: %w", err)
 	}
 

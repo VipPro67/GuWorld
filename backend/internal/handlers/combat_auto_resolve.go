@@ -377,17 +377,7 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 				return nil, fmt.Errorf("complete ascension calamity: %w", err)
 			}
 		} else if simState.FledBy == "" {
-			session, err := loadAscensionSession(tx, player)
-			if err != nil {
-				return nil, fmt.Errorf("load ascension session after calamity defeat: %w", err)
-			}
-			if session == nil {
-				return nil, fmt.Errorf("load ascension session after calamity defeat: no active session")
-			}
-			if err := failAscensionSession(tx, player, session, "Địa Tai Bản Yếu đánh bại"); err != nil {
-				return nil, fmt.Errorf("fail ascension session after calamity defeat: %w", err)
-			}
-			logs = append(logs, simulator.CombatLog{Turn: simState.Turn, Action: "ASCENSION_PENALTY", Detail: fmt.Sprintf("Nghi thức thất bại, Nhân Khí tổn thất %.0f%%.", AscensionFailQiLoss*100)})
+			logs = append(logs, simulator.CombatLog{Turn: simState.Turn, Action: "ASCENSION_RETRY", Detail: "Đạo hữu bại trận, nhưng nghi thức vẫn tiếp tục. Địa Tai còn đó; hãy hồi phục và nghênh chiến lại trước khi hết thời hạn."})
 		}
 	}
 
@@ -477,7 +467,7 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 		StonesSpent:   stonesSpent,
 	}
 	res.AfterCommit = func() {
-		if ascensionCalamity && (alliesAlive || simState.FledBy == "") {
+		if ascensionCalamity && alliesAlive {
 			if err := cache.DeleteWorldMonster(context.Background(), ascensionActor); err != nil {
 				logger.S.Errorf("delete ascension calamity actor %s: %v", ascensionActor.InstanceID, err)
 			} else {

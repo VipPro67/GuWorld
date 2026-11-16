@@ -5,8 +5,6 @@ BEGIN;
 ALTER TABLE players
     ADD COLUMN IF NOT EXISTS world_zone_id VARCHAR(80) NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS world_instance_id VARCHAR(80) NOT NULL DEFAULT '',
-    ADD COLUMN IF NOT EXISTS world_x DOUBLE PRECISION NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS world_y DOUBLE PRECISION NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS world_safe_x DOUBLE PRECISION NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS world_safe_y DOUBLE PRECISION NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS world_location_revision BIGINT NOT NULL DEFAULT 0;
@@ -27,8 +25,6 @@ BEGIN
             UPDATE players p
             SET world_zone_id = s.zone_id,
                 world_instance_id = s.instance_id,
-                world_x = s.x,
-                world_y = s.y,
                 world_safe_x = s.safe_x,
                 world_safe_y = s.safe_y,
                 world_location_revision = GREATEST(p.world_location_revision, 1)
@@ -48,8 +44,6 @@ BEGIN
             SET current_region = l.region_id,
                 world_zone_id = l.zone_id,
                 world_instance_id = l.instance_id,
-                world_x = l.x,
-                world_y = l.y,
                 world_safe_x = l.safe_x,
                 world_safe_y = l.safe_y,
                 world_location_revision = GREATEST(p.world_location_revision, l.revision, 1)
@@ -76,8 +70,6 @@ BEGIN
         NEW.x IS DISTINCT FROM OLD.x OR NEW.y IS DISTINCT FROM OLD.y) AND
        NEW.world_zone_id IS NOT DISTINCT FROM OLD.world_zone_id AND
        NEW.world_instance_id IS NOT DISTINCT FROM OLD.world_instance_id AND
-       NEW.world_x IS NOT DISTINCT FROM OLD.world_x AND
-       NEW.world_y IS NOT DISTINCT FROM OLD.world_y AND
        NEW.world_location_revision IS NOT DISTINCT FROM OLD.world_location_revision THEN
         NEW.world_zone_id := '';
         NEW.world_instance_id := '';

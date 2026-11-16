@@ -36,8 +36,6 @@ func schemaPlayers() error {
 		y INTEGER NOT NULL DEFAULT 50,
 		world_zone_id VARCHAR(80) NOT NULL DEFAULT '',
 		world_instance_id VARCHAR(80) NOT NULL DEFAULT '',
-		world_x DOUBLE PRECISION NOT NULL DEFAULT 0,
-		world_y DOUBLE PRECISION NOT NULL DEFAULT 0,
 		world_safe_x DOUBLE PRECISION NOT NULL DEFAULT 0,
 		world_safe_y DOUBLE PRECISION NOT NULL DEFAULT 0,
 		world_location_revision BIGINT NOT NULL DEFAULT 0,
@@ -204,8 +202,6 @@ func schemaPlayers() error {
 		    NEW.x IS DISTINCT FROM OLD.x OR NEW.y IS DISTINCT FROM OLD.y) AND
 		   NEW.world_zone_id IS NOT DISTINCT FROM OLD.world_zone_id AND
 		   NEW.world_instance_id IS NOT DISTINCT FROM OLD.world_instance_id AND
-		   NEW.world_x IS NOT DISTINCT FROM OLD.world_x AND
-		   NEW.world_y IS NOT DISTINCT FROM OLD.world_y AND
 		   NEW.world_location_revision IS NOT DISTINCT FROM OLD.world_location_revision THEN
 			NEW.world_zone_id := '';
 			NEW.world_instance_id := '';
@@ -218,6 +214,10 @@ func schemaPlayers() error {
 	CREATE TRIGGER trg_players_world_location_legacy_invalidation
 		BEFORE UPDATE OF current_region, map_instance_id, x, y ON players
 		FOR EACH ROW EXECUTE FUNCTION invalidate_world_location_after_legacy_move();`); err != nil {
+		return err
+	}
+	if err := execSchema("players_remove_duplicate_world_coordinates", `
+	ALTER TABLE players DROP COLUMN IF EXISTS world_x, DROP COLUMN IF EXISTS world_y;`); err != nil {
 		return err
 	}
 

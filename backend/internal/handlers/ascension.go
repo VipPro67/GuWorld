@@ -620,10 +620,19 @@ func AscensionEngageCalamity(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	var lockedPlayerID uuid.UUID
+	if err := tx.QueryRow(`SELECT id FROM players WHERE id = $1 FOR UPDATE`, authID).Scan(&lockedPlayerID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
+		return
+	}
 
 	player, err := evaluateManaTxEquipped(tx, authID)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi lấy thông tin cổ sư", err))
+		return
+	}
+	if player.ActiveCombat != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Đạo hữu đang trong một trận chiến khác."})
 		return
 	}
 	if err := checkRegionAction(player.CurrentRegion, "combat"); err != nil {
@@ -662,11 +671,11 @@ func AscensionEngageCalamity(c *gin.Context) {
 	bossHP, _, _ := models.ScaleMonsterStats(boss.MaxHP, boss.BaseAttack, boss.BaseDefense, 5, 4, boss.Type)
 
 	var originZone string
-	var worldX, worldY float64
+	var playerX, playerY float64
 	if err := tx.QueryRow(`
-		SELECT COALESCE(NULLIF(world_zone_id,''), current_region), world_x, world_y
+		SELECT COALESCE(NULLIF(world_zone_id,''), current_region), x, y
 		FROM players WHERE id = $1
-	`, player.ID).Scan(&originZone, &worldX, &worldY); err != nil {
+	`, player.ID).Scan(&originZone, &playerX, &playerY); err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể đọc vị trí hiện tại", err))
 		return
 	}
@@ -678,13 +687,8 @@ func AscensionEngageCalamity(c *gin.Context) {
 		return
 	}
 
-	if err := tx.Commit(); err != nil {
-		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
-		return
-	}
-
 	spawnID := "ascension:" + player.ID.String()
-	spawnX, spawnY := worldX+1, worldY
+	spawnX, spawnY := playerX+1, playerY
 	actorTTL := 2 * time.Hour
 	if session.ExpiresAt != nil {
 		if remaining := time.Until(*session.ExpiresAt); remaining > 0 && remaining < actorTTL {
@@ -697,19 +701,83 @@ func AscensionEngageCalamity(c *gin.Context) {
 		X: spawnX, Y: spawnY, SpawnX: spawnX, SpawnY: spawnY, HP: bossHP, MaxHP: bossHP,
 		State: MonsterStateIdle, Revision: 1, LastUpdateAt: time.Now().UTC(), RespawnSeconds: int(actorTTL.Seconds()),
 	}
-	bx, by := monsterBucket(int(math.Round(spawnX)), int(math.Round(spawnY)))
-	spawned, _, err := cache.MaterializeWorldMonster(c.Request.Context(), actor, bx, by, actorTTL)
+
+	spawned, exists, err := cache.FindWorldBossBySpawnID(c.Request.Context(), spawnID)
 	if err != nil {
-		logger.S.Errorf("Failed to spawn ascension boss in world: %v", err)
-		httperr.Respond(c, httperr.Internal(fmt.Sprintf("Không thể triệu hồi Địa Tai trên bản đồ thế giới: %v", err), err))
+		logger.S.Errorf("Failed to find ascension boss in world: %v", err)
+		httperr.Respond(c, httperr.Internal(fmt.Sprintf("Không thể tìm Địa Tai trên bản đồ thế giới: %v", err), err))
 		return
 	}
-	publishWorldChanges([]worldfeed.Event{worldMonsterChangeEvent("spawned", spawned)})
+	created := false
+	if !exists {
+		bx, by := monsterBucket(int(math.Round(spawnX)), int(math.Round(spawnY)))
+		spawned, created, err = cache.MaterializeWorldMonster(c.Request.Context(), actor, bx, by, actorTTL)
+		if err != nil {
+			logger.S.Errorf("Failed to spawn ascension boss in world: %v", err)
+			httperr.Respond(c, httperr.Internal(fmt.Sprintf("Không thể triệu hồi Địa Tai trên bản đồ thế giới: %v", err), err))
+			return
+		}
+		exists = !created
+	}
+
+	oldActor := spawned
+	relocated := false
+	if exists {
+		if spawned.State == MonsterStateDefeated {
+			c.JSON(http.StatusConflict, gin.H{"error": "Địa Tai của phiên này đã bị đánh bại."})
+			return
+		}
+		if spawned.RegionID != originZone || spawned.X != spawnX || spawned.Y != spawnY {
+			relocatedActor := spawned
+			relocatedActor.RegionID = originZone
+			relocatedActor.X, relocatedActor.Y = spawnX, spawnY
+			relocatedActor.SpawnX, relocatedActor.SpawnY = spawnX, spawnY
+			relocatedActor.Revision++
+			relocatedActor.LastUpdateAt = time.Now().UTC()
+			oldBX, oldBY := monsterBucket(int(math.Round(spawned.X)), int(math.Round(spawned.Y)))
+			newBX, newBY := monsterBucket(int(math.Round(spawnX)), int(math.Round(spawnY)))
+			moved, moveErr := cache.RelocateWorldMonster(c.Request.Context(), spawned, relocatedActor, spawned.Revision, oldBX, oldBY, newBX, newBY, actorTTL)
+			if moveErr != nil {
+				logger.S.Errorf("Failed to move ascension boss beside player: %v", moveErr)
+				httperr.Respond(c, httperr.Internal(fmt.Sprintf("Không thể đưa Địa Tai đến gần đạo hữu: %v", moveErr), moveErr))
+				return
+			}
+			if !moved {
+				c.JSON(http.StatusConflict, gin.H{"error": "Vị trí Địa Tai vừa thay đổi; hãy bấm nghênh chiến lại."})
+				return
+			}
+			spawned = relocatedActor
+			relocated = true
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
+		return
+	}
+
+	worldChanges := make([]worldfeed.Event, 0, 2)
+	if relocated && oldActor.RegionID != spawned.RegionID {
+		worldChanges = append(worldChanges, worldMonsterChangeEvent("despawned", oldActor))
+	}
+	if created {
+		worldChanges = append(worldChanges, worldMonsterChangeEvent("spawned", spawned))
+	} else if relocated {
+		worldChanges = append(worldChanges, worldMonsterChangeEvent("moved", spawned))
+	}
+	if len(worldChanges) > 0 {
+		publishWorldChanges(worldChanges)
+	}
 
 	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated, PlayerDomain, AscensionDomain)
+	message := "Địa Tai Bản Yếu đã áp sát vị trí hiện tại của ngươi! Hãy tương tác với nó để nghênh chiến!"
+	if created {
+		message = "ĐỊA TAI BẢN YẾU đã giáng lâm ngay bên cạnh ngươi trên đại lục! Hãy tương tác với nó để nghênh chiến!"
+	} else if !relocated {
+		message = "Địa Tai Bản Yếu đang ở ngay bên cạnh ngươi! Hãy tương tác với nó để nghênh chiến!"
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "ĐỊA TAI BẢN YẾU đã giáng lâm ngay bên cạnh ngươi trên đại lục! Hãy tương tác với nó để nghênh chiến!",
+		"message": message,
 		"zone_id": originZone, "instance_id": spawned.InstanceID,
 	})
 }
@@ -723,17 +791,22 @@ func AscensionStartCalamityCombat(c *gin.Context) {
 		return
 	}
 	instanceID := c.Param("instanceId")
-	actor, exists, err := cache.GetWorldMonster(c.Request.Context(), c.Query("region"), instanceID)
-	if err != nil || !exists || actor.OwnerPlayerID != playerID.String() || !strings.HasPrefix(actor.SpawnID, "ascension:") {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Địa Tai của phiên Thăng Tiên này."})
-		return
-	}
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Database transaction failure", err))
 		return
 	}
 	defer tx.Rollback()
+	var lockedPlayerID uuid.UUID
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT id FROM players WHERE id = $1 FOR UPDATE`, playerID).Scan(&lockedPlayerID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi"})
+		return
+	}
+	actor, exists, err := cache.GetWorldMonster(c.Request.Context(), c.Query("region"), instanceID)
+	if err != nil || !exists || actor.OwnerPlayerID != playerID.String() || !strings.HasPrefix(actor.SpawnID, "ascension:") {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Địa Tai của phiên Thăng Tiên này."})
+		return
+	}
 	player, err := evaluateManaTxEquipped(tx, playerID)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi lấy thông tin cổ sư", err))
@@ -748,12 +821,12 @@ func AscensionStartCalamityCombat(c *gin.Context) {
 		return
 	}
 	var currentZone string
-	var worldX, worldY float64
-	if err := tx.QueryRow(`SELECT COALESCE(NULLIF(world_zone_id,''),current_region), world_x, world_y FROM players WHERE id=$1`, player.ID).Scan(&currentZone, &worldX, &worldY); err != nil {
+	var playerX, playerY float64
+	if err := tx.QueryRow(`SELECT COALESCE(NULLIF(world_zone_id,''),current_region), x, y FROM players WHERE id=$1`, player.ID).Scan(&currentZone, &playerX, &playerY); err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể xác minh vị trí hiện tại", err))
 		return
 	}
-	if currentZone != actor.RegionID || math.Hypot(actor.X-worldX, actor.Y-worldY) > float64(WorldMonsterActivationRadius) {
+	if currentZone != actor.RegionID || math.Hypot(actor.X-playerX, actor.Y-playerY) > float64(WorldMonsterActivationRadius) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Địa Tai không còn ở gần vị trí của đạo hữu."})
 		return
 	}

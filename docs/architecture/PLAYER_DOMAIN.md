@@ -17,6 +17,7 @@ Tài liệu này mô tả ranh giới sở hữu dữ liệu player để tránh
 - Projection hẹp vẫn phù hợp nếu caller chỉ cần một nhóm field xác định; không mở rộng mọi query chỉ để dùng một kiểu chung.
 - Cần phân biệt trạng thái lưu bền vững với giá trị tính toán từ thời gian như regen, tuổi thọ hoặc trạng thái hết hạn.
 - Collection revision dùng để phát hiện/cập nhật thay đổi bộ sưu tập. Không tự tăng revision ở nơi không sở hữu mutation tương ứng.
+- Vị trí hiện tại của player dùng `players.x/y`; `current_region`, `map_instance_id` và các trường scope xác định bản đồ/instance chứa tọa độ. Không duy trì cặp `world_x/world_y` song song.
 
 ## Quy tắc ghi
 
