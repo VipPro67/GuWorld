@@ -46,8 +46,9 @@ Redis dùng cho cache, pub/sub và một số phối hợp realtime. Rate limite
 - Combat thường, PvP và các flow có session được giải quyết bằng simulator theo lượt.
 - `/api/wt` là WebTransport endpoint khi được bật; `/api/ws` là WebSocket fallback theo cấu hình.
 - Realtime transport phục vụ di chuyển/vị trí thế giới, chat, notification và player events. Nó không chạy combat simulation.
-- `world:change` là World Change Feed cho thay đổi ô map, ground drop, resource point và portal. Sau commit, publisher phân giải người nhận theo region/map/instance một lần, gửi event cùng danh sách người nhận qua Redis; mỗi backend instance chỉ chuyển tiếp tới các phiên cục bộ khớp danh sách đó. Client patch các thay đổi có payload đủ rõ và tải lại snapshot tọa độ khi cần.
-- `world:pos` giữ đường phát trực tiếp theo bán kính lân cận cho chuyển động người chơi. Delta di chuyển quái/boss và revision/resync của snapshot map chưa nằm trong feed hiện tại; xem các bước tiếp theo trong tài liệu thế giới.
+- `world:change` là World Change Feed cho ô map, ground drop, resource point, portal và vòng đời actor quái/boss. Sau mutation, publisher cấp `epoch`/`revision` theo region/map/instance, phân giải người nhận một lần cho mỗi scope trong batch, rồi gửi event cùng danh sách người nhận qua Redis. Mỗi backend chỉ chuyển tiếp tới phiên cục bộ khớp danh sách đó.
+- Snapshot map cells, world points và world monsters trả sequence trong `X-World-*` response headers; world-monster snapshot còn trả vector revision cho các region scope mà AOI bao phủ. Client loại event trùng/cũ, resync snapshot khi sequence có gap hoặc UI stream reconnect. `/api/world/revisions` giúp phát hiện event cuối bị rơi; Redis Pub/Sub không lưu lịch sử event nên snapshot vẫn là phục hồi chuẩn.
+- `world:pos` giữ đường phát trực tiếp theo bán kính lân cận cho chuyển động người chơi. Combat và Tai Kiếp vẫn theo lượt; feed chỉ đồng bộ trạng thái thế giới ngoài combat.
 - Client player events có cơ chế reconnect; WebTransport cần HTTPS và certificate hợp lệ.
 
 ## Ranh giới khi thay đổi

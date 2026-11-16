@@ -11,6 +11,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/worldfeed"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -146,6 +147,15 @@ func GetCellsRect(c *gin.Context) {
 	fmt.Sscanf(c.Query("max_x"), "%d", &maxX)
 	fmt.Sscanf(c.Query("max_y"), "%d", &maxY)
 
+	EnsureWorldPosLoaded(playerID.String())
+	if entry, ok := worldPosIndex.Get(playerID.String()); ok {
+		scope := worldfeed.Scope{RegionID: entry.Region, WorldMapID: entry.MapID, InstanceID: entry.InstanceID}
+		beginWorldSnapshotRevision(c, scope)
+		status, res := ExecuteGetCellsRect(playerID, minX, minY, maxX, maxY)
+		setWorldSnapshotRevision(c, scope)
+		c.JSON(status, res)
+		return
+	}
 	status, res := ExecuteGetCellsRect(playerID, minX, minY, maxX, maxY)
 	c.JSON(status, res)
 }

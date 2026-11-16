@@ -322,6 +322,7 @@ export const ImmortalApertureView: React.FC = () => {
   const worldMonsters = useWorldStore((state) => state.worldMonsters);
   const mapRevision = useWorldStore((state) => state.mapRevision);
   const fetchWorldMonsters = useWorldStore((state) => state.fetchWorldMonsters);
+  const checkWorldRevisions = useWorldStore((state) => state.checkWorldRevisions);
   const [apertureMapSnapshot, setApertureMapSnapshot] = useState<ApertureMapSnapshot | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [buildCells, setBuildCells] = useState<{ x: number; y: number }[]>([]);
@@ -346,7 +347,7 @@ export const ImmortalApertureView: React.FC = () => {
   useEffect(() => {
     if (activeTab === "map" && ownerInsideAperture) void fetchWorldMonsters();
   }, [activeTab, ownerInsideAperture, fetchWorldMonsters]);
-  usePolling(() => fetchWorldMonsters().then(() => undefined), 5000, activeTab === "map" && ownerInsideAperture);
+  usePolling(() => checkWorldRevisions().then(() => undefined), 5000, activeTab === "map" && ownerInsideAperture);
 
   // Aperture Anchoring & Portal / Guest State
   const [showAnchorModal, setShowAnchorModal] = useState<boolean>(false);
@@ -2551,6 +2552,7 @@ return (
                       const count = grp.id === "ALL"
                         ? (daoNgan?.paths?.length ?? daoMarks.length)
                         : (daoNgan?.paths ?? []).filter(p => (PATH_TO_DAO_GROUP[p.path.toLowerCase()] || "ELEMENTAL") === grp.id).length;
+
                       
                       const isSelected = daoGroupFilter === grp.id;
                       return (

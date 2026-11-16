@@ -4,6 +4,8 @@ package worldfeed
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -25,6 +27,13 @@ type Scope struct {
 	InstanceID string `json:"map_instance_id,omitempty"`
 }
 
+// Sequence ties one exact scope to its Redis epoch and latest feed revision.
+type Sequence struct {
+	Scope    Scope  `json:"scope"`
+	Epoch    string `json:"epoch"`
+	Revision int64  `json:"revision"`
+}
+
 // Event describes one committed change at a world coordinate. Data is optional
 // when the client should refresh its scoped snapshot instead of applying a
 // direct patch.
@@ -36,6 +45,8 @@ type Event struct {
 	X          int            `json:"x"`
 	Y          int            `json:"y"`
 	Data       map[string]any `json:"data,omitempty"`
+	Epoch      string         `json:"epoch,omitempty"`
+	Revision   int64          `json:"revision,omitempty"`
 }
 
 // Delivery pairs one committed event with its audience. Target IDs stay inside
@@ -64,15 +75,26 @@ func PublishBatch(events []Event) error {
 	if len(events) == 0 {
 		return nil
 	}
-	targetsByScope := make(map[Scope][]uuid.UUID)
-	deliveries := make([]Delivery, 0, len(events))
-	for _, event := range events {
+	scopeKeys := make(map[Scope]string)
+	scopeCounts := make(map[string]int)
+	normalizedEvents := make([]Event, len(events))
+	for i, event := range events {
 		if event.EventID == "" {
 			event.EventID = uuid.NewString()
 		}
 		if err := validate(event); err != nil {
 			return err
 		}
+		scopeKey := scopeKeys[event.Scope]
+		if scopeKey == "" {
+			scopeKey = RevisionKey(event.Scope)
+			scopeKeys[event.Scope] = scopeKey
+		}
+		scopeCounts[scopeKey]++
+		normalizedEvents[i] = event
+	}
+	targetsByScope := make(map[Scope][]uuid.UUID)
+	for _, event := range normalizedEvents {
 		targets, found := targetsByScope[event.Scope]
 		if !found {
 			var err error
@@ -82,9 +104,65 @@ func PublishBatch(events []Event) error {
 			}
 			targetsByScope[event.Scope] = targets
 		}
-		deliveries = append(deliveries, Delivery{Event: event, Targets: targets})
+	}
+	ranges, err := cache.AllocateWorldSequenceRanges(scopeCounts)
+	if err != nil {
+		return err
+	}
+	nextRevision := make(map[string]int64, len(ranges))
+	for scopeKey, sequence := range ranges {
+		nextRevision[scopeKey] = sequence.FirstRevision
+	}
+	deliveries := make([]Delivery, 0, len(events))
+	for i := range normalizedEvents {
+		event := normalizedEvents[i]
+		scopeKey := scopeKeys[event.Scope]
+		sequence := ranges[scopeKey]
+		event.Epoch = sequence.Epoch
+		event.Revision = nextRevision[scopeKey]
+		nextRevision[scopeKey]++
+		deliveries = append(deliveries, Delivery{Event: event, Targets: targetsByScope[event.Scope]})
 	}
 	return cache.PublishEventQuick(RedisChannel, Envelope{Deliveries: deliveries})
+}
+
+// RevisionKey returns the stable Redis key suffix for an exact region/map/
+// instance scope without embedding user-controlled identifiers in Redis keys.
+func RevisionKey(scope Scope) string {
+	if scope.WorldMapID == "" {
+		scope.WorldMapID = "world_map"
+	}
+	encoded, _ := json.Marshal(scope)
+	sum := sha256.Sum256(encoded)
+	return hex.EncodeToString(sum[:])
+}
+
+// CurrentSequence reads the revision attached to snapshots of this scope.
+func CurrentSequence(scope Scope) (string, int64, error) {
+	return cache.WorldSequence(RevisionKey(scope))
+}
+
+// CurrentSequences reads the cursor vector for a compound snapshot.
+func CurrentSequences(scopes []Scope) ([]Sequence, error) {
+	keys := make([]string, len(scopes))
+	for i, scope := range scopes {
+		keys[i] = RevisionKey(scope)
+	}
+	values, err := cache.WorldSequences(keys)
+	if err != nil {
+		return nil, err
+	}
+	sequences := make([]Sequence, 0, len(scopes))
+	seen := make(map[Scope]struct{}, len(scopes))
+	for _, scope := range scopes {
+		if _, exists := seen[scope]; exists {
+			continue
+		}
+		seen[scope] = struct{}{}
+		value := values[RevisionKey(scope)]
+		sequences = append(sequences, Sequence{Scope: scope, Epoch: value.Epoch, Revision: value.FirstRevision})
+	}
+	return sequences, nil
 }
 
 // DecodeEnvelope validates an internal Redis message and returns its audience

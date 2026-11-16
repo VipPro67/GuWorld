@@ -15,6 +15,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
+	"github.com/vippro67/GuWorld/backend/internal/worldfeed"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -479,6 +480,8 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 		if ascensionCalamity && (alliesAlive || simState.FledBy == "") {
 			if err := cache.DeleteWorldMonster(context.Background(), ascensionActor); err != nil {
 				logger.S.Errorf("delete ascension calamity actor %s: %v", ascensionActor.InstanceID, err)
+			} else {
+				publishWorldChanges([]worldfeed.Event{worldMonsterChangeEvent("defeated", ascensionActor)})
 			}
 			PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated, PlayerDomain, AscensionDomain)
 		}

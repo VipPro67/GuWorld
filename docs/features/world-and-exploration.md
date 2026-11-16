@@ -45,14 +45,15 @@ Map/region và portal data quyết định địa hình, vùng, ô vào và đi�
 ## Mã nguồn liên quan
 
 - Backend: `backend/internal/handlers/exploration_move.go`, `movement.go`, `world.go`, `portal_transfer.go`, `ground_drops.go`.
-- Realtime feed: `backend/internal/worldfeed/`, `backend/internal/handlers/world_change_events.go`, `backend/internal/uihub/redis_sub.go`; frontend dispatch: `frontend/src/store/useGameStore.ts`, `frontend/src/store/useWorldStore.ts`.
+- Realtime feed and actor lifecycle: `backend/internal/worldfeed/`, `backend/internal/handlers/world_change_events.go`, `backend/internal/handlers/world_monsters.go`, `backend/internal/handlers/admin_bosses.go`, `backend/internal/uihub/redis_sub.go`; frontend dispatch/resync: `frontend/src/store/useGameStore.ts`, `frontend/src/store/useWorldStore.ts`.
 - Frontend: `frontend/src/components/ExplorationMap.tsx`, `frontend/src/store/slices/worldSlice.ts`.
 - UI: `frontend/src/app/page.tsx`, `frontend/src/components/ExplorationMap.tsx`; asset nền: `frontend/public/assets/world/great-regions-atlas.png`, `ground-moss.webp`; cài đặt: `frontend/src/components/LobbySettingsPanel.tsx`, `frontend/src/store/slices/combatSlice.ts`; API `GET/PUT /api/player/combat-settings`.
 
-## Realtime tiếp theo (kế hoạch, chưa triển khai)
+## Đồng bộ realtime
 
-- **Delta vòng đời quái/boss:** phát spawn, di chuyển, bị hạ và hồi sinh qua World Change Feed; giữ chiến đấu theo lượt, không đưa mô phỏng combat vào realtime transport. Hiện event `world_monster.killed` chỉ kích hoạt tải lại snapshot.
-- **Snapshot → delta → resync:** thêm revision cho snapshot và event; client áp dụng delta tiếp theo revision, tải lại snapshot khi reconnect, đổi region/instance hoặc phát hiện gap. Redis Pub/Sub không lưu event đã lỡ, nên snapshot vẫn là cách phục hồi chuẩn.
+World Change Feed phát delta vòng đời quái/boss khi actor được tạo, di chuyển/cập nhật bởi quản trị, bị hạ trong encounter hoặc hồi sinh. Payload mang actor mới để client cập nhật marker trực tiếp; event cũ chỉ có tọa độ sẽ khiến client tải lại snapshot. Snapshot quái cung cấp vector revision cho các region mà AOI đọc cùng lúc. Combat vẫn chạy theo lượt, realtime không mô phỏng lượt đánh.
+
+Mỗi event có `epoch` và `revision` tăng theo scope region/map/instance. Snapshot lưới, ô bản đồ, điểm tài nguyên và quái trả sequence bắt đầu/kết thúc qua các response header `X-World-*`; snapshot quái kèm vector cho mọi region scope trong AOI. Client đọc lại snapshot nếu revision đổi trong lúc truy vấn, bỏ event trùng/cũ, resync khi phát hiện gap và đồng bộ lại sau khi UI stream kết nối lại. Bản đồ kiểm tra cursor qua `GET /api/world/revisions` định kỳ để bắt cả event cuối bị rơi mà không có event kế tiếp. Redis Pub/Sub vẫn best-effort; snapshot là nguồn phục hồi khi event bị lỡ. Nếu Redis mất sequence, epoch mới khiến client đồng bộ lại thay vì nhầm revision vừa reset với event cũ.
 
 ## API liên quan
 

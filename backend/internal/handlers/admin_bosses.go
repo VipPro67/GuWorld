@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/worldfeed"
 )
 
 // AdminWorldBoss is the admin-facing projection of one live boss actor kept in
@@ -264,6 +265,7 @@ func AdminUpdateWorldBoss(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Boss vừa được worker cập nhật, hãy thử lại"})
 		return
 	}
+	publishWorldChanges([]worldfeed.Event{worldMonsterChangeEvent(worldMonsterActionFromAdmin(event), monster)})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật boss", "data": newAdminWorldBoss(monster)})
 }
 
@@ -326,6 +328,7 @@ func AdminSpawnWorldBosses(c *gin.Context) {
 
 	now := time.Now().UTC()
 	created, revived, alive := 0, 0, 0
+	worldChanges := make([]worldfeed.Event, 0)
 	failures := make([]string, 0)
 	for rows.Next() {
 		var spawn monsterSpawnRow
@@ -363,6 +366,7 @@ func AdminSpawnWorldBosses(c *gin.Context) {
 		}
 		if isNew {
 			created++
+			worldChanges = append(worldChanges, worldMonsterChangeEvent("spawned", runtime))
 			continue
 		}
 		if runtime.State != MonsterStateDefeated {
@@ -384,11 +388,13 @@ func AdminSpawnWorldBosses(c *gin.Context) {
 			continue
 		}
 		revived++
+		worldChanges = append(worldChanges, worldMonsterChangeEvent("respawned", runtime))
 	}
 	if err := rows.Err(); err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể đọc ô boss: "+err.Error(), err))
 		return
 	}
+	publishWorldChanges(worldChanges)
 	if created+revived+alive == 0 && len(failures) == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không có ô boss nào đang hoạt động"})
 		return

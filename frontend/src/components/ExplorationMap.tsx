@@ -80,6 +80,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const leaveAperture = useGameStore((state) => state.leaveAperture);
   const worldMonsters = useWorldStore((state) => state.worldMonsters);
   const fetchWorldMonsters = useWorldStore((state) => state.fetchWorldMonsters);
+  const checkWorldRevisions = useWorldStore((state) => state.checkWorldRevisions);
   const engageAscensionWorldMonster = useWorldStore((state) => state.engageAscensionWorldMonster);
   const collectWorldResourcePoint = useWorldStore((state) => state.collectWorldResourcePoint);
   const lootGroundDrop = useGameStore((state) => state.lootGroundDrop);
@@ -188,7 +189,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   usePolling(() => loadGrid().then(() => undefined), 10000);
   usePolling(() => fetchZoneMarkers(player.current_region).then(() => undefined), 10000);
   useEffect(() => { void fetchWorldMonsters(); }, [player.current_region, player.x, player.y, fetchWorldMonsters]);
-  usePolling(() => fetchWorldMonsters().then(() => undefined), 5000);
+  usePolling(() => checkWorldRevisions().then(() => undefined), 5000);
   usePolling(() => player.current_region === "aperture_interior" ? fetchAperturePoints(true) : undefined, 10000);
 
   useEffect(() => {

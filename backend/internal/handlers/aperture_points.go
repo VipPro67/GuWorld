@@ -30,6 +30,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/worldfeed"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
@@ -1060,6 +1061,8 @@ func GetWorldResourcePoints(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa đặt chân vào thế giới thực"})
 		return
 	}
+	snapshotScope := worldfeed.Scope{RegionID: regionID, WorldMapID: worldMapIDForRegion(regionID)}
+	beginWorldSnapshotRevision(c, snapshotScope)
 
 	// Lazy top-up: a region must have mines the first time anyone looks at it,
 	// before the periodic sweep (StartWorldResourcePointWorker) reaches it.
@@ -1137,6 +1140,7 @@ func GetWorldResourcePoints(c *gin.Context) {
 		notify.Send(db.DB, playerID, "point_transplant", "Nghi Thức Tan",
 			"Nghi thức di dời đã đứt vì đạo hữu rời khỏi mỏ — Tiên Nguyên đã tiêu không thể thu hồi.")
 	}
+	setWorldSnapshotRevision(c, snapshotScope)
 	c.JSON(http.StatusOK, points)
 }
 

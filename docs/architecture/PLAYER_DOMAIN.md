@@ -26,7 +26,7 @@ Tài liệu này mô tả ranh giới sở hữu dữ liệu player để tránh
 4. Sau mutation, phát snapshot/event theo flow domain đang dùng để frontend không phải tự suy đoán trạng thái server.
 5. Thêm hoặc cập nhật test ở package sở hữu hành vi.
 
-Player đổi vị trí phải đi qua `handlers/movement.go`, dùng chung kiểm tra quyền/đích, ghi vị trí và phát sự kiện. `world:pos` cập nhật marker lân cận; thay đổi tọa độ của ô map/drop/resource point dùng World Change Feed và được lọc theo region/map/instance. Không tự viết một nhánh cập nhật tọa độ riêng trong handler khác.
+Player đổi vị trí phải đi qua `handlers/movement.go`, dùng chung kiểm tra quyền/đích, ghi vị trí và phát sự kiện. `world:pos` cập nhật marker lân cận; thay đổi tọa độ của ô map/drop/resource point và vòng đời actor quái/boss dùng World Change Feed, được lọc theo region/map/instance. Snapshot trả `epoch`/`revision`; client resync khi có gap hoặc reconnect. Không tự viết một nhánh cập nhật tọa độ riêng trong handler khác.
 
 ## Frontend và đồng bộ
 

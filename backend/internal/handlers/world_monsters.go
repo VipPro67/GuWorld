@@ -19,6 +19,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/worldfeed"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -118,9 +119,9 @@ func materializeSpawn(ctx context.Context, spawn monsterSpawnRow, now time.Time)
 	return runtime, created, nil
 }
 
-func respawnWorldMonsterIfDue(ctx context.Context, monster WorldMonster, now time.Time) WorldMonster {
+func respawnWorldMonsterIfDue(ctx context.Context, monster WorldMonster, now time.Time) (WorldMonster, bool) {
 	if monster.State != MonsterStateDefeated || monster.RespawnAt.IsZero() || now.Before(monster.RespawnAt) {
-		return monster
+		return monster, false
 	}
 	replacement := monster
 	replacement.InstanceID = uuid.NewString()
@@ -133,12 +134,13 @@ func respawnWorldMonsterIfDue(ctx context.Context, monster WorldMonster, now tim
 	oldBX, oldBY := monsterBucket(int(monster.X), int(monster.Y))
 	newBX, newBY := monsterBucket(int(replacement.X), int(replacement.Y))
 	if ok, err := cache.RespawnWorldMonster(ctx, monster, replacement, oldBX, oldBY, newBX, newBY, monsterTTL(monster.RespawnSeconds)); err == nil && ok {
-		return replacement
+		return replacement, true
 	}
-	return monster
+	return monster, false
 }
 
-func spawnGuards(ctx context.Context, leader WorldMonster, now time.Time) {
+func spawnGuards(ctx context.Context, leader WorldMonster, now time.Time) []worldfeed.Event {
+	createdEvents := make([]worldfeed.Event, 0)
 	guardCount := 2 + leader.Rank/2 // R1=2, R3=3, R5=4
 	for i := 0; i < guardCount; i++ {
 		angle := float64(i) * 2 * math.Pi / float64(guardCount)
@@ -166,8 +168,12 @@ func spawnGuards(ctx context.Context, leader WorldMonster, now time.Time) {
 			continue
 		}
 		bx, by := monsterBucket(gx, gy)
-		materializeWorldMonster(ctx, guard, bx, by, monsterTTL(guardSpawn.RespawnSeconds))
+		spawned, created, err := materializeWorldMonster(ctx, guard, bx, by, monsterTTL(guardSpawn.RespawnSeconds))
+		if err == nil && created {
+			createdEvents = append(createdEvents, worldMonsterChangeEvent("spawned", spawned))
+		}
 	}
+	return createdEvents
 }
 
 type guardTemplatePick struct {
@@ -380,6 +386,8 @@ func GetWorldMonsters(c *gin.Context) {
 		}
 		isApertureOwner = owner
 	}
+	snapshotScope := worldfeed.Scope{RegionID: entry.Region, WorldMapID: entry.MapID, InstanceID: entry.InstanceID}
+	beginWorldSnapshotRevision(c, snapshotScope)
 	radius, _ := strconv.Atoi(c.DefaultQuery("r", strconv.Itoa(WorldMonsterActivationRadius)))
 	if radius < 1 {
 		radius = 1
@@ -393,6 +401,16 @@ func GetWorldMonsters(c *gin.Context) {
 	snapshotStartedAt := time.Now()
 	mapID := worldMapIDForRegion(entry.Region)
 	scopeRegions := activeScopeRegions(entry.X-radius, entry.Y-radius, entry.X+radius, entry.Y+radius, mapID, entry.Region)
+	snapshotScopes := make([]worldfeed.Scope, 0, len(scopeRegions))
+	for _, region := range scopeRegions {
+		snapshotScopes = append(snapshotScopes, worldfeed.Scope{RegionID: region, WorldMapID: worldMapIDForRegion(region), InstanceID: entry.InstanceID})
+	}
+	startSequences, sequenceErr := worldfeed.CurrentSequences(snapshotScopes)
+	if sequenceErr != nil {
+		logger.S.Warnf("capture world monster snapshot revisions for %s: %v", entry.Region, sequenceErr)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "World snapshot revision unavailable"})
+		return
+	}
 	if entry.MapID != "world_map" || entry.InstanceID != "" {
 		minBX, minBY := monsterBucket(entry.X-radius, entry.Y-radius)
 		maxBX, maxBY := monsterBucket(entry.X+radius, entry.Y+radius)
@@ -424,7 +442,14 @@ func GetWorldMonsters(c *gin.Context) {
 				}
 			}
 		}
-		c.JSON(http.StatusOK, gin.H{"monsters": monsters, "server_time": time.Now().UTC()})
+		endSequences, endErr := worldfeed.CurrentSequences(snapshotScopes)
+		if endErr != nil {
+			logger.S.Warnf("finish world monster snapshot revisions for %s: %v", entry.Region, endErr)
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "World snapshot revision unavailable"})
+			return
+		}
+		setWorldSnapshotRevision(c, snapshotScope)
+		c.JSON(http.StatusOK, gin.H{"monsters": monsters, "server_time": time.Now().UTC(), "world_revisions_start": startSequences, "world_revisions": endSequences})
 		return
 	}
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
@@ -437,6 +462,7 @@ func GetWorldMonsters(c *gin.Context) {
 	}
 	defer rows.Close()
 	monsters := make([]WorldMonster, 0, 32)
+	pendingWorldChanges := make([]worldfeed.Event, 0, 16)
 	occupied := make(map[[2]int]struct{}, 32)
 	now := time.Now().UTC()
 	staticSpawns := make([]monsterSpawnRow, 0, 32)
@@ -476,16 +502,22 @@ func GetWorldMonsters(c *gin.Context) {
 			continue
 		}
 		monster, created := result.Monster, result.Created
-		monster = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
+		var respawned bool
+		monster, respawned = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
+		inView := math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) <= float64(radius)
+		if created && inView {
+			pendingWorldChanges = append(pendingWorldChanges, worldMonsterChangeEvent("spawned", monster))
+		}
+		if respawned && inView {
+			pendingWorldChanges = append(pendingWorldChanges, worldMonsterChangeEvent("respawned", monster))
+		}
 		// Elite/Boss spawn guards around them
-		if monster.IsBoss || worldMonsterTemplateIsElite(monster.MonsterTemplateID) {
-			spawnGuards(c.Request.Context(), monster, now)
+		if inView && (monster.IsBoss || worldMonsterTemplateIsElite(monster.MonsterTemplateID)) {
+			pendingWorldChanges = append(pendingWorldChanges, spawnGuards(c.Request.Context(), monster, now)...)
 		}
 		occupied[[2]int{spawn.X, spawn.Y}] = struct{}{}
 		if monster.State != MonsterStateDefeated {
 			monsters = append(monsters, monster)
-		}
-		if created {
 		}
 	}
 	spawnDuration := time.Since(snapshotStartedAt)
@@ -558,14 +590,20 @@ func GetWorldMonsters(c *gin.Context) {
 			continue
 		}
 		monster, created := result.Monster, result.Created
-		monster = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
+		var respawned bool
+		monster, respawned = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
+		inView := math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) <= float64(radius)
+		if created && inView {
+			pendingWorldChanges = append(pendingWorldChanges, worldMonsterChangeEvent("spawned", monster))
+		}
+		if respawned && inView {
+			pendingWorldChanges = append(pendingWorldChanges, worldMonsterChangeEvent("respawned", monster))
+		}
 		if spawnWithinPlayerRadius(spawn, entry, radius) {
 			occupied[[2]int{spawn.X, spawn.Y}] = struct{}{}
 		}
 		if monster.State != MonsterStateDefeated && math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) <= float64(radius) {
 			monsters = append(monsters, monster)
-		}
-		if created && math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) <= float64(radius) {
 		}
 	}
 	bossMaterializeDuration := time.Since(bossMaterializeStartedAt)
@@ -599,21 +637,45 @@ func GetWorldMonsters(c *gin.Context) {
 			bucketErrors++
 			continue
 		}
+		bucketActors := make([]WorldMonster, 0)
 		for _, coord := range coords {
-			for _, monster := range buckets[coord] {
-				if !worldMonsterVisibleToPlayer(monster, playerID.String()) {
-					continue
-				}
-				monster = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
-				if monster.State == MonsterStateDefeated || math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) > float64(radius) {
-					continue
-				}
-				if _, seen := seenActors[monster.InstanceID]; seen {
-					continue
-				}
-				seenActors[monster.InstanceID] = struct{}{}
-				monsters = append(monsters, monster)
+			bucketActors = append(bucketActors, buckets[coord]...)
+		}
+		proceduralCoords := make([]cache.CellCoordKey, 0)
+		for _, monster := range bucketActors {
+			region, x, y, ok := proceduralMonsterCell(monster.SpawnID)
+			if ok {
+				proceduralCoords = append(proceduralCoords, cache.CellCoordKey{RegionID: region, X: x, Y: y})
 			}
+		}
+		clearedProcedural := map[cache.CellCoordKey]cache.MapCellState{}
+		if len(proceduralCoords) > 0 {
+			if cleared, clearErr := worldMonsterCellsCleared(proceduralCoords); clearErr == nil {
+				clearedProcedural = cleared
+			}
+		}
+		for _, monster := range bucketActors {
+			if region, x, y, ok := proceduralMonsterCell(monster.SpawnID); ok {
+				if _, cleared := clearedProcedural[cache.CellCoordKey{RegionID: region, X: x, Y: y}]; cleared {
+					continue
+				}
+			}
+			if !worldMonsterVisibleToPlayer(monster, playerID.String()) {
+				continue
+			}
+			var respawned bool
+			monster, respawned = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
+			if respawned {
+				pendingWorldChanges = append(pendingWorldChanges, worldMonsterChangeEvent("respawned", monster))
+			}
+			if monster.State == MonsterStateDefeated || math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) > float64(radius) {
+				continue
+			}
+			if _, seen := seenActors[monster.InstanceID]; seen {
+				continue
+			}
+			seenActors[monster.InstanceID] = struct{}{}
+			monsters = append(monsters, monster)
 		}
 	}
 	bucketDuration := time.Since(bucketStartedAt)
@@ -635,14 +697,20 @@ func GetWorldMonsters(c *gin.Context) {
 			continue
 		}
 		monster, created := result.Monster, result.Created
-		monster = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
-		if monster.IsBoss || worldMonsterTemplateIsElite(monster.MonsterTemplateID) {
-			spawnGuards(c.Request.Context(), monster, now)
+		var respawned bool
+		monster, respawned = respawnWorldMonsterIfDue(c.Request.Context(), monster, now)
+		inView := math.Hypot(monster.X-float64(entry.X), monster.Y-float64(entry.Y)) <= float64(radius)
+		if created && inView {
+			pendingWorldChanges = append(pendingWorldChanges, worldMonsterChangeEvent("spawned", monster))
+		}
+		if respawned && inView {
+			pendingWorldChanges = append(pendingWorldChanges, worldMonsterChangeEvent("respawned", monster))
+		}
+		if inView && (monster.IsBoss || worldMonsterTemplateIsElite(monster.MonsterTemplateID)) {
+			pendingWorldChanges = append(pendingWorldChanges, spawnGuards(c.Request.Context(), monster, now)...)
 		}
 		if monster.State != MonsterStateDefeated {
 			monsters = append(monsters, monster)
-		}
-		if created {
 		}
 	}
 	totalDuration := time.Since(snapshotStartedAt)
@@ -650,5 +718,52 @@ func GetWorldMonsters(c *gin.Context) {
 		logger.S.Warnf("GetWorldMonsters slow snapshot region=%s radius=%d total=%s spawns=%s boss_load=%s boss_materialize=%s boss_prune=%s buckets=%s procedural=%s boss_rows=%d boss_candidates=%d boss_errors=%d bucket_count=%d bucket_errors=%d monsters=%d",
 			entry.Region, radius, totalDuration, spawnDuration, bossLoadDuration, bossMaterializeDuration, bossPruneDuration, bucketDuration, time.Since(proceduralStartedAt), bossRowCount, len(bossRequests), bossMaterializeErrors, bucketCount, bucketErrors, len(monsters))
 	}
-	c.JSON(http.StatusOK, gin.H{"monsters": monsters, "server_time": now})
+	publishWorldChanges(pendingWorldChanges)
+	endSequences, sequenceErr := worldfeed.CurrentSequences(snapshotScopes)
+	if sequenceErr != nil {
+		logger.S.Warnf("finish world monster snapshot revisions for %s: %v", entry.Region, sequenceErr)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "World snapshot revision unavailable"})
+		return
+	}
+	setWorldSnapshotRevision(c, snapshotScope)
+	c.JSON(http.StatusOK, gin.H{"monsters": monsters, "server_time": now, "world_revisions_start": startSequences, "world_revisions": endSequences})
+}
+
+// GetWorldRevisions returns only the revision vector for the player's current
+// AOI. It lets clients detect a lost final Pub/Sub event without reloading the
+// full actor snapshot on every heartbeat.
+func GetWorldRevisions(c *gin.Context) {
+	playerID, ok := middleware.GetPlayerID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	if _, ok := worldPosIndex.Get(playerID.String()); !ok {
+		EnsureWorldPosLoaded(playerID.String())
+	}
+	entry, ok := worldPosIndex.Get(playerID.String())
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Player position unavailable"})
+		return
+	}
+	mapID := entry.MapID
+	if mapID == "" {
+		mapID = worldMapIDForRegion(entry.Region)
+	}
+	scopeRegions := activeScopeRegions(entry.X-WorldMonsterActivationRadius, entry.Y-WorldMonsterActivationRadius,
+		entry.X+WorldMonsterActivationRadius, entry.Y+WorldMonsterActivationRadius, mapID, entry.Region)
+	scopes := make([]worldfeed.Scope, 0, len(scopeRegions))
+	for _, region := range scopeRegions {
+		regionMapID := worldMapIDForRegion(region)
+		if regionMapID == "" {
+			regionMapID = "world_map"
+		}
+		scopes = append(scopes, worldfeed.Scope{RegionID: region, WorldMapID: regionMapID, InstanceID: entry.InstanceID})
+	}
+	sequences, err := worldfeed.CurrentSequences(scopes)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "World revision feed unavailable"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"world_revisions": sequences})
 }

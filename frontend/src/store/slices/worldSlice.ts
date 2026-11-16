@@ -167,12 +167,16 @@ export const createWorldSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
     if (!token) return null;
 
     try {
+      const { useWorldStore } = await import("@/store/useWorldStore");
+      const revisionsAtStart = { ...useWorldStore.getState().worldRevisions };
       const url = radius ? `${BACKEND_URL}/api/explore/grid?radius=${radius}` : `${BACKEND_URL}/api/explore/grid`;
       const response = await authFetch(url);
       if (!response.ok) {
         throw new Error("Failed to load map grid viewport");
       }
-      return await response.json();
+      const snapshot = await response.json();
+      if (!useWorldStore.getState().recordWorldSnapshot(response, revisionsAtStart)) return null;
+      return snapshot;
     } catch (e) {
       console.error("fetchGrid error:", e);
       return null;

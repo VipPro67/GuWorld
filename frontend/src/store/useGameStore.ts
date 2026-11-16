@@ -1940,6 +1940,10 @@ export const useGameStore = create<GameState>((set, get) => {
           void get().reconcilePlayer(true);
           // Đồng bộ lại phiên luyện sau khi WS reconnect (WF-REF-05 §17).
           void get().fetchActiveRefineSession();
+          void import("@/store/useWorldStore").then(({ useWorldStore }) => {
+            useWorldStore.setState({ worldRevisions: {} });
+            void useWorldStore.getState().resyncWorldScope();
+          });
         }
       });
 

@@ -19,6 +19,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/worldfeed"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -703,6 +704,7 @@ func AscensionEngageCalamity(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal(fmt.Sprintf("Không thể triệu hồi Địa Tai trên bản đồ thế giới: %v", err), err))
 		return
 	}
+	publishWorldChanges([]worldfeed.Event{worldMonsterChangeEvent("spawned", spawned)})
 
 	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated, PlayerDomain, AscensionDomain)
 	c.JSON(http.StatusOK, gin.H{

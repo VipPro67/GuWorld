@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -279,6 +280,142 @@ func PublishEventQuick(channel string, payload interface{}) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	return PublishEvent(ctx, channel, payload)
+}
+
+type WorldSequenceRange struct {
+	Epoch         string
+	FirstRevision int64
+}
+
+// AllocateWorldSequenceRanges reserves contiguous revision ranges for scopes
+// in one pipelined Redis round trip.
+func AllocateWorldSequenceRanges(scopeCounts map[string]int) (map[string]WorldSequenceRange, error) {
+	if Client == nil {
+		return nil, fmt.Errorf("redis unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	pipe := Client.Pipeline()
+	commands := make(map[string]*redis.Cmd, len(scopeCounts))
+	for scopeKey, count := range scopeCounts {
+		if count < 1 {
+			continue
+		}
+		commands[scopeKey] = pipe.Eval(ctx, `
+			local epoch = redis.call('GET', KEYS[1])
+			if not epoch then epoch = ARGV[2]; redis.call('SET', KEYS[1], epoch) end
+			if not redis.call('GET', KEYS[2]) then
+				epoch = ARGV[2]; redis.call('SET', KEYS[1], epoch); redis.call('SET', KEYS[2], '0')
+			end
+			local last = redis.call('INCRBY', KEYS[2], ARGV[1])
+			return {epoch, last - tonumber(ARGV[1]) + 1}
+		`, []string{"world:epoch:" + scopeKey, "world:revision:" + scopeKey}, count, uuid.NewString())
+	}
+	if len(commands) == 0 {
+		return map[string]WorldSequenceRange{}, nil
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		return nil, err
+	}
+	ranges := make(map[string]WorldSequenceRange, len(commands))
+	for scopeKey, command := range commands {
+		values, err := command.Slice()
+		if err != nil {
+			return nil, err
+		}
+		if len(values) != 2 {
+			return nil, fmt.Errorf("unexpected world sequence result length: %d", len(values))
+		}
+		epoch, ok := values[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected world sequence epoch type: %T", values[0])
+		}
+		firstRevision, err := strconv.ParseInt(fmt.Sprint(values[1]), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		ranges[scopeKey] = WorldSequenceRange{Epoch: epoch, FirstRevision: firstRevision}
+	}
+	return ranges, nil
+}
+
+// WorldSequence returns the current epoch and latest revision for a scoped
+// snapshot. The epoch changes when Redis loses the sequence keys.
+func WorldSequence(scopeKey string) (string, int64, error) {
+	if Client == nil {
+		return "", 0, fmt.Errorf("redis unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	values, err := Client.Eval(ctx, `
+		local epoch = redis.call('GET', KEYS[1])
+		if not epoch then epoch = ARGV[1]; redis.call('SET', KEYS[1], epoch) end
+		local revision = redis.call('GET', KEYS[2])
+		if not revision then epoch = ARGV[1]; redis.call('SET', KEYS[1], epoch); redis.call('SET', KEYS[2], '0'); revision = '0' end
+		return {epoch, revision}
+	`, []string{"world:epoch:" + scopeKey, "world:revision:" + scopeKey}, uuid.NewString()).Slice()
+	if err != nil {
+		return "", 0, err
+	}
+	if len(values) != 2 {
+		return "", 0, fmt.Errorf("unexpected world sequence result length: %d", len(values))
+	}
+	epoch, ok := values[0].(string)
+	if !ok {
+		return "", 0, fmt.Errorf("unexpected world sequence epoch type: %T", values[0])
+	}
+	revision, err := strconv.ParseInt(fmt.Sprint(values[1]), 10, 64)
+	return epoch, revision, err
+}
+
+// WorldSequences reads several scope cursors with one pipelined Redis round
+// trip so compound snapshots can advertise complete revision coverage.
+func WorldSequences(scopeKeys []string) (map[string]WorldSequenceRange, error) {
+	if Client == nil {
+		return nil, fmt.Errorf("redis unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	pipe := Client.Pipeline()
+	commands := make(map[string]*redis.Cmd, len(scopeKeys))
+	for _, scopeKey := range scopeKeys {
+		if _, exists := commands[scopeKey]; exists {
+			continue
+		}
+		commands[scopeKey] = pipe.Eval(ctx, `
+			local epoch = redis.call('GET', KEYS[1])
+			if not epoch then epoch = ARGV[1]; redis.call('SET', KEYS[1], epoch) end
+			local revision = redis.call('GET', KEYS[2])
+			if not revision then epoch = ARGV[1]; redis.call('SET', KEYS[1], epoch); redis.call('SET', KEYS[2], '0'); revision = '0' end
+			return {epoch, revision}
+		`, []string{"world:epoch:" + scopeKey, "world:revision:" + scopeKey}, uuid.NewString())
+	}
+	if len(commands) == 0 {
+		return map[string]WorldSequenceRange{}, nil
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		return nil, err
+	}
+	sequences := make(map[string]WorldSequenceRange, len(commands))
+	for scopeKey, command := range commands {
+		values, err := command.Slice()
+		if err != nil {
+			return nil, err
+		}
+		if len(values) != 2 {
+			return nil, fmt.Errorf("unexpected world sequence result length: %d", len(values))
+		}
+		epoch, ok := values[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected world sequence epoch type: %T", values[0])
+		}
+		revision, err := strconv.ParseInt(fmt.Sprint(values[1]), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		sequences[scopeKey] = WorldSequenceRange{Epoch: epoch, FirstRevision: revision}
+	}
+	return sequences, nil
 }
 
 // SubscribeChannels subscribes to one or more Redis Pub/Sub channels or patterns.

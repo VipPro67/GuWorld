@@ -101,7 +101,9 @@ Teleport API: GET/PUT `/admin/teleport-arrays[/:id]`.
 - WebTransport: `CONNECT /api/wt`, xử lý ngoài Gin khi bật.
 - WebSocket fallback: `/api/ws`, tùy `WS_FALLBACK_ENABLED`.
 - `POST /api/realtime/metrics` nhận telemetry client có xác thực.
-- UI stream phát `world:change` sau khi dữ liệu tọa độ đã commit. Event có `scope` gồm `region_id`, `world_map_id` và `map_instance_id` (nếu là instance), cùng `entity_type`, `action`, `x`, `y`; backend chỉ chuyển tiếp đến người chơi thuộc phạm vi đó. Client patch ô đã rõ dữ liệu hoặc tải lại snapshot cho drop/resource point.
+- UI stream phát `world:change` sau mutation. Event có `scope` gồm `region_id`, `world_map_id`, `map_instance_id` (nếu là instance), cùng `entity_type`, `action`, `x`, `y`, `epoch` và `revision`. `world_monster` lifecycle event kèm `data.actor` khi có actor snapshot để client patch marker; thay đổi khác có thể yêu cầu tải lại snapshot. Backend chỉ chuyển tiếp đến người chơi thuộc phạm vi đó.
+- Snapshot `GET /api/explore/grid`, `GET /api/explore/cells/rect`, `GET /api/immortal-aperture/world-points` và `GET /api/world/monsters` trả `X-World-Revision`, `X-World-Epoch`, `X-World-Revision-Region`, `X-World-Revision-Map`, `X-World-Revision-Instance`, cùng `X-World-Start-Revision`/`X-World-Start-Epoch`. `GET /api/world/monsters` bổ sung `world_revisions_start` và `world_revisions`, là vector revision cho mọi region scope có thể xuất hiện trong snapshot; trả `503` nếu không thể chụp đủ vector. Client bỏ snapshot có sequence thay đổi trong lúc đọc, bỏ delta trùng/cũ và resync sau gap hoặc reconnect. Redis Pub/Sub không replay event đã lỡ.
+- `GET /api/world/revisions` trả vector sequence nhẹ cho AOI hiện tại; client bản đồ gọi định kỳ để phát hiện cả event cuối bị mất, sau đó tải lại snapshot nếu cursor phía server tiến lên.
 - Vị trí người chơi tiếp tục phát riêng qua `world:pos` với fan-out tới người chơi lân cận cùng map/instance. Combat simulation vẫn dùng HTTP combat session API.
 
 Rate limits, role requirements và payload validation có thể thay đổi theo middleware/handler; kiểm tra source trước khi xây client contract mới.

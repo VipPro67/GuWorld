@@ -1069,6 +1069,7 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
 		api.GET("/world/map-objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetZoneMapObjects)
 		api.GET("/world/monsters", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetWorldMonsters)
+		api.GET("/world/revisions", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.GetWorldRevisions)
 		api.POST("/world/portal/transfer", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.PortalTransfer)
 
 		// Ground drops / Chiến lợi phẩm trên bản đồ

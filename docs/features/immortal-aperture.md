@@ -14,7 +14,7 @@ Anchor aperture, quản lý node và worker, phân quyền khách, rồi mở po
 
 Khi Hạ Khiếu, chủ được chuyển tới tab Bản đồ & Phòng thủ với toàn cảnh lưới 20×20. Khách đã vào qua Môn Hộ chỉ thấy map khám phá quanh vị trí theo tầm nhìn thường; API chỉ trả người chơi, tác nhân quái, chiến lợi phẩm và mỏ trong phạm vi này. Khách có thể thu hoạch điểm tài nguyên khi ở trong phạm vi và tự rời Tiên Khiếu qua nút Rời Tiên Khiếu mà không cần chủ phê duyệt. Khi rời, khách trở về vị trí Môn Hộ bên ngoài. Các thao tác quản trị Tiên Khiếu vẫn theo quyền chủ hiện có.
 
-Thay đổi ô map và Môn Hộ được cập nhật qua `world:change` chỉ trong đúng `map_instance_id`. World Change Feed chưa thay thế polling trạng thái quái/boss hoặc bổ sung cơ chế phục hồi snapshot theo revision.
+Thay đổi ô map và Môn Hộ được cập nhật qua `world:change` chỉ trong đúng `map_instance_id`. Snapshot ô map, điểm tài nguyên và actor quái có revision theo scope; client resync sau reconnect hoặc khi phát hiện thiếu delta. Combat Tai Kiếp vẫn theo lượt.
 
 ## Luật, chi phí và giới hạn
 

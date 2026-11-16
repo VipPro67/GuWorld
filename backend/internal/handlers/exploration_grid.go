@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/worldfeed"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -73,6 +74,8 @@ func GetGrid(c *gin.Context) {
 	isApertureOwner := false
 	apertureOwnerName := ""
 	instanceID := mapInstanceIDForPlayer(player.ID.String())
+	snapshotScope := worldfeed.Scope{RegionID: player.CurrentRegion, WorldMapID: worldMapIDForRegion(player.CurrentRegion), InstanceID: instanceID}
+	beginWorldSnapshotRevision(c, snapshotScope)
 	if player.CurrentRegion == "aperture_interior" && instanceID != "" {
 		tx, txErr := db.DB.BeginTx(c.Request.Context(), nil)
 		if txErr != nil {
@@ -331,6 +334,7 @@ func GetGrid(c *gin.Context) {
 		}
 	}
 
+	setWorldSnapshotRevision(c, snapshotScope)
 	c.JSON(http.StatusOK, gin.H{
 		"x":                   player.X,
 		"y":                   player.Y,
