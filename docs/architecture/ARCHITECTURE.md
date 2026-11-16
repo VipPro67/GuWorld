@@ -48,7 +48,7 @@ Redis dùng cho cache, pub/sub và một số phối hợp realtime. Rate limite
 - Realtime transport phục vụ di chuyển/vị trí thế giới, chat, notification và player events. Nó không chạy combat simulation.
 - `world:change` là World Change Feed cho ô map, ground drop, resource point, portal và vòng đời actor quái/boss. Sau mutation, publisher cấp `epoch`/`revision` theo region/map/instance, phân giải người nhận một lần cho mỗi scope trong batch, rồi gửi event cùng danh sách người nhận qua Redis. Mỗi backend chỉ chuyển tiếp tới phiên cục bộ khớp danh sách đó.
 - Snapshot map cells, world points và world monsters trả sequence trong `X-World-*` response headers; world-monster snapshot còn trả vector revision cho các region scope mà AOI bao phủ. Client loại event trùng/cũ, resync snapshot khi sequence có gap hoặc UI stream reconnect. `/api/world/revisions` giúp phát hiện event cuối bị rơi; Redis Pub/Sub không lưu lịch sử event nên snapshot vẫn là phục hồi chuẩn.
-- `world:pos` giữ đường phát trực tiếp theo bán kính lân cận cho chuyển động người chơi. Combat và Tai Kiếp vẫn theo lượt; feed chỉ đồng bộ trạng thái thế giới ngoài combat.
+- `world:pos` phát vị trí tới người xem quanh cả tọa độ cũ và mới, đóng gói danh sách người nhận trong Redis để mọi backend chuyển tiếp tới đúng phiên cục bộ; client map subscribe và cập nhật marker ngay. Combat và Tai Kiếp vẫn theo lượt; feed chỉ đồng bộ trạng thái thế giới ngoài combat.
 - Client player events có cơ chế reconnect; WebTransport cần HTTPS và certificate hợp lệ.
 
 ## Ranh giới khi thay đổi

@@ -51,6 +51,8 @@ Map/region và portal data quyết định địa hình, vùng, ô vào và đi�
 
 ## Đồng bộ realtime
 
+Vị trí người chơi tiếp tục đi qua kênh `world:pos`; map subscribe kênh này và cập nhật marker trong viewport ngay sau delta, không chờ lần tải grid kế tiếp. Event được giới hạn theo `world_map_id`/`map_instance_id`; khi người chơi rời map hoặc instance, backend gửi event rời scope đến người xem ở vị trí cũ. Snapshot grid cung cấp scope tương ứng để client bỏ event ngoài map/instance hiện tại.
+
 World Change Feed phát delta vòng đời quái/boss khi actor được tạo, di chuyển/cập nhật bởi quản trị, bị hạ trong encounter hoặc hồi sinh. Payload mang actor mới để client cập nhật marker trực tiếp; event cũ chỉ có tọa độ sẽ khiến client tải lại snapshot. Snapshot quái cung cấp vector revision cho các region mà AOI đọc cùng lúc. Combat vẫn chạy theo lượt, realtime không mô phỏng lượt đánh.
 
 Mỗi event có `epoch` và `revision` tăng theo scope region/map/instance. Snapshot lưới, ô bản đồ, điểm tài nguyên và quái trả sequence bắt đầu/kết thúc qua các response header `X-World-*`; snapshot quái kèm vector cho mọi region scope trong AOI. Client đọc lại snapshot nếu revision đổi trong lúc truy vấn, bỏ event trùng/cũ, resync khi phát hiện gap và đồng bộ lại sau khi UI stream kết nối lại. Bản đồ kiểm tra cursor qua `GET /api/world/revisions` định kỳ để bắt cả event cuối bị rơi mà không có event kế tiếp. Redis Pub/Sub vẫn best-effort; snapshot là nguồn phục hồi khi event bị lỡ. Nếu Redis mất sequence, epoch mới khiến client đồng bộ lại thay vì nhầm revision vừa reset với event cũ.

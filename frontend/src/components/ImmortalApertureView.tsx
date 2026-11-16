@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { operationsBy } from "@/lib/effect-blocks";
 import { useGameStore, ApertureResourceNode, ApertureResourcePoint, TribulationEnemy, ApertureGuest } from "@/store/useGameStore";
@@ -44,8 +44,15 @@ import { AperturePointsPanel, pointGlyph, pointIsReady } from "./AperturePointsP
 import { TribulationRealTimeInfo } from "./TribulationRealTimeInfo";
 import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import { usePolling } from "@/lib/usePolling";
+import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
+import { applyWorldPosition, type WorldPositionEvent } from "@/lib/realtime/worldPositions";
 
 interface ApertureMapSnapshot {
+  x: number;
+  y: number;
+  vision_radius: number;
+  world_map_id?: string;
+  map_instance_id?: string;
   players_on_map?: { id: string; username: string; x: number; y: number }[];
   ground_drops?: { id: string; x: number; y: number }[];
 }
@@ -324,6 +331,7 @@ export const ImmortalApertureView: React.FC = () => {
   const fetchWorldMonsters = useWorldStore((state) => state.fetchWorldMonsters);
   const checkWorldRevisions = useWorldStore((state) => state.checkWorldRevisions);
   const [apertureMapSnapshot, setApertureMapSnapshot] = useState<ApertureMapSnapshot | null>(null);
+  const recentWorldPositions = useRef(new Map<string, WorldPositionEvent>());
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
   const [buildCells, setBuildCells] = useState<{ x: number; y: number }[]>([]);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
@@ -334,11 +342,21 @@ export const ImmortalApertureView: React.FC = () => {
 
   const refreshApertureMap = useCallback(async () => {
     if (!ownerInsideAperture) return;
-    const snapshot = await fetchGrid(10) as ApertureMapSnapshot | null;
+    let snapshot = await fetchGrid(10) as ApertureMapSnapshot | null;
+    if (snapshot) {
+      const now = Date.now();
+      for (const [playerID, event] of recentWorldPositions.current) {
+        if (now - event.ts > 30_000) {
+          recentWorldPositions.current.delete(playerID);
+          continue;
+        }
+        snapshot = applyWorldPosition(snapshot, event, player?.id || "");
+      }
+    }
     if (useGameStore.getState().player?.map_instance_id === aperture?.id && snapshot) {
       setApertureMapSnapshot(snapshot);
     }
-  }, [aperture?.id, fetchGrid, ownerInsideAperture]);
+  }, [aperture?.id, fetchGrid, ownerInsideAperture, player?.id]);
 
   useEffect(() => {
     if (activeTab === "map" && ownerInsideAperture) void refreshApertureMap();
@@ -348,6 +366,18 @@ export const ImmortalApertureView: React.FC = () => {
     if (activeTab === "map" && ownerInsideAperture) void fetchWorldMonsters();
   }, [activeTab, ownerInsideAperture, fetchWorldMonsters]);
   usePolling(() => checkWorldRevisions().then(() => undefined), 5000, activeTab === "map" && ownerInsideAperture);
+  useEffect(() => {
+    if (!ownerInsideAperture || !player?.id) return;
+    return uiRealtimeManager.subscribe<WorldPositionEvent>("world:pos", (event) => {
+      if (!event || typeof event.id !== "string" || typeof event.ts !== "number") return;
+      const previous = recentWorldPositions.current.get(event.id);
+      if (previous && previous.ts > event.ts) return;
+      recentWorldPositions.current.set(event.id, event);
+      setApertureMapSnapshot((snapshot) => snapshot
+        ? applyWorldPosition(snapshot, event, player.id)
+        : snapshot);
+    });
+  }, [ownerInsideAperture, player?.id]);
 
   // Aperture Anchoring & Portal / Guest State
   const [showAnchorModal, setShowAnchorModal] = useState<boolean>(false);

@@ -328,15 +328,16 @@ func PublishRespawnWorldPosition(ctx context.Context, playerID uuid.UUID, region
 		if zone := ZoneByID(region); zone != nil && zone.WorldMapID != "" {
 			mapID = zone.WorldMapID
 		}
-		worldPosIndex.Set(WorldPosEntry{ID: playerID.String(), Username: username, AvatarURL: avatarURL, X: x, Y: y, Region: region, MapID: mapID, TS: time.Now().UnixMilli()})
 		broadcastWorldPos(WorldPosEvent{
-			ID:        playerID.String(),
-			Username:  username,
-			AvatarURL: avatarURL,
-			X:         x,
-			Y:         y,
-			Region:    region,
-			TS:        time.Now().UnixMilli(),
+			ID:            playerID.String(),
+			Username:      username,
+			AvatarURL:     avatarURL,
+			X:             x,
+			Y:             y,
+			Region:        region,
+			MapID:         mapID,
+			TS:            time.Now().UnixMilli(),
+			ScopeResolved: true,
 		})
 	}
 }
@@ -352,13 +353,16 @@ const (
 // broadcastPlayerWorldPos is the one construction of a position event.
 func broadcastPlayerWorldPos(player *models.Player) {
 	broadcastWorldPos(WorldPosEvent{
-		ID:        player.ID.String(),
-		Username:  player.Username,
-		AvatarURL: player.AvatarURL,
-		X:         player.X,
-		Y:         player.Y,
-		Region:    player.CurrentRegion,
-		TS:        time.Now().UnixMilli(),
+		ID:            player.ID.String(),
+		Username:      player.Username,
+		AvatarURL:     player.AvatarURL,
+		X:             player.X,
+		Y:             player.Y,
+		Region:        player.CurrentRegion,
+		MapID:         worldMapIDForRegion(player.CurrentRegion),
+		InstanceID:    player.MapInstanceID,
+		TS:            time.Now().UnixMilli(),
+		ScopeResolved: true,
 	})
 }
 
@@ -370,13 +374,16 @@ func publishPartyMovement(members []SyncedPartyMember, mode partyMovementPublish
 	}
 	for _, member := range members {
 		broadcastWorldPos(WorldPosEvent{
-			ID:        member.ID.String(),
-			Username:  member.Username,
-			AvatarURL: member.AvatarURL,
-			X:         member.X,
-			Y:         member.Y,
-			Region:    member.Region,
-			TS:        time.Now().UnixMilli(),
+			ID:            member.ID.String(),
+			Username:      member.Username,
+			AvatarURL:     member.AvatarURL,
+			X:             member.X,
+			Y:             member.Y,
+			Region:        member.Region,
+			MapID:         member.MapID,
+			InstanceID:    member.InstanceID,
+			TS:            time.Now().UnixMilli(),
+			ScopeResolved: true,
 		})
 		if mode == publishPartyPositionDelta {
 			PublishPlayerPositionDelta(member.ID, member.X, member.Y)

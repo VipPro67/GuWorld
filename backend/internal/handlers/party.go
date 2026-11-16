@@ -588,12 +588,14 @@ func checkPartyTeleportRankGate(tx *sql.Tx, player *models.Player, guRank int) e
 }
 
 type SyncedPartyMember struct {
-	ID        uuid.UUID
-	Username  string
-	AvatarURL string
-	Region    string
-	X         int
-	Y         int
+	ID         uuid.UUID
+	Username   string
+	AvatarURL  string
+	Region     string
+	MapID      string
+	InstanceID string
+	X          int
+	Y          int
 }
 
 func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMember {
@@ -685,13 +687,19 @@ func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMe
 				continue
 			}
 		}
+		instanceID := ""
+		if leaderMapInstance.Valid {
+			instanceID = leaderMapInstance.String
+		}
 		synced = append(synced, SyncedPartyMember{
-			ID:        m.id,
-			Username:  m.username,
-			AvatarURL: m.avatarURL,
-			Region:    leader.CurrentRegion,
-			X:         leader.X,
-			Y:         leader.Y,
+			ID:         m.id,
+			Username:   m.username,
+			AvatarURL:  m.avatarURL,
+			Region:     leader.CurrentRegion,
+			MapID:      worldMapIDForRegion(leader.CurrentRegion),
+			InstanceID: instanceID,
+			X:          leader.X,
+			Y:          leader.Y,
 		})
 	}
 	return synced

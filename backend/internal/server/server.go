@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/authz"
+	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/handlers"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
@@ -447,6 +448,17 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 		handlers.SetRealtimeEventStatsProvider(shub.GetStats)
 		handlers.SetRealtimeConnectedProvider(shub.IsConnected)
 		handlers.WorldPosBroadcaster = func(channel string, payload []byte, targets map[uuid.UUID]struct{}) {
+			if cache.Client != nil {
+				targetIDs := make([]uuid.UUID, 0, len(targets))
+				for target := range targets {
+					targetIDs = append(targetIDs, target)
+				}
+				if err := cache.PublishEventQuick(channel, uihub.TargetedEvent{Targets: targetIDs, Payload: json.RawMessage(payload)}); err == nil {
+					return
+				} else {
+					logger.S.Warnf("publish targeted world-position event: %v", err)
+				}
+			}
 			shub.BroadcastToTargets(uihub.ChannelName(channel), worldEventEnvelope(channel, payload), targets)
 		}
 	}

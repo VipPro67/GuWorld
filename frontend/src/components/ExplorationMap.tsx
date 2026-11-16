@@ -5,6 +5,8 @@ import { Compass, Sparkles, DoorOpen, Droplets, Footprints, Landmark, ShieldAler
 import { useGameStore, Player, GroundDrop, ApertureResourcePoint } from "@/store/useGameStore";
 import { useWorldStore } from "@/store/useWorldStore";
 import { usePolling } from "@/lib/usePolling";
+import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
+import { applyWorldPosition, type WorldPositionEvent } from "@/lib/realtime/worldPositions";
 import { getWorldResourceGroup, WORLD_RESOURCE_ASSETS } from "@/lib/worldResourceAssets";
 import { GameModal } from "@/components/ui/GameModal";
 import { WorldAtlasModal } from "@/components/WorldAtlasModal";
@@ -28,6 +30,8 @@ interface GridCell {
 
 interface GridData {
   region_id: string;
+  world_map_id?: string;
+  map_instance_id?: string;
   x: number;
   y: number;
   vision_radius: number;
@@ -97,6 +101,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const fetchMyTeleportArrays = useGameStore((state) => state.fetchMyTeleportArrays);
 
   const [gridSnapshot, setGridSnapshot] = useState<GridData | null>(null);
+  const recentWorldPositions = useRef(new Map<string, WorldPositionEvent>());
   const gridRequestRevision = useRef(0);
   const [preferredRadius, setPreferredRadius] = useState<number>(() => {
     if (typeof window !== "undefined") {
@@ -171,10 +176,28 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       || data.x !== requestedPlayer.x
       || data.y !== requestedPlayer.y) return null;
 
-    const snapshot = { ...data, region_id: requestedPlayer.current_region } as GridData;
+    let snapshot = { ...data, region_id: requestedPlayer.current_region } as GridData;
+    const now = Date.now();
+    for (const [playerID, event] of recentWorldPositions.current) {
+      if (now - event.ts > 30_000) {
+        recentWorldPositions.current.delete(playerID);
+        continue;
+      }
+      snapshot = applyWorldPosition(snapshot, event, requestedPlayer.id);
+    }
     if (requestRevision === gridRequestRevision.current) setGridSnapshot(snapshot);
     return snapshot;
   }, [fetchGrid, preferredRadius]);
+
+  useEffect(() => uiRealtimeManager.subscribe<WorldPositionEvent>("world:pos", (event) => {
+    if (!event || typeof event.id !== "string" || typeof event.ts !== "number") return;
+    const previous = recentWorldPositions.current.get(event.id);
+    if (previous && previous.ts > event.ts) return;
+    recentWorldPositions.current.set(event.id, event);
+    setGridSnapshot((snapshot) => snapshot
+      ? applyWorldPosition(snapshot, event, player.id)
+      : snapshot);
+  }), [player.id]);
 
   const handleRadiusChange = (newRadius: number) => {
     setPreferredRadius(newRadius);
@@ -964,8 +987,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
             })}
           </div>
         ) : (
-          <div className="text-sm text-zinc-500 py-16 flex flex-col items-center gap-3">
-            <Compass className="w-8 h-8 animate-spin text-zinc-600" />
+          <div className={`flex w-full ${maxContainerWidth} aspect-square flex-col items-center justify-center gap-3 text-sm text-zinc-500`}>
+            <Compass className="h-8 w-8 animate-spin text-zinc-600" />
             <span>Đang cảm ứng thiên địa, giải tỏa sương mù...</span>
           </div>
         )}

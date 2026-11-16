@@ -59,6 +59,24 @@ func subscribePattern(shub *ShardedHub, pattern string) {
 		ch := pubsub.Channel()
 		for msg := range ch {
 			clientChannel, clientMsg, broadcastNormalized := formatClientEvent(msg.Channel, []byte(msg.Payload))
+			if msg.Channel == "world:pos" {
+				var event TargetedEvent
+				if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
+					logger.S.Warnf("discard invalid targeted world-position event: %v", err)
+					continue
+				}
+				if !json.Valid(event.Payload) {
+					logger.S.Warnf("discard targeted world-position event with invalid payload")
+					continue
+				}
+				_, clientPayload, _ := formatClientEvent(msg.Channel, event.Payload)
+				targets := make(map[uuid.UUID]struct{}, len(event.Targets))
+				for _, target := range event.Targets {
+					targets[target] = struct{}{}
+				}
+				shub.BroadcastToTargets(ChannelName(clientChannel), clientPayload, targets)
+				continue
+			}
 			if msg.Channel == worldfeed.RedisChannel {
 				deliveries, err := worldfeed.DecodeEnvelope([]byte(msg.Payload))
 				if err != nil {

@@ -20,6 +20,7 @@ var WorldPosBroadcaster func(channel string, payload []byte, targets map[uuid.UU
 // instead of the total number of connected clients.
 type WorldPosEvent struct {
 	ID            string `json:"id"`
+	Action        string `json:"action,omitempty"`
 	Username      string `json:"username"`
 	AvatarURL     string `json:"avatar_url"`
 	X             int    `json:"x"`
@@ -68,10 +69,17 @@ func broadcastWorldPos(payload WorldPosEvent) {
 	if payload.MapID == "" {
 		payload.MapID = worldMapIDForRegion(payload.Region)
 	}
-	if previous, ok := worldPosIndex.Get(payload.ID); ok {
+	previous, hadPrevious := worldPosIndex.Get(payload.ID)
+	if hadPrevious {
 		if !payload.ScopeResolved && payload.InstanceID == "" && previous.InstanceID != "" && previous.MapID == payload.MapID {
 			payload.InstanceID = previous.InstanceID
 		}
+	}
+	oldTargets := map[uuid.UUID]struct{}{}
+	if hadPrevious {
+		oldTargets = worldPositionTargets(worldPosIndex.NearbyInScope(
+			previous.X, previous.Y, WorldPosInterestRadius, payload.ID, previous.MapID, previous.InstanceID,
+		))
 	}
 
 	worldPosIndex.Set(WorldPosEntry{
@@ -87,16 +95,35 @@ func broadcastWorldPos(payload WorldPosEvent) {
 	})
 
 	nearby := worldPosIndex.NearbyInScope(payload.X, payload.Y, WorldPosInterestRadius, payload.ID, payload.MapID, payload.InstanceID)
-
 	if WorldPosBroadcaster != nil {
-		targets := make(map[uuid.UUID]struct{}, len(nearby))
-		for _, e := range nearby {
-			if nid, err := uuid.Parse(e.ID); err == nil {
-				targets[nid] = struct{}{}
+		newTargets := worldPositionTargets(nearby)
+		scopeChanged := hadPrevious && (previous.MapID != payload.MapID || previous.InstanceID != payload.InstanceID)
+		if scopeChanged && len(oldTargets) > 0 {
+			left := WorldPosEvent{
+				ID: payload.ID, Action: "left", Username: payload.Username, AvatarURL: payload.AvatarURL,
+				X: previous.X, Y: previous.Y, Region: previous.Region, MapID: previous.MapID,
+				InstanceID: previous.InstanceID, TS: payload.TS,
+			}
+			WorldPosBroadcaster("world:pos", mustMarshal(left), oldTargets)
+		} else if !scopeChanged {
+			for target := range oldTargets {
+				newTargets[target] = struct{}{}
 			}
 		}
-		WorldPosBroadcaster("world:pos", mustMarshal(payload), targets)
+		if len(newTargets) > 0 {
+			WorldPosBroadcaster("world:pos", mustMarshal(payload), newTargets)
+		}
 	}
+}
+
+func worldPositionTargets(entries []WorldPosEntry) map[uuid.UUID]struct{} {
+	targets := make(map[uuid.UUID]struct{}, len(entries))
+	for _, entry := range entries {
+		if playerID, err := uuid.Parse(entry.ID); err == nil {
+			targets[playerID] = struct{}{}
+		}
+	}
+	return targets
 }
 
 func mustMarshal(v any) []byte {
