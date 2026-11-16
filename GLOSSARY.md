@@ -7,3 +7,31 @@ Thuật ngữ gameplay và thế giới dùng chung trong GuWorld.
 **World Change Feed**:
 Luồng thông báo những thay đổi trong thế giới theo khu vực, tọa độ và instance để các màn hình đang xem có thể cập nhật trạng thái.
 _Avoid_: World event bus, map polling
+
+## Effect gameplay
+
+**Nội tại có điều kiện**:
+Nội tại chỉ đóng góp hiệu lực khi điều kiện riêng của nó đang thỏa mãn.
+
+**Hiệu ứng có thời hạn**:
+Hiệu ứng đã kích hoạt và duy trì hiệu lực trong một khoảng thời gian được xác định.
+
+**Nguồn effect**:
+Cổ, chủng tộc, thể chất, trạng thái hoặc thực thể khác khởi phát hay cung cấp một effect.
+
+**Path chính của hành động**:
+Lưu phái đại diện cho hành động, dùng khi effect cần kiểm tra affinity theo path.
+
+**Điều kiện race mục tiêu**:
+Điều kiện effect khớp với race cụ thể của mục tiêu; race không suy ra từ path của hành động.
+
+## Tiên Khiếu
+
+**Môn Hộ**:
+Cửa ra vào nối Tiên Khiếu với thế giới bên ngoài khi chủ nhân Hạ Khiếu.
+
+**Hạ Khiếu**:
+Đưa Tiên Khiếu ra thế giới bên ngoài và mở Môn Hộ tại một vị trí trong thế giới.
+
+**Xâm nhập Tiên Khiếu**:
+Vào Tiên Khiếu với tư cách người ngoài; hành động này không chuyển quyền làm chủ Tiên Khiếu.
