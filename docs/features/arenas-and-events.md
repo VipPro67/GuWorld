@@ -12,11 +12,14 @@ Mỗi hoạt động có lịch, rank, phí hoặc registration window riêng. A
 
 Chọn hoạt động tại UI, kiểm tra quota/phase, đăng ký hoặc bắt đầu challenge. Khiêu chiến Võ Đài mở bước chuẩn bị; PvP thật chỉ hủy được khi cả hai người đồng ý, còn PvP ảo có thể hủy ngay; việc hủy trước khi bắt đầu combat không kết toán thắng thua. Match được xử lý theo combat engine; sau khi giải chốt, phần thưởng xếp hạng xuất hiện trong tab **Phần thưởng** và người chơi bấm **Nhận thưởng** để cộng tiền/danh hiệu vào nhân vật. UI làm mới danh sách khi nhận sự kiện kết thúc giải. Death Arena trao Gu được chỉ định trực tiếp lúc settlement; Martial Arena chỉ có Gu nếu phần thưởng được cấu hình. Gacha/cược có flow riêng và phải xác nhận chi phí trước khi gửi.
 
+Gacha cho phép mở tối đa 100 lượt trong một request; animation chỉ lần lượt hiện tối đa 20 phần thưởng đầu rồi đóng, phần còn lại vẫn nằm trong kết quả và được ghi nhận cùng giao dịch.
+
 ## Luật, chi phí và giới hạn
 
 - Death Arena tối đa 16 đội, mỗi đội tối đa 6 người (96 slots); cần ít nhất 2 đội để tạo bracket. Lịch hiện tại: thứ Bảy 16:00–17:00 giờ Việt Nam, bắt đầu xử lý lúc 17:00.
 - Martial Arena chỉ tạo giải khi có ít nhất 8 người chơi thuộc rank group online trong 5 phút gần nhất; snapshot tối đa 128 người. Ghép tự động, không đăng ký thủ công.
 - Arena challenge cap: 10/ngày.
+- Gacha giới hạn 100 lượt/request; mở từ 10 lượt giảm 10% chi phí. Server là nơi xác nhận chi phí và phần thưởng.
 - Death Arena phụ thuộc registration phase, bracket và lịch xử lý.
 - Martial Arena ghép tự động theo realm và dùng lịch tuần; không cần manual registration.
 - Tower có progression/entry rules riêng; gacha và betting dùng currency/odds/state do server trả về.
@@ -38,11 +41,11 @@ Arena settings, schedule, bracket, reward tables, tower configuration, gacha poo
 ## Mã nguồn liên quan
 
 - Backend: `backend/internal/handlers/arena.go`, `death_arena_*.go`, `martial_arena_*.go`, `tower.go`, `gacha.go`, `beast_betting.go`.
-- Frontend: `frontend/src/components/DeathArena/DeathArenaView.tsx`, `frontend/src/components/DeathArena/DeathArenaRewards.tsx`, `frontend/src/components/MartialArena/MartialArenaView.tsx`, `frontend/src/components/MartialArena/MartialArenaRewards.tsx`; state and API calls in `frontend/src/store/slices/arenaSlice.ts` and `frontend/src/store/slices/martialArenaSlice.ts`.
+- Frontend: `frontend/src/components/DeathArena/DeathArenaView.tsx`, `frontend/src/components/DeathArena/DeathArenaRewards.tsx`, `frontend/src/components/MartialArena/MartialArenaView.tsx`, `frontend/src/components/MartialArena/MartialArenaRewards.tsx`; state and API calls in `frontend/src/store/slices/arenaSlice.ts` and `frontend/src/store/slices/martialArenaSlice.ts`. Gacha UI is `frontend/src/components/GachaPanel.tsx`, with API calls in `frontend/src/store/slices/gachaSlice.ts`.
 
 ## API liên quan
 
-Routes theo từng hoạt động trong `backend/internal/server/server.go`; xem [API guide](../guides/API.md).
+Routes theo từng hoạt động trong `backend/internal/server/server.go`; gacha dùng `GET /api/gacha/pools`, `POST /api/gacha/open` và route tương thích `POST /api/gacha/open10` trong `backend/internal/handlers/gacha.go`; xem [API guide](../guides/API.md).
 
 ## Ví dụ flow
 

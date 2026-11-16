@@ -28,6 +28,8 @@ const POOL_BTN: Record<string, string> = {
 
 const QUICK_QTYS = [1, 10, 50, 100];
 const COOLDOWN_MS = 12000;
+const MAX_ANIMATED_REWARDS = 20;
+const REWARD_REVEAL_MS = 150;
 
 interface GachaPoolShape {
   id: string;
@@ -67,11 +69,12 @@ export const GachaPanel: React.FC = () => {
   const cooldownLeft = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
 
   useEffect(() => {
-    if (showAnim && animIndex < animRewards.length) {
-      const timer = setTimeout(() => setAnimIndex(animIndex + 1), 600);
+    const animatedCount = Math.min(animRewards.length, MAX_ANIMATED_REWARDS);
+    if (showAnim && animIndex < animatedCount) {
+      const timer = setTimeout(() => setAnimIndex(animIndex + 1), REWARD_REVEAL_MS);
       return () => clearTimeout(timer);
     }
-    if (showAnim && animIndex >= animRewards.length) {
+    if (showAnim && animIndex >= animatedCount) {
       const timer = setTimeout(() => { setShowAnim(false); setResults(null); }, 2000);
       return () => clearTimeout(timer);
     }
@@ -128,7 +131,7 @@ export const GachaPanel: React.FC = () => {
   };
 
   if (showAnim) {
-    const shown = animRewards.slice(0, 20);
+    const shown = animRewards.slice(0, MAX_ANIMATED_REWARDS);
     const hiddenCount = animRewards.length - shown.length;
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-contain bg-black/80 p-4" onClick={closeAnimation}>

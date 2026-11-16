@@ -25,6 +25,23 @@ func TestRollGuNeverReturnsExcludedGu(t *testing.T) {
 	}
 }
 
+func TestPoolCanDropImmortal(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		pool GachaPool
+		want bool
+	}{
+		{name: "common ranks", pool: GachaPool{Rewards: []GachaRewardItem{{Type: "gu_rank", ID: "1,2,3"}}}},
+		{name: "rank six", pool: GachaPool{Rewards: []GachaRewardItem{{Type: "gu_rank", ID: "6"}}}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := poolCanDropImmortal(&tc.pool); got != tc.want {
+				t.Fatalf("poolCanDropImmortal() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestDeductGachaCostAmount(t *testing.T) {
 	p := &models.Player{
 		ResourceState: models.ResourceState{

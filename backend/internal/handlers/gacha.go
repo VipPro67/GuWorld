@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"math/rand"
@@ -165,6 +164,7 @@ type precomputedPools struct {
 	foods         []weightedMaterialEntry
 	drops         []weightedMaterialEntry          // Material + Food (rương mỏ)
 	recipesByRank map[string][]weightedRecipeEntry // "all" → pool (mine chest)
+	recipeOnce    sync.Once
 	totalMat      float64
 	totalFood     float64
 	totalDrops    float64
@@ -239,15 +239,22 @@ func getPrecomputedPools() *precomputedPools {
 		pc.guByRank[rf] = pool
 	}
 
-	// Build the recipe pool for open_mine_chest (item effect).
-	rows, err := db.DB.Query(`SELECT target_gu_id, target_rank, variant FROM refining_recipes`)
-	if err == nil {
+	globalPrecomputedPools = pc
+	gachaPoolsLastUpdate = time.Now()
+	return pc
+}
+
+func (pc *precomputedPools) loadRecipePool() {
+	pc.recipeOnce.Do(func() {
+		rows, err := db.DB.Query(`SELECT target_gu_id, target_rank, variant FROM refining_recipes`)
+		if err != nil {
+			return
+		}
 		defer rows.Close()
 		for rows.Next() {
 			var targetGuID string
 			var targetRank, variant int
 			if err := rows.Scan(&targetGuID, &targetRank, &variant); err == nil {
-				// Rương mỏ: mọi rank đều có thể ra, rank cao hiếm hơn.
 				weight := recipeDropMultiplier(targetRank)
 				if weight > 0 {
 					pc.recipesByRank["all"] = append(pc.recipesByRank["all"], weightedRecipeEntry{
@@ -259,11 +266,7 @@ func getPrecomputedPools() *precomputedPools {
 				}
 			}
 		}
-	}
-
-	globalPrecomputedPools = pc
-	gachaPoolsLastUpdate = time.Now()
-	return pc
+	})
 }
 
 func (pc *precomputedPools) rollGu(rankKey string, excludedImmortal map[string]bool) (string, int) {
@@ -368,25 +371,6 @@ func (pc *precomputedPools) rollDropBoosted(minRank int, factor float64) string 
 	return pc.drops[0].id
 }
 
-// ── Immortal Gu cache (5-minute TTL) ────────────────────────────────
-
-type immortalCache struct {
-	mu       sync.RWMutex
-	data     map[string]bool
-	loadedAt int64 // unix timestamp
-	ttlSec   int64
-}
-
-func getCachedImmortalGuIDs(ctx context.Context, q interface {
-	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}) (map[string]bool, error) {
-	return db.GetExistingImmortalGuIDs(ctx, q)
-}
-
-func timeNowUnix() int64 {
-	return time.Now().Unix()
-}
-
 func OpenGacha(c *gin.Context) {
 	runGachaOpen(c, 0)
 }
@@ -433,15 +417,18 @@ func runGachaOpen(c *gin.Context, forced int) {
 		return
 	}
 
-	// Populate the global catalog before reserving a transaction connection.
-	// A cold cache queries refining_recipes through db.DB; doing that while a
-	// transaction is open can exhaust the pool under concurrent gacha traffic.
+	// Populate the global catalog before reserving a transaction connection so
+	// the player transaction stays focused on the open and its rewards.
 	pc := getPrecomputedPools()
-	excludedImmortal, err := getCachedImmortalGuIDs(c.Request.Context(), db.DB)
-	if err != nil {
-		logger.S.Errorf("gacha: load existing immortal Gu failed for player %s: %v", playerID, err)
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database đang bận, vui lòng thử lại"})
-		return
+	var excludedImmortal map[string]bool
+	if poolCanDropImmortal(pool) {
+		var queryErr error
+		excludedImmortal, queryErr = db.GetExistingImmortalGuIDs(c.Request.Context(), db.DB)
+		if queryErr != nil {
+			logger.S.Errorf("gacha: load existing immortal Gu failed for player %s: %v", playerID, queryErr)
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database đang bận, vui lòng thử lại"})
+			return
+		}
 	}
 
 	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
@@ -588,6 +575,21 @@ func runGachaOpen(c *gin.Context, forced int) {
 			"message": fmt.Sprintf("Mở %d lần thành công! Nhân Khí +%.0f.%s\n", quantity, qiGained, discountMsg) + announcement,
 		})
 	}
+}
+
+func poolCanDropImmortal(pool *GachaPool) bool {
+	for _, reward := range pool.Rewards {
+		if reward.Type != "gu_rank" {
+			continue
+		}
+		for _, rank := range strings.Split(reward.ID, ",") {
+			var parsed int
+			if _, err := fmt.Sscanf(rank, "%d", &parsed); err == nil && parsed >= 6 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 type GachaResultItem struct {

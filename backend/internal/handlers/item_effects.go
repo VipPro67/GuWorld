@@ -475,6 +475,7 @@ func rollItemDrop(tx *sql.Tx, player *models.Player, boostMinRank int, boostFact
 
 func rollRecipeDrop(tx *sql.Tx, player *models.Player, boostMinRank int, boostFactor float64) (string, map[string]interface{}) {
 	pc := getPrecomputedPools()
+	pc.loadRecipePool()
 	allRecipes := pc.recipesByRank["all"]
 	if len(allRecipes) == 0 {
 		return "", nil
