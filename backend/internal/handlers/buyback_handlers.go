@@ -595,8 +595,8 @@ func SellToBuybackOrder(c *gin.Context) {
 		if o.Currency == "immortal" {
 			currencyLabel = "Tiên Nguyên Thạch"
 		}
-		notify.Send(db.DB, buyerUUID, "buyback_filled", "Đơn Thu Mua Đã Khớp",
-			fmt.Sprintf("Đạo hữu %s đã bán %d vật phẩm vào đơn thu mua của bạn. Bạn chi ra %.3f %s.", actor.Username, tradeQty, pricing.Quantize(o.UnitPrice*float64(tradeQty)), currencyLabel))
+		notify.SendBestEffort(db.DB, buyerUUID, "buyback_filled", "Đơn Thu Mua Đã Khớp",
+			fmt.Sprintf("Đạo hữu %s đã bán %d vật phẩm vào đơn thu mua của bạn. Bạn chi ra %.3f %s.", actor.Username, tradeQty, pricing.Quantize(o.UnitPrice*float64(tradeQty)), currencyLabel), c.Request.Context())
 
 		tx2, _ := db.DB.Begin()
 		updatedActor, _ := evaluateManaTx(tx2, actor.ID)
@@ -692,8 +692,8 @@ func SellToBuybackOrder(c *gin.Context) {
 		if o.Currency == "immortal" {
 			currencyLabel2 = "Tiên Nguyên Thạch"
 		}
-		notify.Send(db.DB, sellerUUID, "sell_order_filled", "Đơn Đăng Bán Đã Khớp",
-			fmt.Sprintf("Đạo hữu %s đã mua %d vật phẩm trong đơn đăng bán của bạn. Bạn nhận %.3f %s.", actor.Username, tradeQty, sellerPayout, currencyLabel2))
+		notify.SendBestEffort(db.DB, sellerUUID, "sell_order_filled", "Đơn Đăng Bán Đã Khớp",
+			fmt.Sprintf("Đạo hữu %s đã mua %d vật phẩm trong đơn đăng bán của bạn. Bạn nhận %.3f %s.", actor.Username, tradeQty, sellerPayout, currencyLabel2), c.Request.Context())
 
 		tx2, _ := db.DB.Begin()
 		updatedActor, _ := evaluateManaTx(tx2, actor.ID)

@@ -1,12 +1,14 @@
 package notify
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"go.uber.org/zap"
 )
 
 // Querier abstracts the database transaction or connection needed to insert a
@@ -27,8 +29,9 @@ type Notification struct {
 }
 
 // Send inserts a notification for a player and publishes it to Redis for WebSocket broadcast.
-// Failures are logged and returned. Most callers treat notifications as
-// best-effort, but transaction callers must handle the error because PostgreSQL
+// Failures are returned. Callers that intentionally ignore notification
+// failures use SendBestEffort, which records one structured error event. Most
+// transaction callers must handle the error because PostgreSQL
 // aborts the transaction after a failed statement.
 //
 // When q is a *sql.DB the insert is retried up to 3 times on lock-timeout
@@ -39,7 +42,6 @@ type Notification struct {
 // transaction remains usable.
 func Send(q Querier, playerID uuid.UUID, ntype, title, content string) error {
 	if q == nil {
-		logger.S.Errorf("notify: nil querier, skipping player=%s type=%s", playerID, ntype)
 		return sql.ErrConnDone
 	}
 	n := Notification{
@@ -68,14 +70,11 @@ func Send(q Querier, playerID uuid.UUID, ntype, title, content string) error {
 			if !isRetryableDBError(err) || attempt == maxAttempts {
 				break
 			}
-			logger.S.Warnf("notify: insert attempt %d/%d failed (retrying) player=%s type=%s: %v",
-				attempt, maxAttempts, playerID, ntype, err)
 			time.Sleep(time.Duration(attempt) * 2 * time.Second)
 			// Reuse a fresh UUID so a partial insert on a previous attempt doesn't
 			// cause a duplicate-key conflict on retry.
 			n.ID = uuid.New().String()
 		}
-		logger.S.Errorf("notify: insert failed player=%s type=%s: %v", playerID, ntype, err)
 		return err
 	}
 
@@ -87,7 +86,6 @@ func Send(q Querier, playerID uuid.UUID, ntype, title, content string) error {
 			return err
 		}
 		if _, err := tx.Exec(insertSQL, n.ID, n.PlayerID, n.Type, n.Title, n.Content, n.CreatedAt); err != nil {
-			logger.S.Errorf("notify: insert failed player=%s type=%s: %v", playerID, ntype, err)
 			if _, rollbackErr := tx.Exec("ROLLBACK TO SAVEPOINT notify_send"); rollbackErr != nil {
 				return rollbackErr
 			}
@@ -106,11 +104,23 @@ func Send(q Querier, playerID uuid.UUID, ntype, title, content string) error {
 
 	// Fallback for any other Querier: single attempt, no retry.
 	if _, err := q.Exec(insertSQL, n.ID, n.PlayerID, n.Type, n.Title, n.Content, n.CreatedAt); err != nil {
-		logger.S.Errorf("notify: insert failed player=%s type=%s: %v", playerID, ntype, err)
 		return err
 	}
 	push(playerID, n)
 	return nil
+}
+
+// SendBestEffort sends a notification whose failure must not fail its caller.
+// The caller owns this single log event; use Send when the error is propagated.
+func SendBestEffort(q Querier, playerID uuid.UUID, ntype, title, content string, contexts ...context.Context) {
+	if err := Send(q, playerID, ntype, title, content); err != nil {
+		var ctx context.Context
+		if len(contexts) > 0 {
+			ctx = contexts[0]
+		}
+		logger.LogError(ctx, "notification_send_failed", err,
+			zap.String("notification_type", ntype), zap.String("player_id", playerID.String()))
+	}
 }
 
 // SendDeferred inserts a notification in a caller-owned transaction and
@@ -129,7 +139,6 @@ func SendDeferred(tx *sql.Tx, playerID uuid.UUID, ntype, title, content string) 
 		return Notification{}, err
 	}
 	if _, err := tx.Exec(insertSQL, n.ID, n.PlayerID, n.Type, n.Title, n.Content, n.CreatedAt); err != nil {
-		logger.S.Errorf("notify: deferred insert failed player=%s type=%s: %v", playerID, ntype, err)
 		if _, rollbackErr := tx.Exec("ROLLBACK TO SAVEPOINT notify_send_deferred"); rollbackErr != nil {
 			return Notification{}, rollbackErr
 		}

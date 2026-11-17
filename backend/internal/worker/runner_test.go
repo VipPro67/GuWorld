@@ -54,10 +54,14 @@ func TestSafeRunRecovers(t *testing.T) {
 
 func TestSafeRunEAndEventRecorder(t *testing.T) {
 	var recordedName string
+	var recordedRunID string
 	var recordedErr error
-	SetWorkerEventRecorder(func(workerName string, err error, duration time.Duration) {
+	var recordedStack string
+	SetWorkerEventRecorder(func(workerName, workerRunID string, err error, duration time.Duration, stacktrace string) {
 		recordedName = workerName
+		recordedRunID = workerRunID
 		recordedErr = err
+		recordedStack = stacktrace
 	})
 	defer SetWorkerEventRecorder(nil)
 
@@ -65,8 +69,8 @@ func TestSafeRunEAndEventRecorder(t *testing.T) {
 	SafeRunE("test-worker-err", context.Background(), func(context.Context) error {
 		return errors.New("something went wrong")
 	})
-	if recordedName != "test-worker-err" || recordedErr == nil || recordedErr.Error() != "something went wrong" {
-		t.Fatalf("Expected recorded error, got name=%s err=%v", recordedName, recordedErr)
+	if recordedName != "test-worker-err" || recordedRunID == "" || recordedErr == nil || recordedErr.Error() != "something went wrong" {
+		t.Fatalf("Expected recorded error, got name=%s run_id=%s err=%v", recordedName, recordedRunID, recordedErr)
 	}
 
 	// Test panic recording
@@ -75,5 +79,8 @@ func TestSafeRunEAndEventRecorder(t *testing.T) {
 	})
 	if recordedName != "test-worker-panic" || recordedErr == nil || recordedErr.Error() != "panic: disaster" {
 		t.Fatalf("Expected recorded panic, got name=%s err=%v", recordedName, recordedErr)
+	}
+	if recordedStack == "" {
+		t.Fatal("expected panic stacktrace to be recorded")
 	}
 }

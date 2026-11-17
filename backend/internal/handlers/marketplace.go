@@ -644,7 +644,7 @@ func PlaceBid(c *gin.Context) {
 			httperr.Respond(c, httperr.Internal("refund failed", err))
 			return
 		}
-		notify.Send(tx, prevBidderID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %.3f %s.", current, currency))
+		notify.SendBestEffort(tx, prevBidderID, "auction_outbid", "Bị đè giá", fmt.Sprintf("Bạn đã bị đè giá ở phòng đấu giá cho vật phẩm đấu giá. Được hoàn trả %.3f %s.", current, currency), c.Request.Context())
 	}
 
 	if currency == "primeval" {
@@ -692,8 +692,8 @@ func PlaceBid(c *gin.Context) {
 			currencyName = "Tiên Nguyên Thạch"
 		}
 		// Use player.Username already loaded — no extra query needed
-		notify.Send(db.DB, sellerID, "auction_bid", "Ai đó đặt giá",
-			fmt.Sprintf("%s đã đặt giá %.3f %s cho mặt hàng của bạn.", player.Username, req.Amount, currencyName))
+		notify.SendBestEffort(db.DB, sellerID, "auction_bid", "Ai đó đặt giá",
+			fmt.Sprintf("%s đã đặt giá %.3f %s cho mặt hàng của bạn.", player.Username, req.Amount, currencyName), c.Request.Context())
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đặt giá thành công"})
 }
@@ -923,11 +923,11 @@ func BuyListing(c *gin.Context) {
 		currencyName = "Tiên Nguyên Thạch"
 	}
 	if sellerID != authID {
-		notify.Send(db.DB, sellerID, "market_sold", "Mặt hàng đã bán",
-			fmt.Sprintf("%s đã mua %d %s với giá %.3f %s.", buyer.Username, purchaseQty, itemName, totalPrice, currencyName))
+		notify.SendBestEffort(db.DB, sellerID, "market_sold", "Mặt hàng đã bán",
+			fmt.Sprintf("%s đã mua %d %s với giá %.3f %s.", buyer.Username, purchaseQty, itemName, totalPrice, currencyName), c.Request.Context())
 	}
-	notify.Send(db.DB, authID, "market_bought", "Mua hàng thành công",
-		fmt.Sprintf("Bạn đã mua %d %s với giá %.3f %s.", purchaseQty, itemName, totalPrice, currencyName))
+	notify.SendBestEffort(db.DB, authID, "market_bought", "Mua hàng thành công",
+		fmt.Sprintf("Bạn đã mua %d %s với giá %.3f %s.", purchaseQty, itemName, totalPrice, currencyName), c.Request.Context())
 	respondActionWithInventory(c, http.StatusOK, buyer, gin.H{"message": "Mua hàng thành công"})
 }
 

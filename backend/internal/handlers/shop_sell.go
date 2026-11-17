@@ -108,8 +108,8 @@ func runCaravanSell(c *gin.Context, authID uuid.UUID, lines []merchantSellLine, 
 		IPAddress:      c.ClientIP(),
 		Success:        true,
 	})
-	notify.Send(db.DB, authID, "shop_sell", "Bán Hàng",
-		fmt.Sprintf("Đã bán cho %s, thu về %s.", profile.Name, gainSummary))
+	notify.SendBestEffort(db.DB, authID, "shop_sell", "Bán Hàng",
+		fmt.Sprintf("Đã bán cho %s, thu về %s.", profile.Name, gainSummary), c.Request.Context())
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công, nhận %s!", gainSummary)})
 }
 

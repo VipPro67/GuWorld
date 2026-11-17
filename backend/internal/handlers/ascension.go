@@ -857,7 +857,7 @@ func AscensionStartCalamityCombat(c *gin.Context) {
 	combat.CombatMode = "real"
 	combat.WorldMonsterRegionID, combat.WorldMonsterID = actor.RegionID, actor.InstanceID
 	combat.AscensionCalamity = true
-	player.ActiveCombat = StartCombat(tx, &combat, &player)
+	player.ActiveCombat = StartCombat(c.Request.Context(), tx, &combat, &player)
 	combatJSON, err := json.Marshal(player.ActiveCombat)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể tạo trạng thái chiến đấu", err))
@@ -896,7 +896,7 @@ func CompleteAscensionCalamityForPlayer(ctx context.Context, playerID uuid.UUID)
 	}
 
 	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, PlayerDomain, AscensionDomain)
-	_ = notify.Send(db.DB, playerID, "ascension_calamity_victory", "ĐỊA TAI ĐÃ BỊ ĐÁNH TAN!", "Đại kiếp đã qua, ba khí Thiên Địa Nhân đã hòa quyện. Hãy mau chóng Thả Cổ bản mệnh để ngưng tụ Tiên Khiếu!")
+	notify.SendBestEffort(db.DB, playerID, "ascension_calamity_victory", "ĐỊA TAI ĐÃ BỊ ĐÁNH TAN!", "Đại kiếp đã qua, ba khí Thiên Địa Nhân đã hòa quyện. Hãy mau chóng Thả Cổ bản mệnh để ngưng tụ Tiên Khiếu!", ctx)
 	return nil
 }
 

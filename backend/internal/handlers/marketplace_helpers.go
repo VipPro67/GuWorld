@@ -304,7 +304,7 @@ func settleExpiredTradeOffers() error {
 		}
 		_, _ = tx.Exec(`UPDATE trade_offers SET status = 'EXPIRED' WHERE id = $1`, eo.id)
 		if err := tx.Commit(); err == nil {
-			notify.Send(db.DB, eo.creatorID, "trade_offer_expired", "Đơn Trao Đổi Hết Hạn",
+			notify.SendBestEffort(db.DB, eo.creatorID, "trade_offer_expired", "Đơn Trao Đổi Hết Hạn",
 				"Đơn trao đổi tự động của đạo hữu trên Bảo Hoàng Thiên đã hết hạn. Toàn bộ vật phẩm đã được hoàn trả an toàn.")
 		}
 	}

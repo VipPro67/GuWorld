@@ -819,8 +819,8 @@ func SellToMerchant(c *gin.Context) {
 		IPAddress:      c.ClientIP(),
 		Success:        true,
 	})
-	notify.Send(db.DB, authID, "merchant_sell", "Bán Cho Thương Nhân",
-		fmt.Sprintf("Đã bán cho %s, thu về %s.", profile.Name, gainSummary))
+	notify.SendBestEffort(db.DB, authID, "merchant_sell", "Bán Cho Thương Nhân",
+		fmt.Sprintf("Đã bán cho %s, thu về %s.", profile.Name, gainSummary), c.Request.Context())
 	respondActionWithInventory(c, http.StatusOK, player, gin.H{"message": fmt.Sprintf("Bán thành công cho %s, nhận %s!", profile.Name, gainSummary)})
 }
 

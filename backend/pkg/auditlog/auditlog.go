@@ -36,12 +36,14 @@ type Entry struct {
 }
 
 func Log(q Querier, entry Entry) {
-	_ = LogChecked(q, entry)
+	if err := LogChecked(q, entry); err != nil {
+		fields := []zap.Field{zap.String("action", entry.Action), zap.Any("player_id", entry.PlayerID), zap.String("request_id", entry.RequestID)}
+		logger.LogError(nil, "audit_write_failed", err, fields...)
+	}
 }
 
 func recordWriteFailure(entry Entry, err error) {
 	monitor.GlobalAdminOperations.RecordAuditWriteFailure()
-	logger.L.Error("audit_write_failed", zap.String("action", entry.Action), zap.Any("player_id", entry.PlayerID), zap.Error(err))
 }
 
 // LogChecked records an audit entry and returns persistence failures to

@@ -146,8 +146,8 @@ func TestRequestLogging_ErrorResponseBody(t *testing.T) {
 	if errorLog == nil {
 		t.Fatal("expected http_request_error log")
 	}
-	if completedLog == nil {
-		t.Fatal("expected http_request_completed log")
+	if completedLog != nil {
+		t.Fatal("failed request should not emit a duplicate http_request_completed log")
 	}
 
 	// Verify http_request_error
@@ -164,19 +164,6 @@ func TestRequestLogging_ErrorResponseBody(t *testing.T) {
 		t.Error("expected request_body in http_request_error")
 	}
 
-	// Verify http_request_completed
-	if completedLog["trace_id"] == nil || completedLog["trace_id"] == "" {
-		t.Errorf("expected non-empty trace_id in http_request_completed, got %v", completedLog["trace_id"])
-	}
-	if completedLog["error"] != "Transaction commit failure" {
-		t.Errorf("expected error field in http_request_completed, got %v", completedLog["error"])
-	}
-	if completedLog["response_body"] == nil {
-		t.Error("expected response_body in http_request_completed")
-	}
-	if completedLog["request_body"] == nil {
-		t.Error("expected request_body in http_request_completed")
-	}
 }
 
 func TestRequestLogging_DetailedUnderlyingError(t *testing.T) {
@@ -250,6 +237,158 @@ func TestRequestLogging_DetailedUnderlyingError(t *testing.T) {
 	// Must also retain the user/context prefix
 	if !strings.Contains(errField, "Không thể lưu Cổ trùng mới vào CSDL") {
 		t.Errorf("expected detailed error to contain 'Không thể lưu Cổ trùng mới vào CSDL', got %q", errField)
+	}
+	if got := errorLog["root_cause"]; got != "không khiếu đã đạt giới hạn sức chứa (80/80)" {
+		t.Errorf("root_cause = %v, want underlying cause", got)
+	}
+	if chain, ok := errorLog["error_chain"].([]interface{}); !ok || len(chain) != 2 {
+		t.Errorf("error_chain = %#v, want one wrapper and one root cause", errorLog["error_chain"])
+	}
+	if got := errorLog["error_kind"]; got != "internal" {
+		t.Errorf("error_kind = %v, want internal", got)
+	}
+}
+
+func TestRequestLogging_ValidationErrorsUseInfoLevel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mem := &memorySyncer{}
+	encCfg := zapcore.EncoderConfig{TimeKey: "ts", LevelKey: "level", MessageKey: "msg", EncodeLevel: zapcore.LowercaseLevelEncoder, EncodeTime: zapcore.ISO8601TimeEncoder}
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(encCfg), mem, zapcore.InfoLevel)
+	origLogger := logger.L
+	logger.L = zap.New(core)
+	defer func() { logger.L = origLogger }()
+
+	r := gin.New()
+	r.Use(requestLogging())
+	r.Use(monitor.Middleware())
+	r.POST("/test-validation", func(c *gin.Context) { c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"}) })
+	request := httptest.NewRequest(http.MethodPost, "/test-validation", nil)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+
+	var event map[string]interface{}
+	for _, line := range strings.Split(strings.TrimSpace(mem.buf.String()), "\n") {
+		var parsed map[string]interface{}
+		if json.Unmarshal([]byte(line), &parsed) == nil && parsed["msg"] == "http_request_error" {
+			event = parsed
+		}
+	}
+	if event == nil || event["level"] != "info" || event["error_kind"] != "validation" {
+		t.Fatalf("expected info validation event, got %#v", event)
+	}
+}
+
+func TestRequestRecovery_RecordsPanicWithRequestTrace(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mem := &memorySyncer{}
+	encCfg := zapcore.EncoderConfig{TimeKey: "ts", LevelKey: "level", MessageKey: "msg", EncodeLevel: zapcore.LowercaseLevelEncoder, EncodeTime: zapcore.ISO8601TimeEncoder}
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(encCfg), mem, zapcore.InfoLevel)
+	origLogger := logger.L
+	logger.L = zap.New(core)
+	defer func() { logger.L = origLogger }()
+
+	r := gin.New()
+	r.Use(traceIntakeMiddleware())
+	r.Use(requestLogging())
+	r.Use(monitor.Middleware())
+	r.Use(requestRecovery())
+	r.GET("/test-panic", func(*gin.Context) { panic("root panic") })
+	request := httptest.NewRequest(http.MethodGet, "/test-panic", nil)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", response.Code)
+	}
+
+	var event map[string]interface{}
+	for _, line := range strings.Split(strings.TrimSpace(mem.buf.String()), "\n") {
+		var parsed map[string]interface{}
+		if json.Unmarshal([]byte(line), &parsed) == nil && parsed["msg"] == "http_request_error" {
+			event = parsed
+		}
+	}
+	if event == nil || event["root_cause"] != "panic: root panic" || event["stacktrace"] == nil {
+		t.Fatalf("expected panic cause and stacktrace in request event, got %#v", event)
+	}
+}
+
+func TestRequestRecovery_RecordsPanicAfterResponseStarted(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mem := &memorySyncer{}
+	encCfg := zapcore.EncoderConfig{TimeKey: "ts", LevelKey: "level", MessageKey: "msg", EncodeLevel: zapcore.LowercaseLevelEncoder, EncodeTime: zapcore.ISO8601TimeEncoder}
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(encCfg), mem, zapcore.InfoLevel)
+	origLogger := logger.L
+	logger.L = zap.New(core)
+	defer func() { logger.L = origLogger }()
+
+	r := gin.New()
+	r.Use(traceIntakeMiddleware())
+	r.Use(requestLogging())
+	r.Use(monitor.Middleware())
+	r.Use(requestRecovery())
+	r.GET("/test-panic-after-write", func(c *gin.Context) {
+		c.String(http.StatusOK, "partial")
+		panic("late panic")
+	})
+	request := httptest.NewRequest(http.MethodGet, "/test-panic-after-write", nil)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("already committed status = %d, want 200", response.Code)
+	}
+
+	var event map[string]interface{}
+	for _, line := range strings.Split(strings.TrimSpace(mem.buf.String()), "\n") {
+		var parsed map[string]interface{}
+		if json.Unmarshal([]byte(line), &parsed) == nil && parsed["msg"] == "http_request_error" {
+			event = parsed
+		}
+	}
+	if event == nil || event["error_kind"] != "internal" || event["root_cause"] != "panic: late panic" {
+		t.Fatalf("expected logged panic despite committed response, got %#v", event)
+	}
+}
+
+func TestRequestPanicFallback_RecordsOuterMiddlewarePanic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mem := &memorySyncer{}
+	encCfg := zapcore.EncoderConfig{TimeKey: "ts", LevelKey: "level", MessageKey: "msg", EncodeLevel: zapcore.LowercaseLevelEncoder, EncodeTime: zapcore.ISO8601TimeEncoder}
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(encCfg), mem, zapcore.InfoLevel)
+	origLogger := logger.L
+	logger.L = zap.New(core)
+	defer func() { logger.L = origLogger }()
+	originalTracker := monitor.GlobalTracker
+	monitor.GlobalTracker = monitor.NewRequestTracker()
+	defer func() { monitor.GlobalTracker = originalTracker }()
+
+	r := gin.New()
+	r.Use(requestPanicFallback())
+	r.Use(func(*gin.Context) { panic("middleware panic") })
+	r.GET("/test-middleware-panic", func(*gin.Context) {})
+	request := httptest.NewRequest(http.MethodGet, "/test-middleware-panic", nil)
+	response := httptest.NewRecorder()
+	r.ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", response.Code)
+	}
+
+	var event map[string]interface{}
+	for _, line := range strings.Split(strings.TrimSpace(mem.buf.String()), "\n") {
+		var parsed map[string]interface{}
+		if json.Unmarshal([]byte(line), &parsed) == nil && parsed["msg"] == "http_request_error" {
+			event = parsed
+		}
+	}
+	if event == nil || event["root_cause"] != "panic: middleware panic" || event["stacktrace"] == nil {
+		t.Fatalf("expected fallback panic event with stacktrace, got %#v", event)
+	}
+	trace, ok := monitor.GlobalTracker.GetTraceByID(event["trace_id"].(string))
+	if !ok || trace.RootCause != "panic: middleware panic" {
+		t.Fatalf("expected middleware panic in trace ring, got %+v", trace)
 	}
 }
 

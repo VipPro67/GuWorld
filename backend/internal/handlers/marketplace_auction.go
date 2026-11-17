@@ -186,12 +186,12 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 	}
 	if highestBidderID.Valid {
 		bidderUUID, _ := uuid.Parse(highestBidderID.String)
-		notify.Send(db.DB, bidderUUID, "auction_won", "Thắng đấu giá",
+		notify.SendBestEffort(db.DB, bidderUUID, "auction_won", "Thắng đấu giá",
 			fmt.Sprintf("Bạn đã thắng đấu giá với giá %.3f %s!", currentPrice, currencyName))
-		notify.Send(db.DB, sellerID, "auction_sold", "Đấu giá hoàn tất",
+		notify.SendBestEffort(db.DB, sellerID, "auction_sold", "Đấu giá hoàn tất",
 			fmt.Sprintf("Mặt hàng đã được bán với giá %.3f %s.", currentPrice, currencyName))
 	} else {
-		notify.Send(db.DB, sellerID, "auction_expired", "Đấu giá hết hạn",
+		notify.SendBestEffort(db.DB, sellerID, "auction_expired", "Đấu giá hết hạn",
 			"Phiên đấu giá đã hết hạn và không có người đặt giá.")
 	}
 	return nil
@@ -382,7 +382,7 @@ func rescindResourcePointAuction(tx *sql.Tx, auctionID string, bidderID uuid.UUI
 		RequestSummary: fmt.Sprintf("đấu giá điểm tài nguyên không thể chuyển giao | hoàn trả=%.3f %s", currentPrice, currency),
 		Success:        true,
 	})
-	notify.Send(db.DB, bidderID, "auction_rescinded", "Đấu Giá Hủy Giao Dịch",
+	notify.SendBestEffort(db.DB, bidderID, "auction_rescinded", "Đấu Giá Hủy Giao Dịch",
 		fmt.Sprintf("Điểm tài nguyên không thể chuyển giao cho đạo hữu, %.3f %s đã được hoàn trả.", currentPrice, currency))
 	return nil
 }

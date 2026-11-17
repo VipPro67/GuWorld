@@ -84,7 +84,7 @@ func GrantPvpImmunity(tx *sql.Tx, playerID uuid.UUID, duration time.Duration) {
 	newBytes, _ := json.Marshal(sl)
 	_, _ = tx.Exec(`UPDATE players SET statuses = $1 WHERE id = $2`, newBytes, playerID)
 
-	notify.Send(tx, playerID, "pvp_immunity", "Thiên Đạo Hộ Thể!",
+	notify.SendBestEffort(tx, playerID, "pvp_immunity", "Thiên Đạo Hộ Thể!",
 		"Bạn vừa hồi sinh và được Thiên Đạo ban cho trạng thái Miễn Chiến PvP trong 10 phút. Nếu chủ động tấn công người khác, trạng thái này sẽ bị phá vỡ!")
 }
 
@@ -108,7 +108,7 @@ func GrantPvpInitiatorCooldown(tx *sql.Tx, playerID uuid.UUID, duration time.Dur
 		return
 	}
 	if _, err := tx.Exec(`UPDATE players SET statuses=$1 WHERE id=$2`, encoded, playerID); err == nil {
-		notify.Send(tx, playerID, "pvp_initiator_cooldown", "Dư âm chiến đấu",
+		notify.SendBestEffort(tx, playerID, "pvp_initiator_cooldown", "Dư âm chiến đấu",
 			"Bạn cần chờ một lát trước khi chủ động khai chiến PvP lần nữa.")
 	}
 }
@@ -130,7 +130,7 @@ func RemovePvpImmunity(tx *sql.Tx, playerID uuid.UUID) {
 		sl.Remove("pvp_immunity")
 		newBytes, _ := json.Marshal(sl)
 		_, _ = tx.Exec(`UPDATE players SET statuses = $1 WHERE id = $2`, newBytes, playerID)
-		notify.Send(tx, playerID, "pvp_immunity_broken", "Phá vỡ Miễn Chiến!",
+		notify.SendBestEffort(tx, playerID, "pvp_immunity_broken", "Phá vỡ Miễn Chiến!",
 			"Đạo hữu vừa chủ động khai chiến, trạng thái Thiên Đạo Miễn Chiến đã bị tiêu tán!")
 	}
 }

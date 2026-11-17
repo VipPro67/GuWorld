@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -36,7 +37,7 @@ func CheckAndApplyRegionalWallDebuff(player *models.Player, fromX, fromY, toX, t
 	if player == nil || (fromX == 0 && fromY == 0) {
 		return ""
 	}
-	return applyRegionalWallDebuff(player, FindLargeZoneAt(fromX, fromY), FindLargeZoneAt(toX, toY), q...)
+	return applyRegionalWallDebuff(context.Background(), player, FindLargeZoneAt(fromX, fromY), FindLargeZoneAt(toX, toY), q...)
 }
 
 // CheckAndApplyRegionalWallDebuffBetween resolves the containing large zones
@@ -47,7 +48,7 @@ func CheckAndApplyRegionalWallDebuffBetween(player *models.Player, fromRegion, t
 	if player == nil || fromRegion == "" || toRegion == "" || fromRegion == toRegion {
 		return ""
 	}
-	return applyRegionalWallDebuff(player, largeZoneForRegion(fromRegion), largeZoneForRegion(toRegion), q...)
+	return applyRegionalWallDebuff(context.Background(), player, largeZoneForRegion(fromRegion), largeZoneForRegion(toRegion), q...)
 }
 
 func largeZoneForRegion(regionID string) *models.Region {
@@ -109,7 +110,7 @@ func RegionalWallSuppressionEnabled() bool {
 	return true
 }
 
-func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Region, q ...notify.Querier) string {
+func applyRegionalWallDebuff(ctx context.Context, player *models.Player, oldZone, newZone *models.Region, q ...notify.Querier) string {
 	if !RegionalWallSuppressionEnabled() {
 		return ""
 	}
@@ -171,7 +172,7 @@ func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Reg
 				houseName, oldZone.Name, newZone.Name, debuffInt, durMinutes)
 			player.Statuses.Add("regional_wall_suppression", sourceLabel, duration, debuffPct)
 			if player.ID != uuid.Nil {
-				_ = notify.Send(querier, player.ID, "regional_wall_suppression", "Tiên Cổ Ốc Sụp Đổ", msg)
+				notify.SendBestEffort(querier, player.ID, "regional_wall_suppression", "Tiên Cổ Ốc Sụp Đổ", msg, ctx)
 			}
 			return msg
 		}
@@ -181,7 +182,7 @@ func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Reg
 		msg := fmt.Sprintf("🛡️ Tiên Cổ Ốc [%s] gượng ép xé rách Giới Vực Bích (%s ➔ %s)! Áp lực thiên địa đạo ngân xung đột làm tổn hại %.0f%% độ bền (còn %.0f%%) và chấn tử %d phàm cổ phụ trợ!",
 			houseName, oldZone.Name, newZone.Name, durLoss, newDur, guLoss)
 		if player.ID != uuid.Nil {
-			_ = notify.Send(querier, player.ID, "regional_wall_suppression", "Tiên Cổ Ốc Chấn Động", msg)
+			notify.SendBestEffort(querier, player.ID, "regional_wall_suppression", "Tiên Cổ Ốc Chấn Động", msg, ctx)
 		}
 		return msg
 	}
@@ -201,19 +202,19 @@ func applyRegionalWallDebuff(player *models.Player, oldZone, newZone *models.Reg
 		player.Username, player.ID, oldZone.Name, newZone.Name, debuffInt, duration)
 
 	if querier != nil && player.ID != uuid.Nil {
-		_ = notify.Send(querier, player.ID, "regional_wall_suppression", "Áp Chế Giới Vực", msg)
+		notify.SendBestEffort(querier, player.ID, "regional_wall_suppression", "Áp Chế Giới Vực", msg, ctx)
 	}
 
 	return msg
 }
 
 func resolveCellArrival(tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool) (returnedMessage string, startedCombat bool, returnedErr error) {
-	return resolveCellArrivalWithInstance(tx, player, x, y, attackTargetID, allowAmbush, nil, nil)
+	return resolveCellArrivalWithInstance(context.Background(), tx, player, x, y, attackTargetID, allowAmbush, nil, nil)
 }
 
 // resolveCellArrivalWithInstance lets a multi-cell move reuse the locked
 // player's map-instance value instead of querying the same row on every step.
-func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool, loadedInstanceID *sql.NullString, pendingWorldChanges *[]worldfeed.Event) (returnedMessage string, startedCombat bool, returnedErr error) {
+func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *models.Player, x, y int, attackTargetID string, allowAmbush bool, loadedInstanceID *sql.NullString, pendingWorldChanges *[]worldfeed.Event) (returnedMessage string, startedCombat bool, returnedErr error) {
 	regionWarning := ""
 	defer func() {
 		if regionWarning != "" {
@@ -292,9 +293,9 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 	}
 	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
 	if oldRegion != "" && destinationRegion != "" {
-		regionWarning = CheckAndApplyRegionalWallDebuffBetween(player, oldRegion, destinationRegion, tx)
+		regionWarning = applyRegionalWallDebuff(ctx, player, largeZoneForRegion(oldRegion), largeZoneForRegion(destinationRegion), tx)
 	} else if oldRegion == "" && (oldX != 0 || oldY != 0) {
-		regionWarning = CheckAndApplyRegionalWallDebuff(player, oldX, oldY, player.X, player.Y, tx)
+		regionWarning = applyRegionalWallDebuff(ctx, player, FindLargeZoneAt(oldX, oldY), FindLargeZoneAt(player.X, player.Y), tx)
 	}
 	combatTriggered := false
 	pvpTriggered := false
@@ -757,7 +758,7 @@ func resolveCellArrivalWithInstance(tx *sql.Tx, player *models.Player, x, y int,
 	}
 
 	if player.ActiveCombat != nil {
-		player.ActiveCombat = StartCombat(tx, player.ActiveCombat, player)
+		player.ActiveCombat = StartCombat(ctx, tx, player.ActiveCombat, player)
 	}
 
 	// Fire ON_EXPLORE_MOVE on equipped Gus
@@ -890,7 +891,7 @@ func buildMovePathPlayerUpdate(player *models.Player, beforeGus models.GuInvento
 
 // ExecuteMovePlayerPath moves the player along a straight path from its current cell
 // to the requested cell, decoupled from HTTP gin.Context.
-func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
+func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveRequest) (int, gin.H) {
 	spec := movementSpec{kind: movementWalk, x: req.X, y: req.Y, hasTarget: true}
 	if err := validateMovementTarget(spec); err != nil {
 		status, payload, _ := movementErrorPayload(err)
@@ -952,7 +953,7 @@ func ExecuteMovePlayerPath(authID uuid.UUID, req MoveRequest) (int, gin.H) {
 	combatTriggered := false
 	var lastStepLog string
 	for _, step := range path {
-		stepLog, triggered, errArrival := resolveCellArrivalWithInstance(tx, &player, step[0], step[1], req.AttackTargetID, true, &mapInstanceID, &pendingWorldChanges)
+		stepLog, triggered, errArrival := resolveCellArrivalWithInstance(ctx, tx, &player, step[0], step[1], req.AttackTargetID, true, &mapInstanceID, &pendingWorldChanges)
 		if errArrival != nil {
 			return http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"}
 		}
@@ -1113,6 +1114,6 @@ func MovePlayer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	status, payload := ExecuteMovePlayerPath(authID, req)
+	status, payload := ExecuteMovePlayerPath(c.Request.Context(), authID, req)
 	c.JSON(status, payload)
 }

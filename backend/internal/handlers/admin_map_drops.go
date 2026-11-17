@@ -244,8 +244,8 @@ func AdminReturnMapGroundDrop(c *gin.Context) {
 	if summary == "" {
 		summary = "không có tài sản"
 	}
-	notify.Send(db.DB, loserID, "ground_drop_returned", "Chiến lợi phẩm được trả lại",
-		fmt.Sprintf("Quản trị viên đã trả lại chiến lợi phẩm của bạn tại %s (%d, %d): %s.", regionID, x, y, summary))
+	notify.SendBestEffort(db.DB, loserID, "ground_drop_returned", "Chiến lợi phẩm được trả lại",
+		fmt.Sprintf("Quản trị viên đã trả lại chiến lợi phẩm của bạn tại %s (%d, %d): %s.", regionID, x, y, summary), c.Request.Context())
 	c.JSON(http.StatusOK, gin.H{
 		"message":  fmt.Sprintf("Đã trả chiến lợi phẩm cho %s: %s", loserName, summary),
 		"returned": logs,
