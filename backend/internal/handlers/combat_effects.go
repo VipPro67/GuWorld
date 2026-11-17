@@ -13,6 +13,24 @@ func getActorPathMasteryMultiplier(actor *models.Combatant, paths []string) floa
 	return gamefx.PathMasteryMultiplier(actor.PathMasteries, paths)
 }
 
+func equippedGuRaceModifiers(inventory models.GuInventory) (map[string]float64, map[string]float64) {
+	damage := map[string]float64{}
+	resistance := map[string]float64{}
+	for _, inst := range models.FilterEquippedActive(inventory) {
+		spec, ok := models.GetGu(inst.GuID, inst.Rank)
+		if !ok {
+			continue
+		}
+		for race, value := range models.GuRaceDamage(spec) {
+			damage[race] += value
+		}
+		for race, value := range models.GuRaceResistance(spec) {
+			resistance[race] += value
+		}
+	}
+	return damage, resistance
+}
+
 // GetGuAttainmentScale calculates the path attainment multiplier and reason for a Gu action.
 // Level 0 = 1.0 (Ordinary / Phổ thông).
 // Level 1-4 scale up progressively (1.1x, 1.25x, 1.4x, 1.5x).

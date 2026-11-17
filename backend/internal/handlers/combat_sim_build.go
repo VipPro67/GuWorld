@@ -293,6 +293,14 @@ func buildSimVariantNPC(actor *models.Combatant) *simulator.CombatantAuto {
 	actions := []simulator.SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: actor.BaseAttack, DamageMult: 1}}
 	mechanics := []simulator.CombatMechanic{}
 	hunger := map[string]int{}
+	raceFX := gamefx.Get(&models.Player{CharacterState: models.CharacterState{Race: actor.Race}})
+	raceDamageBonus, raceResistance := equippedGuRaceModifiers(actor.GuInventory)
+	for race, value := range raceFX.RaceDamageBonus {
+		raceDamageBonus[race] += value
+	}
+	for race, value := range raceFX.RaceResistanceBonus {
+		raceResistance[race] += value
+	}
 	for _, gu := range actor.GuInventory {
 		spec, ok := models.GetGu(gu.GuID, gu.Rank)
 		if !ok || gu.Status != "ACTIVE" || gu.Hunger <= 0 {
@@ -308,9 +316,10 @@ func buildSimVariantNPC(actor *models.Combatant) *simulator.CombatantAuto {
 			}
 		}
 	}
-	return &simulator.CombatantAuto{ID: actor.ID, Name: actor.Name, Kind: "VariantNPC", Rank: actor.Rank, SubRank: actor.SubRank, AIProfile: actor.AIProfile,
+	return &simulator.CombatantAuto{ID: actor.ID, Name: actor.Name, Kind: "VariantNPC", Race: actor.Race, Rank: actor.Rank, SubRank: actor.SubRank, AIProfile: actor.AIProfile,
 		GridX: actor.GridX, GridY: actor.GridY, HP: actor.HP, MaxHP: actor.MaxHP, Mana: actor.CurrentMana, MaxMana: actor.MaxMana,
-		BaseDmg: actor.BaseAttack, BaseDef: actor.BaseDefense, Speed: actor.Speed, Actions: actions, Mechanics: mechanics, GuHunger: hunger}
+		BaseDmg: actor.BaseAttack, BaseDef: actor.BaseDefense, Speed: actor.Speed, Actions: actions, Mechanics: mechanics, GuHunger: hunger,
+		RaceDamageBonus: raceDamageBonus, RaceResistance: raceResistance}
 }
 
 // buildSimPlayerDefender rebuilds a real-player PVP defender with the same

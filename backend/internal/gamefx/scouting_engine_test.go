@@ -20,6 +20,68 @@ func TestBaseRankPower(t *testing.T) {
 	}
 }
 
+func TestCanDiscoverAperturePortalUsesInclusiveConcealmentThreshold(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		discoveryPower    float64
+		portalConcealment float64
+		want              bool
+	}{
+		{name: "below threshold", discoveryPower: 99.9, portalConcealment: 100, want: false},
+		{name: "meets threshold", discoveryPower: 100, portalConcealment: 100, want: true},
+		{name: "exceeds threshold", discoveryPower: 100.1, portalConcealment: 100, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CanDiscoverAperturePortal(tc.discoveryPower, tc.portalConcealment); got != tc.want {
+				t.Fatalf("CanDiscoverAperturePortal(%v, %v) = %v, want %v", tc.discoveryPower, tc.portalConcealment, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestScoutingScorersApplyPassiveScoutingInputs(t *testing.T) {
+	previous := RaceRegistry
+	t.Cleanup(func() { RaceRegistry = previous })
+	RaceRegistry = map[string]RaceDef{
+		"scout": {Key: "scout", Effects: Effects{
+			ScoutingInvestigationBonus: 3,
+			ScoutingDisguiseBonus:      2,
+		}},
+	}
+	viewer := &models.Player{CharacterState: models.CharacterState{Race: "scout"}, CultivationState: models.CultivationState{Rank: 1}}
+	target := &models.Player{Account: models.Account{Username: "target"}, CharacterState: models.CharacterState{Race: "scout"}, CultivationState: models.CultivationState{Rank: 1}}
+
+	deduction := DeductionBreakdown(viewer, nil, nil, models.DivinationRequest{TargetUsername: "target"}, target, 0, false, false, 0)
+	if deduction.Stat != BaseRankPower(1)+3*ScoutingInvestigationWeight {
+		t.Fatalf("deduction stat = %v, want %v", deduction.Stat, BaseRankPower(1)+3*ScoutingInvestigationWeight)
+	}
+	concealment := ConcealmentBreakdown(target, nil, nil, "")
+	if concealment.Stat != BaseRankPower(1)+2*ScoutingDisguiseWeight {
+		t.Fatalf("concealment stat = %v, want %v", concealment.Stat, BaseRankPower(1)+2*ScoutingDisguiseWeight)
+	}
+
+	portalPower := AperturePortalDiscoveryPower(viewer, nil, nil, nil)
+	if portalPower != BaseRankPower(1)+3*ScoutingInvestigationWeight {
+		t.Fatalf("portal discovery power = %v, want %v", portalPower, BaseRankPower(1)+3*ScoutingInvestigationWeight)
+	}
+	if got := AperturePortalDiscoveryPower(viewer, nil, nil, nil); got != portalPower {
+		t.Fatalf("portal discovery power changed between reads: got %v, want deterministic %v", got, portalPower)
+	}
+
+	portalOwner := &models.Player{CharacterState: models.CharacterState{Race: "scout"}, CultivationState: models.CultivationState{Rank: 6}}
+	portalDefense := AperturePortalConcealmentPower(portalOwner, nil, nil, nil, "Southern_Border", "Southern_Border", 0)
+	if portalDefense <= BaseRankPower(6) {
+		t.Fatalf("portal defense = %v, want concealment scorer to include rank and regional defense", portalDefense)
+	}
+	if got := AperturePortalConcealmentPower(portalOwner, nil, nil, nil, "Southern_Border", "Southern_Border", 7); got != portalDefense+7 {
+		t.Fatalf("portal defense with extra concealment = %v, want %v", got, portalDefense+7)
+	}
+	remotePortalDefense := AperturePortalConcealmentPower(portalOwner, nil, nil, nil, "Northern_Plains", "Southern_Border", 0)
+	if remotePortalDefense <= portalDefense {
+		t.Fatalf("cross-region portal defense = %v, want it above same-region defense %v", remotePortalDefense, portalDefense)
+	}
+}
+
 func TestGetPathAttainment(t *testing.T) {
 	masteries := models.PathMasteriesMap{
 		"wisdom":      15000,  // Level 1: Master

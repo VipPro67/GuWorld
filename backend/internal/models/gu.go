@@ -460,7 +460,7 @@ func GuPathResistance(spec GuDictionaryItem) map[string]float64 {
 		return out
 	}
 	for _, op := range compiled.Operations(gameplayeffects.TriggerAlwaysOn) {
-		if op.Type != gameplayeffects.OpStatMod || op.Stat != "PATH_RESISTANCE" {
+		if len(op.Conditions) > 0 || op.Type != gameplayeffects.OpStatMod || op.Stat != "PATH_RESISTANCE" {
 			continue
 		}
 		path := strings.ToLower(strings.TrimSpace(op.Path))
@@ -468,6 +468,41 @@ func GuPathResistance(spec GuDictionaryItem) map[string]float64 {
 			continue
 		}
 		out[path] += op.Value
+	}
+	return out
+}
+
+// GuRaceDamage reads damage bonuses keyed by exact target race from a passive
+// gamefx projection on an equipped Gu.
+func GuRaceDamage(spec GuDictionaryItem) map[string]float64 {
+	return guRaceModifiers(spec, "RACE_DAMAGE_MODIFIER")
+}
+
+// GuRaceResistance reads damage reduction keyed by exact attacker race from a
+// passive gamefx projection on an equipped Gu.
+func GuRaceResistance(spec GuDictionaryItem) map[string]float64 {
+	return guRaceModifiers(spec, "RACE_RESISTANCE_MODIFIER")
+}
+
+func guRaceModifiers(spec GuDictionaryItem, code string) map[string]float64 {
+	out := map[string]float64{}
+	compiled := CompiledGuEffects(spec)
+	if compiled == nil {
+		return out
+	}
+	for _, op := range compiled.Operations(gameplayeffects.TriggerAlwaysOn) {
+		if len(op.Conditions) > 0 || op.Type != gameplayeffects.OpUnique || op.Code != code {
+			continue
+		}
+		values, ok := op.Values["value"].(map[string]any)
+		if !ok {
+			continue
+		}
+		for race, raw := range values {
+			if value, ok := raw.(float64); ok {
+				out[race] += value
+			}
+		}
 	}
 	return out
 }
@@ -481,7 +516,7 @@ func GuImmuneDream(spec GuDictionaryItem) bool {
 		return false
 	}
 	for _, op := range compiled.NativeMechanics() {
-		if op.Code == "IMMUNE_DREAM_STATUS" {
+		if len(op.Conditions) == 0 && op.Trigger == gameplayeffects.TriggerAlwaysOn && op.Code == "IMMUNE_DREAM_STATUS" {
 			return true
 		}
 	}
@@ -501,6 +536,9 @@ func GuPersistentHitStatus(spec GuDictionaryItem) (statusKey string, pvpOnly boo
 	}
 	for _, op := range compiled.NativeMechanics() {
 		if op.Code != "PERSIST_STATUS_ON_HIT" {
+			continue
+		}
+		if len(op.Conditions) > 0 {
 			continue
 		}
 		if op.Trigger != gameplayeffects.TriggerOnHit && op.Trigger != gameplayeffects.TriggerOnAction {
@@ -551,7 +589,7 @@ func GuAlwaysOnValue(spec GuDictionaryItem, code string) float64 {
 	code = strings.ToUpper(strings.TrimSpace(code))
 	var total float64
 	for _, op := range compiled.Operations(gameplayeffects.TriggerAlwaysOn) {
-		if op.Type != gameplayeffects.OpUnique || op.Code != code {
+		if len(op.Conditions) > 0 || op.Type != gameplayeffects.OpUnique || op.Code != code {
 			continue
 		}
 		if v, ok := op.Values["value"].(float64); ok {

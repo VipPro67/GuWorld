@@ -17,6 +17,12 @@ type StatusOp struct {
 	Chance     float64 // proc chance per application (0..1); 0 = always applies
 	Unit       StatusUnit
 	SourcePath string
+	// Lifecycle fields are populated by context adapters. Empty fields preserve
+	// legacy status behavior; combat owns the lifetime of these instances.
+	SourceID    string
+	EffectID    string
+	Context     string
+	StackPolicy string
 }
 
 type StatusUnit string

@@ -34,6 +34,15 @@ func collectAllStatusOps(a *SimAction) []statusfx.StatusOp {
 		return nil
 	}
 	ops := append([]statusfx.StatusOp(nil), a.StatusOps...)
+	sourceID := a.InstanceID
+	if sourceID == "" {
+		sourceID = a.SourceID
+	}
+	for index := range ops {
+		if ops[index].EffectID != "" && ops[index].Context == "combat" {
+			ops[index].SourceID = sourceID
+		}
+	}
 	if a.BleedPerTurn > 0 {
 		ops = append(ops, statusfx.StatusOp{ID: statusfx.StatusBleed, Value: a.BleedPerTurn, Turns: 3})
 	}
@@ -142,6 +151,21 @@ func applyStatusOps(actor *CombatantAuto, targets []*CombatantAuto, ops []status
 }
 
 func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op statusfx.StatusOp, guRank int, turn int, rng *rand.Rand, logs *[]CombatLog) {
+	if target == nil {
+		return
+	}
+	targetEffectStart, targetDoTStart := len(target.ActiveEffects), len(target.ActiveDoT)
+	actorEffectStart := targetEffectStart
+	if actor != nil && actor != target {
+		actorEffectStart = len(actor.ActiveEffects)
+	}
+	defer func() {
+		applyCombatStatusLifecycle(target, targetEffectStart, targetDoTStart, op)
+		if actor != nil && actor != target {
+			applyCombatStatusLifecycle(actor, actorEffectStart, len(actor.ActiveDoT), op)
+		}
+	}()
+
 	if spec.SelfTarget {
 		// Self-target proc gate based on Player Rank and Gu Rank (includes Caster Attenuation)
 		if !statusfx.CanApplySelfStatus(rng, actor.Rank, guRank, spec, op.Chance) {
@@ -259,12 +283,14 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 		sourceDaoMult, _ := actorDaoMultiplier(actor, []string{sourcePath})
 		val *= sourceDaoMult
 		target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
-			Type:          dotType(op.ID),
-			Value:         val,
-			Turns:         op.Turns,
-			DirectHP:      spec.DirectHP,
-			SourcePath:    sourcePath,
-			SourceDaoMult: sourceDaoMult,
+			Type:            dotType(op.ID),
+			Value:           val,
+			Turns:           op.Turns,
+			DirectHP:        spec.DirectHP,
+			SourcePath:      sourcePath,
+			SourceDaoMult:   sourceDaoMult,
+			SourceRace:      actor.Race,
+			RaceDamageBonus: gamefx.RaceModifier(target.Race, actor.RaceDamageBonus),
 		})
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
@@ -811,4 +837,167 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 			Detail:    fmt.Sprintf("%s nhận hiệu ứng [%s] (%d lượt).", target.Name, spec.Label, op.Turns),
 		})
 	}
+}
+
+func applyCombatStatusLifecycle(target *CombatantAuto, effectStart, dotStart int, op statusfx.StatusOp) {
+	if target == nil || op.EffectID == "" || op.Context != "combat" {
+		return
+	}
+	policy := strings.ToUpper(strings.TrimSpace(op.StackPolicy))
+	for index := effectStart; index < len(target.ActiveEffects); index++ {
+		effect := &target.ActiveEffects[index]
+		effect.SourceID, effect.EffectID, effect.Context, effect.StackPolicy = op.SourceID, op.EffectID, op.Context, policy
+	}
+	newEffects := append([]Effect(nil), target.ActiveEffects[effectStart:]...)
+	target.ActiveEffects = target.ActiveEffects[:effectStart]
+	for _, effect := range newEffects {
+		mergeCombatEffect(&target.ActiveEffects, effect, policy)
+	}
+	for index := dotStart; index < len(target.ActiveDoT); index++ {
+		dot := &target.ActiveDoT[index]
+		dot.SourceID, dot.EffectID, dot.Context, dot.StackPolicy = op.SourceID, op.EffectID, op.Context, policy
+	}
+	newDots := append([]DoTEffect(nil), target.ActiveDoT[dotStart:]...)
+	target.ActiveDoT = target.ActiveDoT[:dotStart]
+	for _, dot := range newDots {
+		mergeCombatDoT(&target.ActiveDoT, dot, policy)
+	}
+}
+
+func mergeCombatEffect(effects *[]Effect, incoming Effect, policy string) {
+	if policy == "REPLACE" {
+		kept := (*effects)[:0]
+		for _, current := range *effects {
+			if current.ID != incoming.ID {
+				kept = append(kept, current)
+			}
+		}
+		*effects = kept
+	} else if policy == "IGNORE" {
+		for _, current := range *effects {
+			if current.ID == incoming.ID {
+				return
+			}
+		}
+	} else if policy == "MAX" || policy == "MIN" {
+		merged := make([]Effect, 0, len(*effects))
+		var winner Effect
+		foundGroup, incomingIsRefresh := false, false
+		for _, current := range *effects {
+			if current.Context != incoming.Context || current.EffectID != incoming.EffectID || current.ID != incoming.ID {
+				continue
+			}
+			if current.SourceID == incoming.SourceID {
+				current = incoming
+				incomingIsRefresh = true
+			}
+			if !foundGroup || combatEffectCandidateWins(float64(winner.Value), winner.Duration, float64(current.Value), current.Duration, policy) {
+				winner, foundGroup = current, true
+			}
+		}
+		if !incomingIsRefresh && (!foundGroup || combatEffectCandidateWins(float64(winner.Value), winner.Duration, float64(incoming.Value), incoming.Duration, policy)) {
+			winner, foundGroup = incoming, true
+		}
+		if !foundGroup {
+			winner = incoming
+		}
+		inserted := false
+		for _, current := range *effects {
+			if current.Context == incoming.Context && current.EffectID == incoming.EffectID && current.ID == incoming.ID {
+				if !inserted {
+					merged = append(merged, winner)
+					inserted = true
+				}
+				continue
+			}
+			merged = append(merged, current)
+		}
+		if !inserted {
+			merged = append(merged, winner)
+		}
+		*effects = merged
+		return
+	} else {
+		for index, current := range *effects {
+			if current.Context == incoming.Context && current.ID == incoming.ID && current.EffectID == incoming.EffectID && current.SourceID == incoming.SourceID {
+				(*effects)[index] = incoming
+				return
+			}
+		}
+	}
+	*effects = append(*effects, incoming)
+}
+
+func mergeCombatDoT(dots *[]DoTEffect, incoming DoTEffect, policy string) {
+	if policy == "REPLACE" {
+		kept := (*dots)[:0]
+		for _, current := range *dots {
+			if current.Type != incoming.Type {
+				kept = append(kept, current)
+			}
+		}
+		*dots = kept
+	} else if policy == "IGNORE" {
+		for _, current := range *dots {
+			if current.Type == incoming.Type {
+				return
+			}
+		}
+	} else if policy == "MAX" || policy == "MIN" {
+		merged := make([]DoTEffect, 0, len(*dots))
+		var winner DoTEffect
+		foundGroup, incomingIsRefresh := false, false
+		for _, current := range *dots {
+			if current.Context != incoming.Context || current.EffectID != incoming.EffectID || current.Type != incoming.Type {
+				continue
+			}
+			if current.SourceID == incoming.SourceID {
+				current = incoming
+				incomingIsRefresh = true
+			}
+			if !foundGroup || combatEffectCandidateWins(winner.Value, winner.Turns, current.Value, current.Turns, policy) {
+				winner, foundGroup = current, true
+			}
+		}
+		if !incomingIsRefresh && (!foundGroup || combatEffectCandidateWins(winner.Value, winner.Turns, incoming.Value, incoming.Turns, policy)) {
+			winner, foundGroup = incoming, true
+		}
+		if !foundGroup {
+			winner = incoming
+		}
+		inserted := false
+		for _, current := range *dots {
+			if current.Context == incoming.Context && current.EffectID == incoming.EffectID && current.Type == incoming.Type {
+				if !inserted {
+					merged = append(merged, winner)
+					inserted = true
+				}
+				continue
+			}
+			merged = append(merged, current)
+		}
+		if !inserted {
+			merged = append(merged, winner)
+		}
+		*dots = merged
+		return
+	} else {
+		for index, current := range *dots {
+			if current.Context == incoming.Context && current.Type == incoming.Type && current.EffectID == incoming.EffectID && current.SourceID == incoming.SourceID {
+				(*dots)[index] = incoming
+				return
+			}
+		}
+	}
+	*dots = append(*dots, incoming)
+}
+
+func combatEffectCandidateWins(currentValue float64, currentDuration int, candidateValue float64, candidateDuration int, policy string) bool {
+	if candidateValue != currentValue {
+		if policy == "MAX" {
+			return candidateValue > currentValue
+		}
+		return candidateValue < currentValue
+	}
+	return candidateDuration > currentDuration
 }

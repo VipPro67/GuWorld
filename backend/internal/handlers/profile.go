@@ -104,12 +104,16 @@ func GetPlayerProfile(c *gin.Context) {
 	var viewerSectID sql.NullString
 	var viewerGuInventory models.GuInventory
 	var viewerPathMasteries models.PathMasteriesMap
+	var viewerRace, viewerConstitution string
+	var viewerStatuses models.StatusList
+	var viewerHP, viewerBaseHP, viewerCurrentMana, viewerMaxMana float64
 
 	err := db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT rank, current_region, x, y, party_id, `+db.GuInventoryAggregate("players.id")+`, path_masteries
+		SELECT rank, current_region, x, y, party_id, `+db.GuInventoryAggregate("players.id")+`, path_masteries,
+		       COALESCE(race, ''), COALESCE(constitution, ''), statuses, hp, base_hp, current_mana, max_mana
 		FROM players
 		WHERE id = $1
-	`, viewerID).Scan(&viewerRank, &viewerRegion, &viewerX, &viewerY, &viewerPartyID, &viewerGuInventory, &viewerPathMasteries)
+	`, viewerID).Scan(&viewerRank, &viewerRegion, &viewerX, &viewerY, &viewerPartyID, &viewerGuInventory, &viewerPathMasteries, &viewerRace, &viewerConstitution, &viewerStatuses, &viewerHP, &viewerBaseHP, &viewerCurrentMana, &viewerMaxMana)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Failed to load viewer data: "+err.Error(), err))
 		return
@@ -179,6 +183,22 @@ func GetPlayerProfile(c *gin.Context) {
 
 	// 3. Compute Scouting Level of Viewer
 	scoutingLevel := float64(viewerRank)
+	viewerPlayer := &models.Player{
+		CharacterState: models.CharacterState{Race: viewerRace, Constitution: viewerConstitution, Statuses: viewerStatuses},
+		BodyState:      models.BodyState{HP: viewerHP, BaseHP: viewerBaseHP},
+		ResourceState:  models.ResourceState{CurrentMana: viewerCurrentMana, MaxMana: viewerMaxMana},
+		GuInventory:    viewerGuInventory,
+	}
+	viewerPlayer.Rank = viewerRank
+	viewerConditions := gamefx.PlayerConditionValues(viewerPlayer)
+	if target.Race != "" {
+		viewerConditions["TARGET_RACE"] = target.Race
+	}
+	viewerEffects, err := gamefx.GetWithConditions(viewerPlayer, viewerConditions)
+	if err != nil {
+		viewerEffects = gamefx.Get(viewerPlayer)
+	}
+	scoutingLevel += viewerEffects.ScoutingInvestigationBonus
 	for _, gu := range models.FilterEquippedActive(viewerGuInventory) {
 		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
 			scoutingLevel += models.GuStatValue(spec, "INVESTIGATION")
@@ -202,6 +222,18 @@ func GetPlayerProfile(c *gin.Context) {
 
 	// 4. Compute Disguise Level of Target
 	disguiseLevel := float64(target.Rank)
+	targetConditions := gamefx.PlayerConditionValues(&target)
+	if viewerRace != "" {
+		targetConditions["ACTOR_RACE"] = viewerRace
+	}
+	if target.Race != "" {
+		targetConditions["TARGET_RACE"] = target.Race
+	}
+	targetEffects, err := gamefx.GetWithConditions(&target, targetConditions)
+	if err != nil {
+		targetEffects = gamefx.Get(&target)
+	}
+	disguiseLevel += targetEffects.ScoutingDisguiseBonus
 	for _, gu := range models.FilterEquippedActive(target.GuInventory) {
 		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
 			disguiseLevel += models.GuStatValue(spec, "DISGUISE")

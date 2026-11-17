@@ -286,6 +286,8 @@ func unsupportedConditionReason(contextID string, conditions []gameplayeffects.C
 	case "TURN_BASED_COMBAT", "KILLER_MOVE_COMBAT":
 		values["RANK"] = 1
 		values["TURN"] = 1
+		values["ACTOR_RACE"] = "human"
+		values["TARGET_RACE"] = "human"
 		values["MASTERY"] = 0
 		values["HP_PERCENT"] = 0
 		values["ACTOR_HP_PERCENT"] = 0
@@ -296,6 +298,8 @@ func unsupportedConditionReason(contextID string, conditions []gameplayeffects.C
 		}
 	case "WORLD_ON_USE", "KILLER_MOVE_ON_USE", "GU_HOUSE_ON_USE", "TELEPORT_ARRAY_ARRIVAL":
 		values["RANK"] = 1
+		values["ACTOR_RACE"] = "human"
+		values["TARGET_RACE"] = "human"
 		values["HP_PERCENT"] = 0
 		values["ACTOR_HP_PERCENT"] = 0
 		values["MANA_PERCENT"] = 0

@@ -17,6 +17,7 @@ var DefaultLimits = Limits{MaxEventsPerAction: 128, MaxTriggerDepth: 8, MaxRepea
 
 type Snapshot struct {
 	ID                       string
+	Race                     string
 	HP, MaxHP, Mana, MaxMana float64
 	Stats                    map[string]float64
 }
@@ -110,6 +111,7 @@ type compiledBlock struct {
 type CompiledOperation struct {
 	BlockID                     string
 	BlockIndex                  int
+	OperationIndex              int
 	Type                        OperationType
 	Trigger                     Trigger
 	SubType                     string
@@ -132,18 +134,18 @@ func (Compiler) Compile(input []Block) (*Compiled, error) {
 		if !effectcatalog.TargetCatalog[string(b.Target.Selector)] {
 			return nil, fmt.Errorf("effect %q: unknown selector %q", b.ID, b.Target.Selector)
 		}
-		for _, condition := range b.Conditions {
-			if !effectcatalog.ConditionFields[strings.ToUpper(condition.Field)] || !effectcatalog.ConditionOperators[strings.ToUpper(condition.Operator)] {
-				return nil, fmt.Errorf("effect %q: unknown condition %q/%q", b.ID, condition.Field, condition.Operator)
-			}
-		}
 		conditions := append([]Condition(nil), b.Conditions...)
 		for i := range conditions {
-			conditions[i].Field = strings.ToUpper(conditions[i].Field)
-			conditions[i].Operator = strings.ToUpper(conditions[i].Operator)
+			conditions[i].Field = strings.ToUpper(strings.TrimSpace(conditions[i].Field))
+			conditions[i].Operator = strings.ToUpper(strings.TrimSpace(conditions[i].Operator))
+			value, err := effectcatalog.NormalizeConditionValue(conditions[i].Field, conditions[i].Operator, conditions[i].Value)
+			if err != nil {
+				return nil, fmt.Errorf("effect %q: %w", b.ID, err)
+			}
+			conditions[i].Value = value
 		}
 		cb := compiledBlock{id: b.ID, trigger: b.Trigger, target: b.Target, conditions: conditions}
-		for _, op := range b.Operations {
+		for operationIndex, op := range b.Operations {
 			definition, knownOperation := effectcatalog.OperationCatalog[string(op.Op)]
 			if !knownOperation {
 				return nil, fmt.Errorf("effect %q: unknown operation %q", b.ID, op.Op)
@@ -166,7 +168,7 @@ func (Compiler) Compile(input []Block) (*Compiled, error) {
 			if op.Target != nil {
 				effectiveOpTarget = *op.Target
 			}
-			co := CompiledOperation{BlockID: b.ID, BlockIndex: blockIndex, Type: op.Op, Trigger: b.Trigger, SubType: subType, Conditions: append([]Condition(nil), conditions...), Target: &effectiveOpTarget, Value: op.Value, Path: op.Path, Stat: strings.ToUpper(op.Stat), Unit: strings.ToUpper(op.Unit), Resource: strings.ToUpper(op.Resource), StackPolicy: strings.ToUpper(op.StackPolicy), Code: strings.ToUpper(op.Code), Params: append([]byte(nil), op.Params...)}
+			co := CompiledOperation{BlockID: b.ID, BlockIndex: blockIndex, OperationIndex: operationIndex, Type: op.Op, Trigger: b.Trigger, SubType: subType, Conditions: append([]Condition(nil), conditions...), Target: &effectiveOpTarget, Value: op.Value, Path: op.Path, Stat: strings.ToUpper(op.Stat), Unit: strings.ToUpper(op.Unit), Resource: strings.ToUpper(op.Resource), StackPolicy: strings.ToUpper(op.StackPolicy), Code: strings.ToUpper(op.Code), Params: append([]byte(nil), op.Params...)}
 			if len(op.Params) > 0 {
 				if err := json.Unmarshal(op.Params, &co.Values); err != nil {
 					return nil, fmt.Errorf("effect %q: invalid native params: %w", b.ID, err)
@@ -185,6 +187,8 @@ func (Compiler) Compile(input []Block) (*Compiled, error) {
 					return nil, fmt.Errorf("effect %q: %w", b.ID, err)
 				}
 				resolved.Chance = op.Chance
+				resolved.EffectID = fmt.Sprintf("%s:%d:%d", b.ID, blockIndex, operationIndex)
+				resolved.StackPolicy = co.StackPolicy
 				co.Status = &resolved
 			}
 			if co.Stat != "" && !effectcatalog.StatCatalog[co.Stat] {
@@ -222,6 +226,9 @@ func (c *Compiled) Passives() []Passive {
 	var out []Passive
 	for _, b := range c.blocks {
 		if b.trigger != TriggerAlwaysOn {
+			continue
+		}
+		if len(b.conditions) > 0 {
 			continue
 		}
 		for _, op := range b.operations {
@@ -286,6 +293,9 @@ func (c *Compiled) LastNativeParamFloat(trigger Trigger, code, key string) (floa
 			if op.Type != OpUnique || op.Code != code {
 				continue
 			}
+			if len(op.Conditions) > 0 {
+				continue
+			}
 			if number, ok := op.Values[key].(float64); ok {
 				value, found = number, true
 			}
@@ -347,7 +357,7 @@ func (c *Compiled) StatValue(trigger Trigger, stat, subType string) float64 {
 			continue
 		}
 		for _, op := range block.operations {
-			if op.Type == OpStatMod && op.Stat == stat && (subType == "" || op.SubType == subType) {
+			if len(op.Conditions) == 0 && op.Type == OpStatMod && op.Stat == stat && (subType == "" || op.SubType == subType) {
 				total += op.Value
 			}
 		}
@@ -414,6 +424,9 @@ func (c *Compiled) NativeMechanic(code string) (CompiledOperation, bool) {
 			if op.Type != OpUnique || op.Code != code {
 				continue
 			}
+			if len(op.Conditions) > 0 {
+				continue
+			}
 			cloned := cloneOperation(op)
 			cloned.Trigger = block.trigger
 			return cloned, true
@@ -473,6 +486,12 @@ func (c *Compiled) Evaluate(ctx Context, event Event) (Result, error) {
 }
 func conditionValues(ctx Context, event Event) ConditionValues {
 	values := ConditionValues{}
+	if race := strings.TrimSpace(ctx.Actor.Race); race != "" {
+		values["ACTOR_RACE"] = race
+	}
+	if race := strings.TrimSpace(ctx.Target.Race); race != "" {
+		values["TARGET_RACE"] = race
+	}
 	if ctx.HasRank || ctx.Rank > 0 {
 		values["RANK"] = float64(ctx.Rank)
 	}

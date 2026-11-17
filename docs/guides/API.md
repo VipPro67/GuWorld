@@ -32,7 +32,7 @@ Base path: `/api`. Route được đăng ký trong `backend/internal/server/serv
 - POST `/player/respawn-choice`, `/player/use-item`, `/player/use-items`, `/player/recharge`, `/player/clear-stress`, `/player/referrals/claim`, `/player/referrals/bind`, `/player/avatar`, `/player/redeem-gift-code`, `/player/complete-tutorial`, `/player/complete-onboarding`, `/player/notifications/read`, `/player/notifications/read-all`, `/player/beast-betting/bet`.
 - PUT `/player/profile/settings`, `/player/combat-settings`.
 
-Snapshot player trả `map_instance_id` cùng `current_region`, `x`, `y` để frontend phân biệt người đang ở Tiên Khiếu của mình với khách trong một instance khác.
+Snapshot player trả `map_instance_id` cùng `current_region`, `x`, `y` để frontend phân biệt người đang ở Tiên Khiếu của mình với khách trong một instance khác. Status object có thể kèm `source`, `source_id`, `effect_id`, `context` và `stack_policy`; các trường provenance tùy chọn phân biệt instance cùng status ID và không bắt buộc với status legacy.
 - GET `/wallet`; thanh toán dùng GET `/topup/packages`, POST `/topup/orders`, GET `/topup/orders/:orderCode`, POST `/webhooks/payos`.
 - GET `/shop/packages` trả gói premium; POST mua gói nằm tại `/shop/buy-package`.
 
@@ -52,7 +52,9 @@ Snapshot player trả `map_instance_id` cùng `current_region`, `x`, `y` để f
 | `/pets` | GET `/`; POST `/feed`, `/formation`, `/sleep`, `/release`, `/merge` |
 | `/actors` | GET `/`, `/:id`; chỉ đọc roster actor của player hiện tại |
 
-Combat được xử lý theo lượt. `/combat/start` chạy tự động ngoại trừ PvP thật; `/combat/session/*` dành cho session command có revision. Với PvP thật, mỗi bên gửi loadout tới `POST /combat/session/prepare` để khóa đội hình; khi cả hai khóa, frontend tự gọi `POST /combat/session/start` từ phía người khởi chiến. Sau 45 giây chuẩn bị, server tự mô phỏng trận nếu session chưa được mở. `POST /combat/session/start` có thể trả session `complete` ngay nếu hiệu ứng lúc bắt đầu trận đã kết thúc encounter; client hiển thị báo cáo kết quả mà không chờ command. `GET /combat/session` và `GET /combat/session/:id` cũng settle và đóng phiên cũ nếu replay đã có `BATTLE_END` nhưng không còn actor chờ. `/combat/retreat/:id` cho phép hủy PvP ở bước chuẩn bị: PvP ảo thoát ngay, PvP thật lần gọi đầu ghi đề nghị và chỉ lần gọi từ đối phương mới hủy trạng thái của cả hai; phản hồi đề nghị có `retreat_pending: true` và `active_combat` mới. PvE do quái tấn công bị từ chối ở bước này; sau khi session hoạt động, bỏ chạy phải gửi như command trong lượt qua `/combat/flee/:id`.
+Combat được xử lý theo lượt. `/combat/start` chạy tự động ngoại trừ PvP thật; `/combat/session/*` dành cho session command có revision. Với PvP thật, mỗi bên gửi loadout tới `POST /combat/session/prepare` để khóa đội hình; khi cả hai khóa, frontend tự gọi `POST /combat/session/start` từ phía người khởi chiến. Sau 45 giây chuẩn bị, server tự mô phỏng trận nếu session chưa được mở. `POST /combat/session/start` có thể trả session `complete` ngay nếu hiệu ứng lúc bắt đầu trận đã kết thúc encounter; client hiển thị báo cáo kết quả mà không chờ command. `GET /combat/session` và `GET /combat/session/:id` cũng settle và đóng phiên cũ nếu replay đã có `BATTLE_END` nhưng không còn actor chờ. `/combat/retreat/:id` cho phép hủy PvP ở bước chuẩn bị: PvP ảo thoát ngay, PvP thật lần gọi đầu ghi đề nghị và chỉ lần gọi từ đối phương mới hủy trạng thái của cả hai; phản hồi đề nghị có `retreat_pending: true` và `active_combat` mới. PvE do quái tấn công bị từ chối ở bước này; sau khi session hoạt động, bỏ chạy phải gửi như command trong lượt qua `/combat/flee/:id`. Snapshot combatant có thể kèm `race` nếu nguồn actor có dữ liệu; các condition race chỉ khớp đúng race key, còn actor không có race thì condition đó fail-closed.
+
+Damage breakdown có thể bổ sung `race_damage_bonus`/`race_damage_target` khi actor có modifier khớp race mục tiêu, và `race_resistance`/`race_resist_attacker` khi target có modifier khớp race của actor. Các trường chỉ xuất hiện khi factor khác 0; chúng thuộc response breakdown combat, không đổi request payload.
 
 ## Thế giới, aperture và instance
 
@@ -61,7 +63,7 @@ Combat được xử lý theo lượt. `/combat/start` chạy tự động ngo�
 | `/explore` | GET `/grid`, `/regions`, `/cells/rect`; POST `/move` (di chuyển trong ranh giới instance bí cảnh hoặc Tiên Khiếu hiện tại). `/grid` trả toàn cảnh 20×20 cho chủ Tiên Khiếu; khách nhận viewport theo tầm nhìn thường, dữ liệu theo `map_instance_id` và `aperture_owner_name` để hiện tên chủ. |
 | `/world` | GET `/map-objects`, `/monsters`, `/drops`; POST `/portal/transfer`, `/drops/:id/loot` |
 | `/teleport` | GET `/templates`, `/effect-options`, `/mine`, `/directory`; POST `/preview`, `/build`, `/travel`, `/manage`, `/repair`, `/withdraw`, `/dismantle` |
-| `/immortal-aperture` | GET aperture, nodes, points, world-points, workers, portal, guests, swarms, refinement queue, settlements, NPCs; người trong roster được đọc `/points` của instance đang vào trong phạm vi nhìn thấy, POST `/points/:id/collect` thu hoạch trong phạm vi 6 ô; khách tự rời instance bằng POST `/leave`, không cần chủ phê duyệt. POST `/world-points/:id/transplant` khởi động/hoàn tất nghi thức di dời mỏ ngoài map vào Tiên Khiếu của người thao tác, có phí và thời gian theo cấp mỏ. Các route quản trị còn lại vẫn theo quyền chủ. |
+| `/immortal-aperture` | GET aperture, nodes, points, world-points, workers, portal, guests, swarms, refinement queue, settlements, NPCs; người trong roster được đọc `/points` của instance đang vào trong phạm vi nhìn thấy, POST `/points/:id/collect` thu hoạch trong phạm vi 6 ô; khách tự rời instance bằng POST `/leave`, không cần chủ phê duyệt. POST `/portals/:portalId/enter` đưa khách vào và báo chủ qua notification; POST `/guests/:guestId/evict` trục xuất khách, từ chối khi khách đang realtime combat và hủy ngay nghi thức di dời mỏ của khách. POST `/world-points/:id/transplant` khởi động/hoàn tất nghi thức di dời mỏ ngoài map vào Tiên Khiếu của người thao tác, có phí và thời gian theo cấp mỏ. Các route quản trị còn lại vẫn theo quyền chủ. |
 | `/dao-marks` | GET `/`, `/dao-ngan` |
 | `/tribulations` | GET `/active`; POST `/:eventId/engage`, `/:eventId/resolve`, `/:eventId/start`, `/:eventId/mitigate-hazard`, `/:eventId/capture-beast`, `/:eventId/claim-spoil`, `/:eventId/claim-all-spoils`, `/:eventId/finalize-aftermath` |
 | `/instance` | GET `/active`, `/list`, `/spatial`, `/spatial/active`; POST `/enter`, `/action`, `/spatial/enter`, `/spatial/exit` |
@@ -69,6 +71,8 @@ Combat được xử lý theo lượt. `/combat/start` chạy tự động ngo�
 | `/dream-realms` | GET `/`, `/active`; POST `/enter`, `/action`, `/exit` |
 | `/veins` | POST `/:id/harvest` |
 | `/scouting` | POST `/inspect`, `/divine`, `/divine-gu`, `/apply-mark`, `/sever-clues`, `/resonance-scan`; GET `/tracked-targets` |
+
+`GET /api/world/map-objects` trả Môn Hộ theo quyền hiển thị: chủ, policy mở, cùng tổ đội/tông môn, hoặc điểm dò đạt điểm che giấu của chủ cộng `concealment_power`. Scorer dùng STAT và realm/Đạo, không có clue hay random roll; passive `INVESTIGATION` tăng điểm dò, `DISGUISE` tăng điểm che giấu. Khi dò thấy cổng ẩn, response chỉ lộ tọa độ và nhãn chung, không trả owner ID, aperture ID hay policy. `POST /api/immortal-aperture/portals/:portalId/enter` kiểm tra cùng vùng, cách tối đa 3 ô và trạng thái combat; dò thành công cho phép vào bất kể policy PARTY/SECT. Event `portal_spawn/update/despawn` chỉ yêu cầu client tải lại marker theo vùng, không gửi tọa độ hoặc ID Môn Hộ.
 
 ## Social, economy và thi đấu
 
@@ -84,6 +88,8 @@ Combat được xử lý theo lượt. `/combat/start` chạy tự động ngo�
 - `/leaderboard/:category`, settings/visibility; `/gacha/pools`, `/gacha/open`, `/gacha/open10`; `/soul/refine`; feedback đọc public, submit/vote/comment cần auth.
 
 ## Admin
+
+Effect catalog: GET `/admin/effect-catalog/metadata` trả vocabulary và `condition_value_types`; POST `/admin/effect-catalog/validate` kiểm tra Block v2 và context compatibility. Race conditions dùng chuỗi ở `ACTOR_RACE`/`TARGET_RACE`; trong runtime hỗ trợ, thiếu race ở context làm block không khớp. Preflight vẫn từ chối context không có evaluator cho trigger/operation đó.
 
 Admin UI dùng `/admin/*`. Mọi route yêu cầu `AuthRequired`, `admin` rate limit và permission tương ứng. Route inventory là `adminRouteSpecs()` trong `server.go`; các nhóm bao gồm access/resources, monitor/traces, billing, combat history/rankings, player/inventory, aperture, Gu, sect, data import/export, cache, audit, regions/map cells/drops, mỏ tài nguyên thế giới và Nguyên Tuyền (`/admin/primeval-veins*`, `/admin/world-resource-points*`), shop, arena shop, monsters, pets, moderation và role management. Các thao tác ghi được audit; mutation nguy hiểm có thể yêu cầu reason/confirmation/re-auth/idempotency.
 

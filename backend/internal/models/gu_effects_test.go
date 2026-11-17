@@ -325,13 +325,16 @@ func TestCompiledProjectionReadsAuthoredBlocksOnly(t *testing.T) {
 
 func TestGuStatValueReadsOnlyFlatAlwaysOnPassives(t *testing.T) {
 	var effects GuEffects
-	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":12},{"op":"STAT_MOD","stat":"ATTACK","sub_type":"GROWTH_CAP","value":100}]}]`
+	raw := `[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":12},{"op":"STAT_MOD","stat":"ATTACK","sub_type":"GROWTH_CAP","value":100}]},{"id":"CONDITIONAL_ATTACK","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"conditions":[{"field":"ACTOR_RACE","operator":"EQ","value":"human"}],"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":200}]}]`
 	if err := effects.Scan(raw); err != nil {
 		t.Fatalf("scan block effects: %v", err)
 	}
 
 	if got := GuStatValue(Gu{Effects: effects}, "ATTACK"); got != 12 {
 		t.Fatalf("attack passive = %v, want 12 (growth cap must not be loaded as a passive)", got)
+	}
+	if passives := CompiledGuEffects(Gu{Effects: effects}).Passives(); len(passives) != 2 {
+		t.Fatalf("unconditioned passives count = %d, want 2", len(passives))
 	}
 }
 

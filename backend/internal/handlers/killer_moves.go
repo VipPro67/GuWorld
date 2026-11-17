@@ -1450,7 +1450,7 @@ func UseKillerMove(c *gin.Context) {
 		evalCtx := gameplayeffects.Context{
 			Rank: move.MainGuRank, Mastery: currentLevel, HasMastery: true,
 		}
-		outcome, execErr := executeWorldUseEffect(tx, &player, compiledEffects, evalCtx, move.MainGuRank, cost, move.Name, componentIDs)
+		outcome, execErr := executeWorldUseEffect(tx, &player, compiledEffects, evalCtx, move.MainGuRank, cost, move.Name, move.ID, componentIDs)
 		if execErr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": execErr.Error()})
 			return

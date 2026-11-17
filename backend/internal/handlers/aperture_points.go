@@ -1677,10 +1677,12 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 	var currentMana float64
 	var playerRegion string
 	var playerX, playerY float64
+	var initialLocationRevision int64
 	if err := tx.QueryRow(`
-		SELECT rank, COALESCE(current_mana, 0), COALESCE(current_region, ''), x, y
+		SELECT rank, COALESCE(current_mana, 0), COALESCE(current_region, ''), x, y,
+		       COALESCE(world_location_revision, 0)
 		FROM players WHERE id = $1
-	`, playerID).Scan(&rank, &currentMana, &playerRegion, &playerX, &playerY); err != nil {
+	`, playerID).Scan(&rank, &currentMana, &playerRegion, &playerX, &playerY, &initialLocationRevision); err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi vị trí đạo hữu", err))
 		return
 	}
@@ -1867,6 +1869,24 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 	}
 	if affected, rowsErr := burn.RowsAffected(); rowsErr == nil && affected == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Không đủ Tiên Nguyên cho nghi thức: cần %s.", formatTransplantEssence(cost))})
+		return
+	}
+	// Revalidate location after the mana UPDATE has locked the player row.
+	// Entry/eviction can race the earlier read; never start a ritual using a
+	// stale world position after the player has moved into or out of an aperture.
+	var lockedRegion string
+	var lockedX, lockedY float64
+	var lockedLocationRevision int64
+	var lockedMapInstance sql.NullString
+	if err := tx.QueryRow(`
+		SELECT COALESCE(current_region, ''), x, y, COALESCE(world_location_revision, 0), map_instance_id::text
+		FROM players WHERE id = $1
+	`, playerID).Scan(&lockedRegion, &lockedX, &lockedY, &lockedLocationRevision, &lockedMapInstance); err != nil {
+		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra lại vị trí đạo hữu", err))
+		return
+	}
+	if lockedLocationRevision != initialLocationRevision || lockedMapInstance.Valid || !worldPointInReach(lockedRegion, regionID, lockedX, lockedY, pointX, pointY) {
+		c.JSON(http.StatusConflict, gin.H{"error": "Vị trí đã thay đổi trong lúc bắt đầu nghi thức; hãy thử lại khi đứng cạnh mỏ ở thế giới bên ngoài."})
 		return
 	}
 	if _, err := tx.Exec(`

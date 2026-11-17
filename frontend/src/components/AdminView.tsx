@@ -2495,15 +2495,16 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                           <div className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">Trạng Thái</div>
                           {detail.statuses && detail.statuses.length > 0 ? (
                             <div className="flex flex-col gap-1.5 mt-1">
-                              {detail.statuses.map((s: string | { id: string; expires_at?: string | null }) => {
+                              {detail.statuses.map((s: string | { id: string; expires_at?: string | null; source_id?: string; effect_id?: string; context?: string }, index: number) => {
                                 const sId = typeof s === "string" ? s : s.id;
                                 const sExp = typeof s === "string" ? undefined : s.expires_at;
+                                const statusKey = typeof s === "string" ? `${sId}-${index}` : `${sId}-${s.source_id || ""}-${s.effect_id || ""}-${s.context || ""}-${index}`;
                                 let displayName = statusDictionary?.[sId]?.name || sId;
                                 if (sId.startsWith("cd_gu_")) displayName = "Hồi chiêu Cổ Trùng";
                                 const statusEffects = statusDictionary?.[sId]?.effects;
 
                                 return (
-                                  <div key={sId} className="flex flex-col gap-1">
+                                  <div key={statusKey} className="flex flex-col gap-1">
                                     <span className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold w-fit">
                                       {displayName}{statusRemainLabel(sExp)}
                                     </span>

@@ -223,9 +223,13 @@ func (v *blockValidator) condition(c map[string]json.RawMessage, path, id string
 	if r, ok := c["value"]; !ok {
 		v.add(path+".value", "required_field", "value is required", id, nil)
 	} else {
-		var x float64
-		if json.Unmarshal(r, &x) != nil {
-			v.add(path+".value", "invalid_type", "value must be a number", id, nil)
+		var value any
+		if json.Unmarshal(r, &value) != nil {
+			v.add(path+".value", "invalid_type", "value must be a number or string", id, nil)
+			return
+		}
+		if _, err := NormalizeConditionValue(f, o, value); err != nil {
+			v.add(path+".value", "invalid_condition_value", err.Error(), id, nil)
 		}
 	}
 }

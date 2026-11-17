@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -39,9 +40,17 @@ func CombineDaoConflictReduction(current, bonus float64) float64 {
 // Effects aggregates the gameplay modifiers granted by a player's
 // race (chủng tộc), constitution (thể chất) and active statuses (trạng thái).
 type Effects struct {
+	// ConditionalBlocks are passive projections that require a consumer-owned
+	// condition context. They remain on the unprojected source aggregate until
+	// Get/GetWithConditions evaluates them.
+	ConditionalBlocks []gameplayeffects.Block `json:"-"`
 	// StatMods maps a passive stat key ("attack", "defense", "speed", ...) to a
 	// percentage modifier applied on the stat total. E.g. 0.10 => +10%.
 	StatMods map[string]float64 `json:"stat_mods"`
+	// ScoutingInvestigationBonus and ScoutingDisguiseBonus are flat additions
+	// to the existing scorer inputs, before their existing Gu-stat weights.
+	ScoutingInvestigationBonus float64 `json:"scouting_investigation,omitempty"`
+	ScoutingDisguiseBonus      float64 `json:"scouting_disguise,omitempty"`
 	// RefineBonus is an additive success-rate bonus for luyện cổ (refining),
 	// in the 0..1 range.
 	RefineBonus float64 `json:"refine"`
@@ -54,6 +63,11 @@ type Effects struct {
 	// PathResistanceBonus maps a dao path to a percentage reduction of damage
 	// taken from that path. E.g. {"fire": 0.10} => -10% fire damage taken.
 	PathResistanceBonus map[string]float64 `json:"path_resistance"`
+	// RaceDamageBonus adds damage against the exact target race key. Values are
+	// additive within the target-race bucket before that bucket is multiplied.
+	RaceDamageBonus map[string]float64 `json:"race_damage"`
+	// RaceResistanceBonus reduces damage from the exact attacker race key.
+	RaceResistanceBonus map[string]float64 `json:"race_resistance"`
 	// LuckBonus is a flat increase of the luck stat.
 	LuckBonus float64 `json:"luck"`
 	// MaxManaBonus is a percentage increase of the mana pool capacity.
@@ -111,8 +125,8 @@ type Effects struct {
 }
 
 // ValidateEffectProjection checks whether a Block v2 definition can be
-// consumed by the passive/derived projection adapter. Unsupported triggers,
-// conditions, targets, and operations must be rejected before data is stored.
+// consumed by the passive/derived projection adapter. Conditions are retained
+// for consumer-owned evaluation through GetWithConditions.
 func ValidateEffectProjection(raw []byte) error {
 	var effects Effects
 	return json.Unmarshal(raw, &effects)
@@ -123,7 +137,7 @@ func ValidateEffectProjection(raw []byte) error {
 func PassiveStatModSupported(stat, subtype, unit, path string) bool {
 	stat = strings.ToUpper(strings.TrimSpace(stat))
 	switch stat {
-	case "ATTACK", "DEFENSE", "SPEED", "HP", "DAO_MARK", "PATH_DAMAGE", "PATH_RESISTANCE", "LUCK",
+	case "ATTACK", "DEFENSE", "SPEED", "HP", "DAO_MARK", "PATH_DAMAGE", "PATH_RESISTANCE", "LUCK", "INVESTIGATION", "DISGUISE",
 		"REFINE_SUCCESS", "CULTIVATION_EFFICIENCY", "DAO_MARK_GAIN", "APERTURE_STRESS",
 		"PATH_CONFLICT_REDUCTION", "TENACITY", "CC_RESIST":
 	default:
@@ -239,6 +253,23 @@ func (e Effects) ToBlocks() []any {
 	if len(e.PathResistanceBonus) > 0 {
 		addBlock("PATH_RESISTANCE_MODIFIER", "PATH_RESISTANCE_MODIFIER", e.PathResistanceBonus)
 	}
+	if len(e.RaceDamageBonus) > 0 {
+		addBlock("RACE_DAMAGE_MODIFIER", "RACE_DAMAGE_MODIFIER", e.RaceDamageBonus)
+	}
+	if len(e.RaceResistanceBonus) > 0 {
+		addBlock("RACE_RESISTANCE_MODIFIER", "RACE_RESISTANCE_MODIFIER", e.RaceResistanceBonus)
+	}
+	addScoutingStat := func(id, stat string, value float64) {
+		if value == 0 {
+			return
+		}
+		blocks = append(blocks, map[string]any{
+			"id": id, "trigger": "ALWAYS_ON", "target": target{Selector: "SELF"},
+			"operations": []any{map[string]any{"op": "STAT_MOD", "stat": stat, "sub_type": "ADD_FLAT", "value": value}},
+		})
+	}
+	addScoutingStat("SCOUTING_INVESTIGATION", "INVESTIGATION", e.ScoutingInvestigationBonus)
+	addScoutingStat("SCOUTING_DISGUISE", "DISGUISE", e.ScoutingDisguiseBonus)
 	if e.RefineBonus != 0 {
 		addBlock("REFINE_SUCCESS", "REFINE_SUCCESS", e.RefineBonus)
 	}
@@ -314,10 +345,21 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 	if err := json.Unmarshal(data, &effectBlocks); err != nil {
 		return err
 	}
-	for _, block := range effectBlocks {
-		if block.Trigger != gameplayeffects.TriggerAlwaysOn || len(block.Conditions) > 0 || block.Target.Selector != gameplayeffects.TargetSelf {
-			return fmt.Errorf("gamefx effect block %q requires ALWAYS_ON, unconditional SELF targeting", block.ID)
+	for blockIndex, block := range effectBlocks {
+		if block.Trigger != gameplayeffects.TriggerAlwaysOn || block.Target.Selector != gameplayeffects.TargetSelf {
+			return fmt.Errorf("gamefx effect block %q requires ALWAYS_ON SELF targeting", block.ID)
 		}
+		for i := range block.Conditions {
+			condition := &block.Conditions[i]
+			condition.Field = strings.ToUpper(strings.TrimSpace(condition.Field))
+			condition.Operator = strings.ToUpper(strings.TrimSpace(condition.Operator))
+			value, err := effectcatalog.NormalizeConditionValue(condition.Field, condition.Operator, condition.Value)
+			if err != nil {
+				return fmt.Errorf("gamefx effect block %q: %w", block.ID, err)
+			}
+			condition.Value = value
+		}
+		effectBlocks[blockIndex] = block
 		for _, operation := range block.Operations {
 			if operation.Target != nil && operation.Target.Selector != gameplayeffects.TargetSelf {
 				return fmt.Errorf("gamefx effect block %q has an unsupported operation target", block.ID)
@@ -345,6 +387,8 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 		DaoNganBonus:        map[string]float64{},
 		PathDamageBonus:     map[string]float64{},
 		PathResistanceBonus: map[string]float64{},
+		RaceDamageBonus:     map[string]float64{},
+		RaceResistanceBonus: map[string]float64{},
 	}
 
 	type blockOp struct {
@@ -358,7 +402,8 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 		Params  json.RawMessage `json:"params"`
 	}
 	type blockItem struct {
-		Operations []blockOp `json:"operations"`
+		Conditions []gameplayeffects.Condition `json:"conditions"`
+		Operations []blockOp                   `json:"operations"`
 	}
 
 	var blocks []blockItem
@@ -392,7 +437,15 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 		return m
 	}
 
+	for _, block := range effectBlocks {
+		if len(block.Conditions) > 0 {
+			e.ConditionalBlocks = append(e.ConditionalBlocks, block)
+		}
+	}
 	for _, b := range blocks {
+		if len(b.Conditions) > 0 {
+			continue
+		}
 		for _, op := range b.Operations {
 			var p struct {
 				Value any `json:"value"`
@@ -411,6 +464,10 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 				switch statUpper {
 				case "ATTACK", "DEFENSE", "SPEED", "HP":
 					e.StatMods[strings.ToLower(statUpper)] += asFloat(val)
+				case "INVESTIGATION":
+					e.ScoutingInvestigationBonus += asFloat(val)
+				case "DISGUISE":
+					e.ScoutingDisguiseBonus += asFloat(val)
 				case "DAO_MARK":
 					if op.Path != "" {
 						e.DaoNganBonus[strings.ToLower(op.Path)] += asFloat(val)
@@ -480,6 +537,14 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 				for k, v := range asMap(val) {
 					e.PathResistanceBonus[k] += v
 				}
+			case "RACE_DAMAGE_MODIFIER":
+				for k, v := range asMap(val) {
+					e.RaceDamageBonus[k] += v
+				}
+			case "RACE_RESISTANCE_MODIFIER":
+				for k, v := range asMap(val) {
+					e.RaceResistanceBonus[k] += v
+				}
 			case "LUCK":
 				e.LuckBonus += asFloat(val)
 			case "MAX_MANA":
@@ -526,7 +591,7 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 
 func gameFXUniqueProjection(code string) bool {
 	switch strings.ToUpper(strings.TrimSpace(code)) {
-	case "STAT_MODS", "REFINE_SUCCESS", "DAO_MARK_MODIFIER", "PATH_DAMAGE_MODIFIER", "PATH_RESISTANCE_MODIFIER",
+	case "STAT_MODS", "REFINE_SUCCESS", "DAO_MARK_MODIFIER", "PATH_DAMAGE_MODIFIER", "PATH_RESISTANCE_MODIFIER", "RACE_DAMAGE_MODIFIER", "RACE_RESISTANCE_MODIFIER",
 		"LUCK", "MAX_MANA", "MANA_REGEN", "CULTIVATION_EFFICIENCY", "DAO_MARK_GAIN", "HEALING_RECEIVED",
 		"HP_REGEN", "MENTAL_RESISTANCE", "SOUL_DEFENSE", "SOUL_REGEN", "TENACITY", "CC_RESIST",
 		"APERTURE_STRESS", "NON_CONFLICTING_DAO_MARKS", "IMMORTAL", "DISABLE_HP_REGEN", "DISABLE_MANA_REGEN",
@@ -566,12 +631,14 @@ func ValidConstitutions() map[string]bool {
 }
 
 // Get returns all effects from a player's character fields.
-func Get(p *models.Player) Effects {
+func getUnconditional(p *models.Player) Effects {
 	fx := Effects{
 		StatMods:            map[string]float64{},
 		DaoNganBonus:        map[string]float64{},
 		PathDamageBonus:     map[string]float64{},
 		PathResistanceBonus: map[string]float64{},
+		RaceDamageBonus:     map[string]float64{},
+		RaceResistanceBonus: map[string]float64{},
 	}
 	if p == nil {
 		return fx
@@ -626,6 +693,11 @@ func Get(p *models.Player) Effects {
 		if !ok {
 			continue
 		}
+		for _, block := range spec.Effects.GetBlocks() {
+			if block.Trigger == gameplayeffects.TriggerAlwaysOn && len(block.Conditions) > 0 && block.Target.Selector == gameplayeffects.TargetSelf {
+				fx.ConditionalBlocks = append(fx.ConditionalBlocks, block)
+			}
+		}
 		guVal := func(spec models.GuDictionaryItem, key string) float64 {
 			v := models.GuStatValue(spec, key)
 			if v == 0 {
@@ -663,6 +735,73 @@ func Get(p *models.Player) Effects {
 	}
 
 	return fx
+}
+
+// PlayerConditionValues exposes actor-local state available to ordinary
+// player projections. Event consumers should add target/turn-specific values.
+func PlayerConditionValues(p *models.Player) gameplayeffects.ConditionValues {
+	values := gameplayeffects.ConditionValues{}
+	if p == nil {
+		return values
+	}
+	if p.Race != "" {
+		values["ACTOR_RACE"] = p.Race
+	}
+	if p.Rank > 0 {
+		values["RANK"] = float64(p.Rank)
+	}
+	if maxHP := EffectiveMaxHP(p); maxHP > 0 {
+		percent := p.HP / maxHP
+		values["HP_PERCENT"] = percent
+		values["ACTOR_HP_PERCENT"] = percent
+	}
+	maxMana := p.MaxMana * (1 + getUnconditional(p).MaxManaBonus)
+	if maxMana > 0 {
+		values["MANA_PERCENT"] = p.CurrentMana / maxMana
+	}
+	return values
+}
+
+// Get resolves player passives against the actor-local state available on the
+// player. Consumers with event targets should use GetWithConditions instead.
+func Get(p *models.Player) Effects {
+	base := getUnconditional(p)
+	projected, err := projectEffectsWithConditions(base, PlayerConditionValues(p))
+	if err != nil {
+		return base
+	}
+	return projected
+}
+
+// GetWithConditions resolves player passives for one consumer-owned read.
+// Conditions unavailable in values fail closed for that block only.
+func GetWithConditions(p *models.Player, values gameplayeffects.ConditionValues) (Effects, error) {
+	return projectEffectsWithConditions(getUnconditional(p), values)
+}
+
+func projectEffectsWithConditions(fx Effects, values gameplayeffects.ConditionValues) (Effects, error) {
+	blocks := fx.ConditionalBlocks
+	fx.ConditionalBlocks = nil
+	for _, block := range blocks {
+		matched, err := gameplayeffects.ConditionsMatch(block.Conditions, values)
+		if err != nil {
+			continue
+		}
+		if !matched {
+			continue
+		}
+		block.Conditions = nil
+		data, err := json.Marshal([]gameplayeffects.Block{block})
+		if err != nil {
+			return Effects{}, fmt.Errorf("encode passive block %q: %w", block.ID, err)
+		}
+		var projected Effects
+		if err := projected.unmarshalBlocks(data); err != nil {
+			return Effects{}, fmt.Errorf("project passive block %q: %w", block.ID, err)
+		}
+		addEffects(&fx, projected)
+	}
+	return fx, nil
 }
 
 // CombinedResist merges mental + generic CC resist multiplicatively, capped at 0.75.
@@ -845,22 +984,27 @@ func PathDamageMultiplier(path string, pathDamage map[string]float64) float64 {
 	return 1.0 + pathDamage[cleanPath]
 }
 
-// PathDamageMultiplierForPaths returns the maximum path-damage multiplier
-// across the given paths. 1.0 means no bonus.
+// PathDamageMultiplierForPaths returns the multiplier for the primary path.
+// Secondary paths do not participate unless an action explicitly opts into
+// multi-path modifier behavior. 1.0 means no bonus.
 func PathDamageMultiplierForPaths(paths []string, pathDamage map[string]float64) float64 {
 	if pathDamage == nil {
 		return 1.0
 	}
-	if len(paths) == 0 {
-		paths = []string{"strength"}
+	path := "strength"
+	if len(paths) > 0 {
+		path = paths[0]
 	}
-	maxMult := 1.0
-	for _, path := range paths {
-		if mult := PathDamageMultiplier(path, pathDamage); mult > maxMult {
-			maxMult = mult
-		}
+	return PathDamageMultiplier(path, pathDamage)
+}
+
+// RaceModifier returns a passive modifier for an exact race key. Unknown or
+// missing race keys fail closed and never receive a racial factor.
+func RaceModifier(race string, modifiers map[string]float64) float64 {
+	if race == "" || modifiers == nil {
+		return 0
 	}
-	return maxMult
+	return modifiers[race]
 }
 
 func (e Effects) ApplyToEnemyCombatState(combat *models.CombatState) {
@@ -868,6 +1012,8 @@ func (e Effects) ApplyToEnemyCombatState(combat *models.CombatState) {
 		return
 	}
 	combat.EnemyPathResistance = e.PathResistanceBonus
+	combat.EnemyRaceResistance = e.RaceResistanceBonus
+	combat.EnemyRaceDamageBonus = e.RaceDamageBonus
 	combat.EnemyMentalResistance = e.MentalResistanceBonus
 	combat.EnemyTenacity = e.Tenacity
 	combat.EnemyCCResist = e.CCResist

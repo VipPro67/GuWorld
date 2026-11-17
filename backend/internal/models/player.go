@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -83,10 +84,14 @@ func (b BodyModsList) Has(id string) bool {
 // nil for permanent statuses; Source records where it came from ("admin",
 // "combat", "tribulation", ...); Value carries an optional intensity.
 type StatusInstance struct {
-	ID        string     `json:"id"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
-	Source    string     `json:"source,omitempty"`
-	Value     float64    `json:"value,omitempty"`
+	ID          string     `json:"id"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	Source      string     `json:"source,omitempty"`
+	Value       float64    `json:"value,omitempty"`
+	SourceID    string     `json:"source_id,omitempty"`
+	EffectID    string     `json:"effect_id,omitempty"`
+	Context     string     `json:"context,omitempty"`
+	StackPolicy string     `json:"stack_policy,omitempty"`
 }
 
 // StatusList represents the player's active statuses (trạng thái), e.g.
@@ -121,6 +126,87 @@ func (s *StatusList) Add(id, source string, d time.Duration, value float64) {
 		}
 	}
 	*s = append(*s, StatusInstance{ID: id, ExpiresAt: expiry, Source: source, Value: value})
+}
+
+// ApplyEffect applies a provenance-aware status. The same source/effect/context
+// refreshes its expiry; unrelated sources coexist unless a value policy selects
+// one winner.
+func (s *StatusList) ApplyEffect(id, source, sourceID, effectID, context, policy string, d time.Duration, value float64) {
+	now := time.Now()
+	var expiry *time.Time
+	if d > 0 {
+		t := now.Add(d)
+		expiry = &t
+	}
+	policy = strings.ToUpper(strings.TrimSpace(policy))
+	if policy == "IGNORE" {
+		for _, st := range *s {
+			if st.ID == id && (st.ExpiresAt == nil || st.ExpiresAt.After(now)) {
+				return
+			}
+		}
+	}
+	if policy == "REPLACE" {
+		s.Remove(id)
+	}
+	if policy == "MAX" || policy == "MIN" {
+		live := (*s)[:0]
+		for _, st := range *s {
+			isGroupMember := st.ID == id && st.EffectID == effectID && st.Context == context
+			if isGroupMember && st.ExpiresAt != nil && !st.ExpiresAt.After(now) {
+				continue
+			}
+			live = append(live, st)
+		}
+		*s = live
+		bestIndex := -1
+		for i := range *s {
+			st := &(*s)[i]
+			if st.ID != id || st.EffectID != effectID || st.Context != context {
+				continue
+			}
+			if bestIndex < 0 {
+				bestIndex = i
+				continue
+			}
+			best := (*s)[bestIndex]
+			if (policy == "MAX" && st.Value > best.Value) || (policy == "MIN" && st.Value < best.Value) || (st.Value == best.Value && expiryLater(st.ExpiresAt, best.ExpiresAt)) {
+				bestIndex = i
+			}
+		}
+		wins := bestIndex < 0 || (policy == "MAX" && value > (*s)[bestIndex].Value) || (policy == "MIN" && value < (*s)[bestIndex].Value) || (bestIndex >= 0 && value == (*s)[bestIndex].Value && expiryLater(expiry, (*s)[bestIndex].ExpiresAt))
+		if wins {
+			if bestIndex < 0 {
+				bestIndex = len(*s)
+				*s = append(*s, StatusInstance{})
+			}
+			(*s)[bestIndex] = StatusInstance{ID: id, ExpiresAt: expiry, Source: source, Value: value, SourceID: sourceID, EffectID: effectID, Context: context, StackPolicy: policy}
+		}
+		out := (*s)[:0]
+		for i, st := range *s {
+			if i != bestIndex && st.ID == id && st.EffectID == effectID && st.Context == context {
+				continue
+			}
+			out = append(out, st)
+		}
+		*s = out
+		return
+	}
+	for i := range *s {
+		st := &(*s)[i]
+		if st.ID == id && st.SourceID == sourceID && st.EffectID == effectID && st.Context == context {
+			*st = StatusInstance{ID: id, ExpiresAt: expiry, Source: source, Value: value, SourceID: sourceID, EffectID: effectID, Context: context, StackPolicy: policy}
+			return
+		}
+	}
+	*s = append(*s, StatusInstance{ID: id, ExpiresAt: expiry, Source: source, Value: value, SourceID: sourceID, EffectID: effectID, Context: context, StackPolicy: policy})
+}
+
+func expiryLater(a, b *time.Time) bool {
+	if a == nil {
+		return b != nil
+	}
+	return b != nil && a.After(*b)
 }
 
 // Active returns the non-expired statuses (permanent ones always included),

@@ -718,23 +718,18 @@ func DaoMultiplier(dm DaoMarks, paths []string) (float64, bool) {
 	return mult, true
 }
 
-// pathBonus returns the maximum additive bonus for any path in paths from a
-// per-path bonus map (e.g. character DaoBonus / PathDamageBonus / PathResistance).
+// pathBonus returns the additive bonus for the action's primary path from a
+// per-path bonus map. Secondary paths do not participate unless an action
+// explicitly opts into multi-path modifier behavior.
 func pathBonus(bonus map[string]float64, paths []string) float64 {
 	if bonus == nil {
 		return 0
 	}
-	if len(paths) == 0 {
-		paths = []string{"strength"}
+	path := daoPathForAction(paths)
+	if value := bonus[path]; value > 0 {
+		return value
 	}
-	maxB := 0.0
-	for _, p := range paths {
-		clean := gamefx.CleanPath(p)
-		if b := bonus[clean]; b > maxB {
-			maxB = b
-		}
-	}
-	return maxB
+	return 0
 }
 
 // ensureDaoProfile lazily builds the combatant's DaoCombatProfile.
@@ -2284,7 +2279,14 @@ func Simulate(state *CombatState) []CombatLog {
 					child.IsKillerMoveOperation = true
 					child.IsEffectOperation = true
 					child.Rank = effect.SourceRank
-					child.SourceID = a.SourceID
+					child.SourceID = effect.SourceGuID
+					child.InstanceID = effect.SourceInstanceID
+					if child.InstanceID == "" {
+						child.InstanceID = a.InstanceID
+					}
+					if child.SourceID == "" {
+						child.SourceID = a.SourceID
+					}
 					out := runOne(actor, &child, isAlly, enemyTargets)
 					res.executed = res.executed || out.executed
 					res.hasDamage = res.hasDamage || out.hasDamage
@@ -4832,7 +4834,14 @@ func Simulate(state *CombatState) []CombatLog {
 					child.IsEffectOperation = true
 					child.OperationConditions = append([]gameplayeffects.Condition(nil), effect.Compiled.Conditions...)
 					child.Rank = effect.SourceRank
-					child.SourceID = a.SourceID
+					child.SourceID = effect.SourceGuID
+					child.InstanceID = effect.SourceInstanceID
+					if child.InstanceID == "" {
+						child.InstanceID = a.InstanceID
+					}
+					if child.SourceID == "" {
+						child.SourceID = a.SourceID
+					}
 					if child.Damage > 0 {
 						child.Damage *= operationDamageScale
 					} else {
@@ -4978,6 +4987,8 @@ func Simulate(state *CombatState) []CombatLog {
 					isCritHit := false
 					hitPath := daoPathForAction(a.Path)
 					natResVal, targetResonance := targetDaoFactors(target, hitPath)
+					raceDamageBonus := gamefx.RaceModifier(target.Race, actor.RaceDamageBonus)
+					raceResistance := gamefx.RaceModifier(actor.Race, target.RaceResistance)
 
 					skillMult := a.DamageMult
 					if skillMult <= 0 {
@@ -4990,7 +5001,7 @@ func Simulate(state *CombatState) []CombatLog {
 
 					totalHitDmg := 0.0
 					for h := 0; h < hitCount; h++ {
-						hitDmg := a.Damage * skillMult * dmgMultiplier * daoMult * conflictPenaltyMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path)) * targetResonance
+						hitDmg := a.Damage * skillMult * dmgMultiplier * daoMult * conflictPenaltyMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path)) * (1.0 + raceDamageBonus) * targetResonance
 						if h > 0 {
 							hitDmg *= 0.7
 						}
@@ -5010,6 +5021,7 @@ func Simulate(state *CombatState) []CombatLog {
 						netDmg := hitDmg - targetDef
 						netDmg *= (1.0 - natResVal)
 						netDmg *= (1.0 - pathBonus(target.PathResistance, a.Path))
+						netDmg *= (1.0 - raceResistance)
 						netDmg = ResolveBaseDamage(netDmg, 0)
 						totalHitDmg += netDmg
 						totalDmg += applyDamageToTarget(state, actor, target, netDmg, &turnLogs, turn, shieldBypass, sureHit, !isAlly, rng)
@@ -5029,7 +5041,7 @@ func Simulate(state *CombatState) []CombatLog {
 						critMultVal = 1.5
 					}
 
-					rawDmg := a.Damage * skillMult * dmgMultiplier * daoMult * conflictPenaltyMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path)) * targetResonance * critMultVal
+					rawDmg := a.Damage * skillMult * dmgMultiplier * daoMult * conflictPenaltyMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path)) * (1.0 + raceDamageBonus) * targetResonance * critMultVal
 
 					natResFinal := natResVal
 
@@ -5051,9 +5063,11 @@ func Simulate(state *CombatState) []CombatLog {
 						BuffMult:           dmgMultiplier,
 						CritMult:           critMultVal,
 						PathBonus:          pathBonus(actor.PathDamageBonus, a.Path),
+						RaceDamageBonus:    raceDamageBonus,
 						TargetDef:          targetDef,
 						NaturalResist:      natResFinal,
 						PathResist:         pathBonus(target.PathResistance, a.Path),
+						RaceResistance:     raceResistance,
 						DamageReduction:    target.DamageTakenReduction,
 						ShieldAbsorbed:     shieldAbsorbed,
 						HPDamage:           hpLost,
@@ -5063,6 +5077,12 @@ func Simulate(state *CombatState) []CombatLog {
 						Reason:             dmgReason,
 						AttackerAttack:     actor.StatProvenance["attack"],
 						DefenderDefense:    target.StatProvenance["defense"],
+					}
+					if raceDamageBonus != 0 {
+						breakdown.RaceDamageTarget = target.Race
+					}
+					if raceResistance != 0 {
+						breakdown.RaceResistAttacker = actor.Race
 					}
 
 					if totalHitDmg > 0 {
@@ -5135,16 +5155,32 @@ func Simulate(state *CombatState) []CombatLog {
 					if a.PhantomDmg > 0 {
 						phantomPath := daoPathForAction(a.Path)
 						phantomResist, phantomResonance := targetDaoFactors(target, phantomPath)
+						phantomRaceDamage := gamefx.RaceModifier(target.Race, actor.RaceDamageBonus)
+						phantomRaceResistance := gamefx.RaceModifier(actor.Race, target.RaceResistance)
 						phantomDef := target.BaseDef
-						phantomNet := (a.PhantomDmg * dmgMultiplier * phantomResonance) - phantomDef
+						phantomNet := (a.PhantomDmg * dmgMultiplier * (1 + phantomRaceDamage) * phantomResonance) - phantomDef
 						phantomNet *= (1 - phantomResist)
 						phantomNet *= (1.0 - pathBonus(target.PathResistance, a.Path))
+						phantomNet *= (1.0 - phantomRaceResistance)
 						phantomNet = math.Max(1, phantomNet)
 						phantomDealt := applyDamageToTarget(state, actor, target, phantomNet, &turnLogs, turn, shieldBypass, sureHit, !isAlly, rng)
 						if phantomDealt > 0 && phantomResist > 0 {
 							applyForeignDaoWound(target)
 						}
 						totalDamageDealt += phantomDealt
+						phantomBreakdown := &DamageBreakdown{
+							BaseDamage: a.PhantomDmg, DaoMult: 1, TargetDaoResonance: phantomResonance,
+							DaoPath: phantomPath, NaturalResist: phantomResist,
+							PathResist:      pathBonus(target.PathResistance, a.Path),
+							RaceDamageBonus: phantomRaceDamage, RaceResistance: phantomRaceResistance,
+							TargetDef: phantomDef, FinalDamage: phantomNet,
+						}
+						if phantomRaceDamage != 0 {
+							phantomBreakdown.RaceDamageTarget = target.Race
+						}
+						if phantomRaceResistance != 0 {
+							phantomBreakdown.RaceResistAttacker = actor.Race
+						}
 						turnLogs = append(turnLogs, CombatLog{
 							Turn:      turn,
 							ActorId:   actor.ID,
@@ -5152,6 +5188,7 @@ func Simulate(state *CombatState) []CombatLog {
 							Action:    "PHANTOM_ATTACK",
 							TargetId:  target.ID,
 							Damage:    phantomDealt,
+							Breakdown: phantomBreakdown,
 							Detail:    fmt.Sprintf("Hư ảnh của %s tấn công thêm %.0f sát thương lên %s!", actor.Name, phantomDealt, target.Name),
 						})
 					}

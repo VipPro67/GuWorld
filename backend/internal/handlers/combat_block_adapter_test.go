@@ -16,7 +16,7 @@ func TestAdaptBlockCombatOperationsPreservesTargetsAndConditions(t *testing.T) {
 		Conditions: []gameplayeffects.Condition{{Field: "TARGET_HP_PERCENT", Operator: "LTE", Value: 0.5}},
 		Operations: []gameplayeffects.Operation{
 			{Op: gameplayeffects.OpDamage, SubType: "FLAT", Value: 24},
-			{Op: gameplayeffects.OpStatus, StatusID: "STUN", Turns: 2},
+			{Op: gameplayeffects.OpStatus, StatusID: "STUN", Turns: 2, StackPolicy: "MAX"},
 		},
 	}
 	compiled, err := (gameplayeffects.Compiler{}).Compile([]gameplayeffects.Block{block})
@@ -40,7 +40,8 @@ func TestAdaptBlockCombatOperationsPreservesTargetsAndConditions(t *testing.T) {
 	if got.Action.TargetX != 2 || got.Action.TargetY != 3 || len(got.Action.OperationConditions) != 1 {
 		t.Fatalf("target position or conditions were lost: %+v", got.Action)
 	}
-	if len(got.Action.StatusOps) != 1 || got.Action.StatusOps[0].ID != "STUN" || got.Action.StatusOps[0].Turns != 2 {
+	if len(got.Action.StatusOps) != 1 || got.Action.StatusOps[0].ID != "STUN" || got.Action.StatusOps[0].Turns != 2 ||
+		got.Action.StatusOps[0].EffectID != "GU_TEST:ACTION:0:1" || got.Action.StatusOps[0].Context != "combat" || got.Action.StatusOps[0].StackPolicy != "MAX" {
 		t.Fatalf("status operation was not compiled: %+v", got.Action.StatusOps)
 	}
 }

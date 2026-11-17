@@ -241,24 +241,35 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 	if cs == nil && activeCombat != nil {
 		cs = activeCombat.EnemyCombatSettings
 	}
+	enemyRaceFX := gamefx.Get(&models.Player{CharacterState: models.CharacterState{Race: enemy.Race}})
+	raceDamageBonus, raceResistance := equippedGuRaceModifiers(enemy.GuInventory)
+	for race, value := range enemyRaceFX.RaceDamageBonus {
+		raceDamageBonus[race] += value
+	}
+	for race, value := range enemyRaceFX.RaceResistanceBonus {
+		raceResistance[race] += value
+	}
 
 	simEnemy := &simulator.CombatantAuto{
-		ID:            enemy.ID,
-		Name:          enemy.Name,
-		Kind:          enemyKind,
-		Rank:          enemy.Rank,
-		SubRank:       enemy.SubRank,
-		GridX:         enemy.GridX,
-		GridY:         enemy.GridY,
-		MaxHP:         enemy.MaxHP,
-		HP:            eHP,
-		MaxMana:       enemy.MaxMana,
-		Mana:          enemyMana,
-		BaseDmg:       enemy.BaseAttack,
-		BaseDef:       enemy.BaseDefense,
-		Speed:         enemy.Speed,
-		AIProfile:     enemy.AIProfile,
-		VirtualShield: enemyShield,
+		ID:              enemy.ID,
+		Name:            enemy.Name,
+		Kind:            enemyKind,
+		Race:            enemy.Race,
+		Rank:            enemy.Rank,
+		SubRank:         enemy.SubRank,
+		GridX:           enemy.GridX,
+		GridY:           enemy.GridY,
+		MaxHP:           enemy.MaxHP,
+		HP:              eHP,
+		MaxMana:         enemy.MaxMana,
+		Mana:            enemyMana,
+		BaseDmg:         enemy.BaseAttack,
+		BaseDef:         enemy.BaseDefense,
+		Speed:           enemy.Speed,
+		RaceDamageBonus: raceDamageBonus,
+		RaceResistance:  raceResistance,
+		AIProfile:       enemy.AIProfile,
+		VirtualShield:   enemyShield,
 		DaoMarks: func() simulator.DaoMarks {
 			dm := make(simulator.DaoMarks)
 			for k, v := range enemy.DaoMarks {
@@ -275,6 +286,12 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 
 	if activeCombat != nil {
 		simEnemy.PathResistance = activeCombat.EnemyPathResistance
+		if activeCombat.EnemyRaceDamageBonus != nil {
+			simEnemy.RaceDamageBonus = activeCombat.EnemyRaceDamageBonus
+		}
+		if activeCombat.EnemyRaceResistance != nil {
+			simEnemy.RaceResistance = activeCombat.EnemyRaceResistance
+		}
 		simEnemy.MentalResistance = activeCombat.EnemyMentalResistance
 		simEnemy.Tenacity = activeCombat.EnemyTenacity
 		simEnemy.CCResist = activeCombat.EnemyCCResist
@@ -1156,6 +1173,13 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 	for k, v := range charFX.PathResistanceBonus {
 		pathResistance[k] = v
 	}
+	raceDamageBonus, raceResistance := equippedGuRaceModifiers(player.GuInventory)
+	for race, value := range charFX.RaceDamageBonus {
+		raceDamageBonus[race] += value
+	}
+	for race, value := range charFX.RaceResistanceBonus {
+		raceResistance[race] += value
+	}
 	immuneDream := false
 	for _, inst := range allEquippedActiveGus {
 		spec, ok := resolveGuSpec(inst)
@@ -1239,6 +1263,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		ID:                      player.ID.String(),
 		Name:                    player.Username,
 		Kind:                    "Player",
+		Race:                    player.Race,
 		Rank:                    player.Rank,
 		SubRank:                 player.SubRank,
 		GridX:                   2,
@@ -1259,6 +1284,8 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		DaoBonus:                charFX.DaoNganBonus,
 		PathDamageBonus:         charFX.PathDamageBonus,
 		PathResistance:          pathResistance,
+		RaceDamageBonus:         raceDamageBonus,
+		RaceResistance:          raceResistance,
 		HealingReceived:         charFX.HealingReceivedBonus,
 		MentalResistance:        charFX.MentalResistanceBonus,
 		Tenacity:                charFX.Tenacity,

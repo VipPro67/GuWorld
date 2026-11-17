@@ -18,10 +18,10 @@ Bốn CSV hiện có 894 item rows, 4713 Gu rows, 18 race rows và 23 constituti
 | --- | --- | --- |
 | Item `ON_CONSUME` | `UNIQUE` native hook thuộc `item_use`; `HEAL` HP/MANA có adapter riêng | SELF, không evaluate conditions; một hook chưa map/handler vẫn có thể no-op.
 | Gu `ON_CONSUME` / `ON_USE` | Consumable Gu gọi native event handler khớp đúng trigger | Dispatcher chỉ chạy `UNIQUE`, không evaluate generic operations hoặc conditions.
-| Gu combat turn-based | Generic operations ở `ON_ACTION`; native combat hook cần đúng domain/trigger | Hook có conditions hiện không được dispatch; từng hook có handler riêng.
+| Gu combat turn-based | Generic operations ở `ON_ACTION`; native combat hook cần đúng domain/trigger | Hook có conditions hiện không được dispatch; status `stack_policy` áp dụng trong combat với provenance theo Gu instance/block/operation/target.
 | Gu House combat | Một operation `ON_ACTION`: flat DAMAGE vào TARGET hoặc HEAL/SHIELD/BARRIER vào SELF | Không conditions; action ngoài khuôn bị từ chối.
 | World `ON_USE` | Self HEAL HP/MANA hoặc STATUS `FLYING`/`HASTE`/`STEALTH` | Không phải native hook bất kỳ nào cũng chạy được trong world.
-| Passive `ALWAYS_ON` | SELF + `STAT_MOD` được projection allowlist hoặc UNIQUE `gamefx` có consumer riêng | Không conditions; catalog stat list rộng hơn projection allowlist.
+| Passive `ALWAYS_ON` | SELF + `STAT_MOD` được projection allowlist hoặc UNIQUE `gamefx` có consumer riêng | `gamefx.Get` chiếu điều kiện actor-local (race, rank, HP%, mana%); scouting/profile/portal truyền thêm target race. Event-specific conditions không có trong context sẽ không áp dụng; catalog stat list rộng hơn projection allowlist.
 | `ON_TICK` | Năm native hook hồi/tạo tài nguyên được worker đọc | Không conditions; code khác không tự chạy chỉ vì trigger là ON_TICK.
 | Race/Constitution | `gamefx.Get` nhập effects của race + constitution vào player effects | Mỗi field cần consumer gameplay; effect decoded/hiện trên stat chưa chắc bị mọi hệ thống sử dụng.
 

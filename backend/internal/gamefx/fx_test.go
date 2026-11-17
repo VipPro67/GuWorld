@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -57,10 +58,6 @@ func TestValidateEffectProjectionRejectsUnsupportedBlockContext(t *testing.T) {
 		{
 			name: "wrong trigger",
 			raw:  `[{"id":"ATTACK","trigger":"ON_ACTION","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","value":0.2}]}]`,
-		},
-		{
-			name: "conditional derived projection",
-			raw:  `[{"id":"ATTACK","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"conditions":[{"field":"HP_PERCENT","operator":"LT","value":0.5}],"operations":[{"op":"STAT_MOD","stat":"ATTACK","value":0.2}]}]`,
 		},
 		{
 			name: "unsupported operation",
@@ -160,6 +157,113 @@ func TestGetRaceEffectsNoRace(t *testing.T) {
 	}
 	if fx.RefineBonus != 0 {
 		t.Errorf("expected no refine bonus without race, got %v", fx.RefineBonus)
+	}
+}
+
+func TestConditionalPassiveRequiresConsumerContext(t *testing.T) {
+	var effects Effects
+	raw := []byte(`[{"id":"RACE_ATTACK","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"conditions":[{"field":"ACTOR_RACE","operator":"EQ","value":"scout"},{"field":"TARGET_RACE","operator":"EQ","value":"merman"}],"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":0.2}]}]`)
+	if err := json.Unmarshal(raw, &effects); err != nil {
+		t.Fatalf("unmarshal conditional passive: %v", err)
+	}
+	previous := RaceRegistry
+	t.Cleanup(func() { RaceRegistry = previous })
+	RaceRegistry = map[string]RaceDef{"scout": {Key: "scout", Effects: effects}}
+	player := &models.Player{CharacterState: models.CharacterState{Race: "scout"}}
+
+	base := Get(player)
+	if base.StatMods["attack"] != 0 {
+		t.Fatalf("player-only projection applied target-dependent attack bonus %v", base.StatMods["attack"])
+	}
+
+	projected, err := GetWithConditions(player, gameplayeffects.ConditionValues{"ACTOR_RACE": "scout", "TARGET_RACE": "merman"})
+	if err != nil {
+		t.Fatalf("project with actor race: %v", err)
+	}
+	if projected.StatMods["attack"] != 0.2 || len(projected.ConditionalBlocks) != 0 {
+		t.Fatalf("scoped projection = (%v, %d deferred blocks), want 0.2 and no deferred blocks", projected.StatMods["attack"], len(projected.ConditionalBlocks))
+	}
+
+	projected, err = GetWithConditions(player, gameplayeffects.ConditionValues{"ACTOR_RACE": "scout", "TARGET_RACE": "human"})
+	if err != nil {
+		t.Fatalf("project with mismatched target race: %v", err)
+	}
+	if projected.StatMods["attack"] != 0 {
+		t.Fatalf("mismatched target race applied attack bonus %v", projected.StatMods["attack"])
+	}
+}
+
+func TestGetProjectsActorLocalPassiveConditions(t *testing.T) {
+	var effects Effects
+	raw := []byte(`[{"id":"RACE_ATTACK","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"conditions":[{"field":"ACTOR_RACE","operator":"EQ","value":"scout"}],"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":0.2}]}]`)
+	if err := json.Unmarshal(raw, &effects); err != nil {
+		t.Fatalf("unmarshal actor-local passive: %v", err)
+	}
+	previous := RaceRegistry
+	t.Cleanup(func() { RaceRegistry = previous })
+	RaceRegistry = map[string]RaceDef{"scout": {Key: "scout", Effects: effects}}
+	player := &models.Player{CharacterState: models.CharacterState{Race: "scout"}}
+	if got := Get(player).StatMods["attack"]; got != 0.2 {
+		t.Fatalf("actor-local projection = %v, want 0.2", got)
+	}
+}
+
+func TestPlayerConditionValuesUsesCurrentPlayerState(t *testing.T) {
+	player := &models.Player{
+		CharacterState:   models.CharacterState{Race: "scout"},
+		CultivationState: models.CultivationState{Rank: 4},
+		BodyState:        models.BodyState{HP: 25, BaseHP: 100},
+		ResourceState:    models.ResourceState{CurrentMana: 30, MaxMana: 60},
+	}
+	values := PlayerConditionValues(player)
+	if values["ACTOR_RACE"] != "scout" || values["RANK"] != float64(4) || values["HP_PERCENT"] != float64(0.25) || values["ACTOR_HP_PERCENT"] != float64(0.25) || values["MANA_PERCENT"] != float64(0.5) {
+		t.Fatalf("player condition values = %#v", values)
+	}
+}
+
+func TestScoutingProjectsConditionalPassiveForTargetRace(t *testing.T) {
+	var effects Effects
+	raw := `[{"id":"SCOUT_TARGET_RACE","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"conditions":[{"field":"TARGET_RACE","operator":"EQ","value":"merman"}],"operations":[{"op":"STAT_MOD","stat":"INVESTIGATION","sub_type":"ADD_FLAT","value":4}]}]`
+	if err := json.Unmarshal([]byte(raw), &effects); err != nil {
+		t.Fatalf("unmarshal conditional scouting effect: %v", err)
+	}
+	previous := RaceRegistry
+	t.Cleanup(func() { RaceRegistry = previous })
+	RaceRegistry = map[string]RaceDef{"scout": {Key: "scout", Effects: effects}}
+	viewer := &models.Player{CharacterState: models.CharacterState{Race: "scout"}, CultivationState: models.CultivationState{Rank: 1}}
+	target := &models.Player{CharacterState: models.CharacterState{Race: "merman"}, CultivationState: models.CultivationState{Rank: 1}}
+
+	score := DeductionBreakdown(viewer, nil, nil, models.DivinationRequest{}, target, 0, false, false, 0)
+	if want := BaseRankPower(1) + 4*ScoutingInvestigationWeight; score.Stat != want {
+		t.Fatalf("conditional scouting stat = %v, want %v", score.Stat, want)
+	}
+}
+
+func TestConditionalGuPassiveIsNotAppliedByUnscopedScalars(t *testing.T) {
+	var effects models.GuEffects
+	raw := `[{"id":"CONDITIONAL_SCOUTING","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"conditions":[{"field":"TARGET_RACE","operator":"EQ","value":"merman"}],"operations":[{"op":"STAT_MOD","stat":"INVESTIGATION","sub_type":"ADD_FLAT","value":5}]}]`
+	if err := effects.Scan(raw); err != nil {
+		t.Fatalf("scan conditional Gu effects: %v", err)
+	}
+	previous := models.GuRegistry
+	t.Cleanup(func() { models.GuRegistry = previous })
+	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
+		"GU_SCOUT": {1: {ID: "GU_SCOUT", Rank: 1, Effects: effects}},
+	}
+	player := &models.Player{
+		CharacterState: models.CharacterState{Race: "scout"},
+		GuInventory:    models.GuInventory{{GuID: "GU_SCOUT", Rank: 1, Status: "ACTIVE", Equipped: true}},
+	}
+	base := Get(player)
+	if base.ScoutingInvestigationBonus != 0 {
+		t.Fatalf("player-only Gu projection applied target-dependent bonus %v", base.ScoutingInvestigationBonus)
+	}
+	projected, err := GetWithConditions(player, gameplayeffects.ConditionValues{"ACTOR_RACE": "scout", "TARGET_RACE": "merman"})
+	if err != nil {
+		t.Fatalf("project Gu with target race: %v", err)
+	}
+	if projected.ScoutingInvestigationBonus != 5 {
+		t.Fatalf("scoped Gu projection = %v, want 5", projected.ScoutingInvestigationBonus)
 	}
 }
 
@@ -503,5 +607,46 @@ func TestGuCultivationEfficiencySameRank(t *testing.T) {
 	}
 	if got := Get(p).CultivationEfficiencyBonus; got != 0.5 {
 		t.Errorf("mixed-rank Gu cultivation efficiency = %v, want 0.5", got)
+	}
+}
+
+func TestPathDamageMultiplierUsesPrimaryPath(t *testing.T) {
+	bonuses := map[string]float64{"fire": 0.1, "dream": 0.6}
+	if got := PathDamageMultiplierForPaths([]string{"fire", "dream"}, bonuses); got != 1.1 {
+		t.Fatalf("primary path multiplier = %v, want 1.1", got)
+	}
+	if got := PathDamageMultiplierForPaths(nil, bonuses); got != 1 {
+		t.Fatalf("pathless action multiplier = %v, want strength fallback 1", got)
+	}
+}
+
+func TestScoutingStatModifiersProjectToExistingInputs(t *testing.T) {
+	var effects Effects
+	raw := `[{"trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"INVESTIGATION","sub_type":"ADD_FLAT","value":3},{"op":"STAT_MOD","stat":"DISGUISE","sub_type":"ADD_FLAT","value":2}]}]`
+	if err := json.Unmarshal([]byte(raw), &effects); err != nil {
+		t.Fatalf("unmarshal scouting stat effects: %v", err)
+	}
+	if effects.ScoutingInvestigationBonus != 3 || effects.ScoutingDisguiseBonus != 2 {
+		t.Fatalf("scouting bonuses = (%v, %v), want (3, 2)", effects.ScoutingInvestigationBonus, effects.ScoutingDisguiseBonus)
+	}
+	encoded, err := json.Marshal(effects)
+	if err != nil {
+		t.Fatalf("marshal scouting effects: %v", err)
+	}
+	var roundTrip Effects
+	if err := json.Unmarshal(encoded, &roundTrip); err != nil {
+		t.Fatalf("round-trip scouting effects: %v", err)
+	}
+	if roundTrip.ScoutingInvestigationBonus != 3 || roundTrip.ScoutingDisguiseBonus != 2 {
+		t.Fatalf("round-trip scouting bonuses = (%v, %v), want (3, 2)", roundTrip.ScoutingInvestigationBonus, roundTrip.ScoutingDisguiseBonus)
+	}
+
+	previous := RaceRegistry
+	t.Cleanup(func() { RaceRegistry = previous })
+	RaceRegistry = map[string]RaceDef{"scout": {Key: "scout", Effects: effects}}
+	player := &models.Player{CharacterState: models.CharacterState{Race: "scout"}}
+	combined := Get(player)
+	if combined.ScoutingInvestigationBonus != 3 || combined.ScoutingDisguiseBonus != 2 {
+		t.Fatalf("projected scouting bonuses = (%v, %v), want (3, 2)", combined.ScoutingInvestigationBonus, combined.ScoutingDisguiseBonus)
 	}
 }

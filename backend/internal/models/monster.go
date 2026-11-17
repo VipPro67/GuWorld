@@ -91,6 +91,7 @@ type Combatant struct {
 	ID                      string            `json:"id"`
 	Name                    string            `json:"name"`
 	Kind                    string            `json:"kind"`
+	Race                    string            `json:"race,omitempty"`
 	Rank                    int               `json:"rank"`
 	SubRank                 int               `json:"sub_rank"`
 	HP                      float64           `json:"hp"`

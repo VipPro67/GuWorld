@@ -375,7 +375,8 @@ func appendTickDoTs(logs []CombatLog, c *CombatantAuto, turn int) []CombatLog {
 			} else {
 				path := daoPathForAction([]string{dot.SourcePath})
 				naturalResist, resonance := targetDaoFactors(c, path)
-				dmg = math.Max(0, dmg*resonance*(1-naturalResist)*(1-pathBonus(c.PathResistance, []string{path}))*(1-c.DamageTakenReduction))
+				raceResistance := gamefx.RaceModifier(dot.SourceRace, c.RaceResistance)
+				dmg = math.Max(0, dmg*(1+dot.RaceDamageBonus)*resonance*(1-naturalResist)*(1-pathBonus(c.PathResistance, []string{path}))*(1-raceResistance)*(1-c.DamageTakenReduction))
 				hpDmg := dmg
 				initialHP := c.HP
 				shieldDmg := 0.0
@@ -417,13 +418,20 @@ func appendTickDoTs(logs []CombatLog, c *CombatantAuto, turn int) []CombatLog {
 					detail = fmt.Sprintf("%s chịu %.0f %s sát thương (còn %.0f HP).", c.Name, dmg, label, c.HP)
 				}
 
+				breakdown := &DamageBreakdown{BaseDamage: dot.Value, DaoMult: dot.SourceDaoMult, TargetDaoResonance: resonance, DaoPath: path, NaturalResist: naturalResist, PathResist: pathBonus(c.PathResistance, []string{path}), RaceDamageBonus: dot.RaceDamageBonus, TargetDef: 0, RaceResistance: raceResistance, DamageReduction: c.DamageTakenReduction, FinalDamage: dmg}
+				if dot.RaceDamageBonus != 0 {
+					breakdown.RaceDamageTarget = c.Race
+				}
+				if raceResistance != 0 {
+					breakdown.RaceResistAttacker = dot.SourceRace
+				}
 				logs = append(logs, CombatLog{
 					Turn:      turn,
 					ActorId:   c.ID,
 					ActorName: c.Name,
 					Action:    "DOT_TICK",
 					Damage:    dmg,
-					Breakdown: &DamageBreakdown{BaseDamage: dot.Value, DaoMult: dot.SourceDaoMult, TargetDaoResonance: resonance, DaoPath: path, NaturalResist: naturalResist, PathResist: pathBonus(c.PathResistance, []string{path}), DamageReduction: c.DamageTakenReduction, FinalDamage: dmg},
+					Breakdown: breakdown,
 					Detail:    detail,
 				})
 			}

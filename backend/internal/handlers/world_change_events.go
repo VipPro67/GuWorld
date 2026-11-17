@@ -123,6 +123,19 @@ func publishWorldCellChange(action string, data WorldCellEvent) {
 	})
 }
 
+// publishAperturePortalMarkerChange tells clients to refresh their scoped
+// marker snapshot without broadcasting a concealed portal's coordinates or ID.
+func publishAperturePortalMarkerChange(action, regionID string) {
+	event := newAperturePortalMarkerChangeEvent(action, regionID)
+	if event.EntityType != "" {
+		publishWorldChanges([]worldfeed.Event{event})
+	}
+}
+
+func newAperturePortalMarkerChangeEvent(action, regionID string) worldfeed.Event {
+	return newWorldChangeEvent("map_cell", action, regionID, "", 0, 0, nil)
+}
+
 func newWorldCellChange(action string, data WorldCellEvent) worldfeed.Event {
 	return newWorldChangeEvent("map_cell", action, data.RegionID, data.InstanceID, data.X, data.Y, map[string]any{
 		"cell_type":  data.CellType,

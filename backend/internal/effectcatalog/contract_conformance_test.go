@@ -46,7 +46,11 @@ func TestAdminMetadataVocabularyIsValidatorCompilerConformant(t *testing.T) {
 	}
 	for _, field := range metadata.ConditionFields {
 		b := baseBlock()
-		b.Conditions = []effects.Condition{{Field: field, Operator: "EQ", Value: 1}}
+		value := any(1)
+		if metadata.ConditionValueTypes[field] == "string" {
+			value = "human"
+		}
+		b.Conditions = []effects.Condition{{Field: field, Operator: "EQ", Value: value}}
 		assertAccepted(t, b)
 	}
 	for _, operator := range metadata.ConditionOperators {

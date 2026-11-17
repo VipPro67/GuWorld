@@ -146,6 +146,7 @@ func ExecuteItemConsumption(ctx context.Context, tx *sql.Tx, player *models.Play
 		evalCtx := effects.Context{
 			Actor: effects.Snapshot{
 				ID:      player.ID.String(),
+				Race:    player.Race,
 				HP:      player.HP,
 				MaxHP:   gamefx.EffectiveMaxHP(player),
 				Mana:    player.CurrentMana,

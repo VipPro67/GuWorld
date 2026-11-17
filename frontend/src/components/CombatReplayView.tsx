@@ -37,9 +37,13 @@ export interface DamageBreakdown {
   buff_mult?: number;
   crit_mult?: number;
   path_bonus?: number;
+  race_damage_bonus?: number;
+  race_damage_target?: string;
   target_def?: number;
   natural_resist?: number;
   path_resist?: number;
+  race_resistance?: number;
+  race_resist_attacker?: string;
   damage_reduction?: number;
   shield_absorbed?: number;
   hp_damage?: number;

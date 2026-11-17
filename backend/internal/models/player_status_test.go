@@ -34,7 +34,7 @@ func TestStatusListUnmarshalObjects(t *testing.T) {
 }
 
 func TestStatusListRoundTrip(t *testing.T) {
-	sl := StatusList{{ID: "severely_wounded"}}
+	sl := StatusList{{ID: "HASTE", Source: "Tiên Cổ Ốc", SourceID: "gu-instance-1", EffectID: "haste:0:0", Context: "world", StackPolicy: "STACK", Value: 15}}
 	raw, err := json.Marshal(sl)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -43,7 +43,7 @@ func TestStatusListRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(raw, &back); err != nil {
 		t.Fatalf("unmarshal own output: %v", err)
 	}
-	if len(back) != 1 || back[0].ID != "severely_wounded" {
+	if len(back) != 1 || back[0].ID != "HASTE" || back[0].SourceID != "gu-instance-1" || back[0].EffectID != "haste:0:0" || back[0].Context != "world" || back[0].StackPolicy != "STACK" || back[0].Source != "Tiên Cổ Ốc" {
 		t.Fatalf("round trip mismatch: %+v", back)
 	}
 }
@@ -60,6 +60,52 @@ func TestStatusListAddDedupe(t *testing.T) {
 	}
 	if sl[0].ExpiresAt != nil {
 		t.Fatal("duration 0 should be permanent")
+	}
+}
+
+func TestStatusListApplyEffectLifecycle(t *testing.T) {
+	var statuses StatusList
+	statuses.ApplyEffect("HASTE", "first", "gu-a", "block:0:0", "world", "", time.Minute, 10)
+	firstExpiry := *statuses[0].ExpiresAt
+	statuses.ApplyEffect("HASTE", "first", "gu-a", "block:0:0", "world", "", 2*time.Minute, 10)
+	if len(statuses) != 1 || !statuses[0].ExpiresAt.After(firstExpiry) {
+		t.Fatalf("same source did not refresh: %+v", statuses)
+	}
+	statuses.ApplyEffect("HASTE", "second", "gu-b", "block:0:0", "world", "STACK", time.Minute, 20)
+	if len(statuses) != 2 {
+		t.Fatalf("different sources should coexist: %+v", statuses)
+	}
+	statuses.ApplyEffect("HASTE", "strongest", "gu-c", "block:0:0", "world", "MAX", time.Minute, 30)
+	if len(statuses) != 1 || statuses[0].SourceID != "gu-c" || statuses[0].Value != 30 {
+		t.Fatalf("MAX winner lost provenance: %+v", statuses)
+	}
+	statuses.ApplyEffect("HASTE", "ignored", "gu-d", "block:0:0", "world", "IGNORE", time.Minute, 40)
+	if len(statuses) != 1 {
+		t.Fatalf("IGNORE replaced active status: %+v", statuses)
+	}
+	statuses.ApplyEffect("HASTE", "replacement", "gu-e", "block:0:0", "world", "REPLACE", time.Minute, 5)
+	if len(statuses) != 1 || statuses[0].SourceID != "gu-e" {
+		t.Fatalf("REPLACE did not replace same-id statuses: %+v", statuses)
+	}
+	statuses.ApplyEffect("HASTE", "minimum", "gu-f", "block:0:0", "world", "MIN", time.Minute, 3)
+	if statuses[0].SourceID != "gu-f" || statuses[0].Value != 3 {
+		t.Fatalf("MIN winner lost provenance: %+v", statuses)
+	}
+}
+
+func TestStatusListWinnerPolicyIgnoresExpiredCandidates(t *testing.T) {
+	for _, policy := range []string{"MAX", "MIN"} {
+		t.Run(policy, func(t *testing.T) {
+			past := time.Now().Add(-time.Minute)
+			statuses := StatusList{{
+				ID: "HASTE", ExpiresAt: &past, SourceID: "expired", EffectID: "effect", Context: "world",
+				Value: map[string]float64{"MAX": 100, "MIN": -100}[policy], StackPolicy: policy,
+			}}
+			statuses.ApplyEffect("HASTE", "new", "new-source", "effect", "world", policy, time.Minute, 10)
+			if len(statuses) != 1 || statuses[0].SourceID != "new-source" || statuses[0].Value != 10 {
+				t.Fatalf("expired %s candidate blocked new status: %+v", policy, statuses)
+			}
+		})
 	}
 }
 

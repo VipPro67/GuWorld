@@ -41,9 +41,9 @@ type Target struct {
 	BypassFrontline bool     `json:"bypass_frontline,omitempty"`
 }
 type Condition struct {
-	Field    string  `json:"field"`
-	Operator string  `json:"operator"`
-	Value    float64 `json:"value"`
+	Field    string `json:"field"`
+	Operator string `json:"operator"`
+	Value    any    `json:"value"`
 }
 type OperationType string
 

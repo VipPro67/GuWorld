@@ -504,7 +504,7 @@ func teleportSnapshotHasProvenance(node composition.Node, snapshots map[string]g
 	return snapshot.Trigger == gameplayeffects.Trigger(node.Trigger)
 }
 
-func applyTeleportArrayArrivalEffect(player *models.Player, raw []byte) (string, error) {
+func applyTeleportArrayArrivalEffect(player *models.Player, raw []byte, sourceID string) (string, error) {
 	profile, err := validateTeleportArrayEffectProfile(raw)
 	if err != nil {
 		return "", err
@@ -514,7 +514,7 @@ func applyTeleportArrayArrivalEffect(player *models.Player, raw []byte) (string,
 		return "", err
 	}
 	actor := gameplayeffects.Snapshot{
-		ID: player.ID.String(), HP: player.HP, MaxHP: gamefx.EffectiveMaxHP(player),
+		ID: player.ID.String(), Race: player.Race, HP: player.HP, MaxHP: gamefx.EffectiveMaxHP(player),
 		Mana: player.CurrentMana, MaxMana: gamefx.EffectiveMaxMana(player),
 	}
 	result, err := compiled.Evaluate(gameplayeffects.Context{Actor: actor, Target: actor, Rank: profile.GuRank}, gameplayeffects.Event{Trigger: gameplayeffects.TriggerOnUse})
@@ -524,7 +524,7 @@ func applyTeleportArrayArrivalEffect(player *models.Player, raw []byte) (string,
 	if len(result.Commands) == 0 {
 		return "", nil
 	}
-	healed, restoredMana, flightMinutes, concealment, hasteMinutes, err := applyWorldUseCommands(player, result.Commands, profile.GuRank, "Trận Pháp")
+	healed, restoredMana, flightMinutes, concealment, hasteMinutes, err := applyWorldUseCommandsWithProvenance(player, result.Commands, profile.GuRank, "Trận Pháp", sourceID)
 	if err != nil {
 		return "", err
 	}

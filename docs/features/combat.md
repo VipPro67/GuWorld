@@ -23,12 +23,13 @@ Encounter quái phát sinh khi di chuyển có thể bật **Tự động xử l
 ```text
 damageBeforeDefense = actionDamage * skillMultiplier * actorDamageMultiplier
                       * daoMultiplier * daoConflictMultiplier
-                      * (1 + pathDamageBonus) * targetDaoResonance
+                      * (1 + pathDamageBonus) * (1 + targetRaceDamageBonus)
+                      * targetDaoResonance
 ```
 
-Named buffs/mechanics có thể thêm multiplier; mỗi hit sau hit đầu nhân tiếp 0.7. Sau đó trừ defense đã áp dụng flat/percent ignore, nhân `(1-naturalResistance)*(1-pathResistance)` và có floor damage tối thiểu 1. Crit dùng actor crit bonus và multiplier 1.5. Evasion, virtual shield, damage reduction, last stand và effect blocks chạy thêm theo target/mechanic riêng. Công thức này chỉ mô tả ordinary action damage; không áp dụng nguyên xi cho mọi effect/direct HP change.
+Race damage multiplier so khớp key của mục tiêu; race resistance so khớp key của người tấn công. Thiếu race hoặc không trùng key thì factor tương ứng bằng 1. Sau đó trừ defense đã áp dụng flat/percent ignore, nhân `(1-naturalResistance)*(1-pathResistance)*(1-raceResistance)*(1-damageReduction)` và có floor damage tối thiểu 1. Named buffs/mechanics có thể thêm multiplier; mỗi hit sau hit đầu nhân tiếp 0.7. Crit dùng actor crit bonus và multiplier 1.5. Evasion, virtual shield, last stand và effect blocks chạy thêm theo target/mechanic riêng. Breakdown chỉ chứa race key/factor khi giá trị khác 0. Công thức này chỉ mô tả ordinary action damage; không áp dụng nguyên xi cho mọi effect/direct HP change.
 
-Gu combat power lấy flat damage/shield từ Active effect hoặc `ON_ACTION` flat operations. Trên player action, Gu power multiplier, Dao combat profile và path damage bonus được nhân vào; path mastery đã tích hợp vào DaoCombatProfile ở nhánh này. Hãy dùng combat breakdown/response để giải thích một action cụ thể.
+Mọi path damage bonus và path resistance dùng **path chính của action** (path đầu tiên trong dữ liệu Gu/action). Path phụ không được xét trừ khi action khai báo rõ logic đa path. DaoCombat interaction dùng cùng path chính. Gu combat power lấy flat damage/shield từ Active effect hoặc `ON_ACTION` flat operations. Trên player action, Gu power multiplier, Dao combat profile và path damage bonus được nhân vào; path mastery đã tích hợp vào DaoCombatProfile ở nhánh này. Hãy dùng combat breakdown/response để giải thích một action cụ thể.
 
 ### Bắt quái
 
@@ -46,6 +47,7 @@ Gu capture bonus cao nhất phải có rank ít nhất bằng monster rank. Dao 
 - Session giữ snapshot/loadout cần thiết để giải quyết nhất quán; combat không chạy trên WebTransport/WebSocket.
 - PvP plan có timeout 45 giây; timeout có thể kích hoạt auto action.
 - Mana, energy, cooldown, Gu status và effect context được kiểm tra tại server/simulator.
+- Status từ Block v2 chụp source Gu instance, effect block/operation, value và duration. Cùng source/effect áp lại sẽ refresh; source khác giữ riêng mặc định. `MAX`/`MIN` chọn instance theo value, hòa chọn duration dài hơn; `STACK`, `REPLACE`, `REFRESH`, `IGNORE` theo policy của operation.
 - Khi dung nhập Tiên Cổ Phòng (`GuHouse.Active == true`), combatant chỉ có thể thi triển 6 chiêu thức Trận Kích của Cổ Phòng và lệnh `EXIT_GU_HOUSE`; Cổ kỹ và Sát chiêu cá nhân bị khóa hoàn toàn. Khi ở ngoài Cổ Phòng, combatant dùng Cổ kỹ cá nhân và có thể dùng `ENTER_GU_HOUSE` nếu Cổ Phòng chưa vỡ.
 - Đòn đánh phá vỡ Form HP của Tiên Cổ Phòng áp dụng quy tắc 100% No Spillover (không tràn sát thương vào nhục thân tại lượt đó). Cổ Tiên bị văng ra chịu phản phệ mất 30% Max HP nhục thân và bị Choáng 2 lượt. Độ bền Cổ Phòng về 0 và tất cả Cổ hạch tâm bị trừ 30% độ bền trong database.
 
