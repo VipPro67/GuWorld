@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
 const (
@@ -134,6 +136,7 @@ func (w *loggingResponseWriter) ErrorMessage() string {
 // RequestTrace stores individual request execution details for diagnosis.
 type RequestTrace struct {
 	ID                    string      `json:"id"`
+	WorkerRunID           string      `json:"worker_run_id,omitempty"`
 	Timestamp             time.Time   `json:"timestamp"`
 	Method                string      `json:"method"`
 	Path                  string      `json:"path"`
@@ -150,6 +153,10 @@ type RequestTrace struct {
 	Username              string      `json:"username,omitempty"`
 	UserAgent             string      `json:"user_agent,omitempty"`
 	Error                 string      `json:"error,omitempty"`
+	ErrorKind             string      `json:"error_kind,omitempty"`
+	ErrorChain            []string    `json:"error_chain,omitempty"`
+	RootCause             string      `json:"root_cause,omitempty"`
+	Stacktrace            string      `json:"stacktrace,omitempty"`
 	ResponseBody          string      `json:"response_body,omitempty"`
 	ResponseBodyTruncated bool        `json:"response_body_truncated,omitempty"`
 	ErrorMessage          string      `json:"error_message,omitempty"`
@@ -590,11 +597,14 @@ func (t *RequestTracker) FilterTraces(opts FilterOptions) FilterResult {
 			continue
 		}
 		if searchLower != "" {
+			errorDetails := strings.ToLower(strings.Join(trace.ErrorChain, " ") + " " + trace.RootCause + " " + trace.Error)
 			match := strings.Contains(strings.ToLower(trace.ID), searchLower) ||
+				strings.Contains(strings.ToLower(trace.WorkerRunID), searchLower) ||
 				strings.Contains(strings.ToLower(trace.PlayerID), searchLower) ||
 				strings.Contains(strings.ToLower(trace.Username), searchLower) ||
 				strings.Contains(strings.ToLower(trace.ClientIP), searchLower) ||
-				strings.Contains(strings.ToLower(trace.Path), searchLower)
+				strings.Contains(strings.ToLower(trace.Path), searchLower) ||
+				strings.Contains(errorDetails, searchLower)
 			if !match {
 				continue
 			}
@@ -700,18 +710,21 @@ func (t *RequestTracker) Reset() {
 }
 
 // RecordWorkerEvent registers background worker executions, failures or panics in the diagnostic ring.
-func RecordWorkerEvent(workerName string, err error, duration time.Duration) {
+func RecordWorkerEvent(workerName, workerRunID string, err error, duration time.Duration, stacktrace string) {
 	status := http.StatusOK
 	errMsg := ""
+	var errorChain []string
+	var rootCause string
 	if err != nil {
 		status = http.StatusInternalServerError
 		errMsg = err.Error()
+		errorChain, rootCause = logger.ErrorDetails(err)
 	}
-	traceID := GenerateTraceID()
 	durMs := float64(duration.Nanoseconds()) / 1e6
 
 	GlobalTracker.RecordTraceOnly(RequestTrace{
-		ID:           traceID,
+		ID:           workerRunID,
+		WorkerRunID:  workerRunID,
 		Timestamp:    time.Now().Add(-duration),
 		Method:       "WORKER",
 		Path:         "worker:" + workerName,
@@ -721,6 +734,10 @@ func RecordWorkerEvent(workerName string, err error, duration time.Duration) {
 		ClientIP:     "127.0.0.1",
 		Error:        errMsg,
 		ErrorMessage: errMsg,
+		ErrorKind:    "worker",
+		ErrorChain:   errorChain,
+		RootCause:    rootCause,
+		Stacktrace:   stacktrace,
 	})
 }
 
@@ -785,13 +802,41 @@ func Middleware() gin.HandlerFunc {
 			responseBytes = 0
 		}
 		errMsg := rw.ErrorMessage()
+		var requestErr error
 		if len(c.Errors) > 0 {
 			if len(c.Errors) == 1 {
 				errMsg = c.Errors.Last().Error()
 			} else {
 				errMsg = strings.TrimSpace(c.Errors.String())
 			}
+			for _, requestError := range c.Errors {
+				if requestErr == nil {
+					requestErr = requestError.Err
+				} else {
+					requestErr = errors.Join(requestErr, requestError.Err)
+				}
+			}
 		}
+		if requestErr == nil && status >= 400 && errMsg != "" {
+			requestErr = errors.New(errMsg)
+		}
+		var errorChain []string
+		var rootCause string
+		if requestErr != nil {
+			errorChain, rootCause = logger.ErrorDetails(requestErr)
+		}
+		errorKind := ""
+		if status >= 500 {
+			errorKind = "internal"
+		} else if status == http.StatusBadRequest {
+			errorKind = "validation"
+		} else if status >= 400 {
+			errorKind = "client"
+		} else if requestErr != nil {
+			errorKind = "internal"
+		}
+		stacktrace, _ := c.Get("panic_stacktrace")
+		stacktraceText, _ := stacktrace.(string)
 		c.Set("response_body", responseBody)
 		c.Set("response_body_truncated", responseBodyTruncated)
 		c.Set("error_msg", errMsg)
@@ -816,6 +861,10 @@ func Middleware() gin.HandlerFunc {
 			Username:              usernameStr,
 			UserAgent:             userAgent,
 			Error:                 errMsg,
+			ErrorKind:             errorKind,
+			ErrorChain:            errorChain,
+			RootCause:             rootCause,
+			Stacktrace:            stacktraceText,
 			ResponseBody:          responseBody,
 			ResponseBodyTruncated: responseBodyTruncated,
 			ErrorMessage:          errMsg,

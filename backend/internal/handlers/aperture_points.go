@@ -1137,8 +1137,8 @@ func GetWorldResourcePoints(c *gin.Context) {
 	if ritualAborted {
 		// The listing also runs from the HUD without the panel open, so the
 		// owner must still learn that the essence is gone.
-		notify.Send(db.DB, playerID, "point_transplant", "Nghi Thức Tan",
-			"Nghi thức di dời đã đứt vì đạo hữu rời khỏi mỏ — Tiên Nguyên đã tiêu không thể thu hồi.")
+		notify.SendBestEffort(db.DB, playerID, "point_transplant", "Nghi Thức Tan",
+			"Nghi thức di dời đã đứt vì đạo hữu rời khỏi mỏ — Tiên Nguyên đã tiêu không thể thu hồi.", c.Request.Context())
 	}
 	setWorldSnapshotRevision(c, snapshotScope)
 	c.JSON(http.StatusOK, points)
@@ -1232,7 +1232,7 @@ func CollectWorldResourcePoint(c *gin.Context) {
 	}
 	if granted {
 		publishWorldPointsChanged(regionID, p.X, p.Y)
-		notify.Send(db.DB, playerID, "world_point_harvest", "Khai Thác Thế Giới", message)
+		notify.SendBestEffort(db.DB, playerID, "world_point_harvest", "Khai Thác Thế Giới", message, c.Request.Context())
 	}
 	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{"message": message})
 }
@@ -1612,7 +1612,7 @@ func expirePointTransplants(tx *sql.Tx, pointID string) ([]uuid.UUID, error) {
 // cleaned up that the burnt Tiên Nguyên is gone for good.
 func notifyAbandonedTransplants(owners []uuid.UUID) {
 	for _, owner := range owners {
-		notify.Send(db.DB, owner, "point_transplant", "Nghi Thức Tan",
+		notify.SendBestEffort(db.DB, owner, "point_transplant", "Nghi Thức Tan",
 			"Nghi thức di dời đã quá hạn và bị hủy — Tiên Nguyên đã tiêu không thể thu hồi. Hãy làm lại nghi thức nếu vẫn còn muốn dời núi.")
 	}
 }
@@ -1705,7 +1705,7 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 			httperr.Respond(c, httperr.Internal("Lỗi lưu trạng thái nghi thức", err))
 			return
 		}
-		notify.Send(db.DB, playerID, "point_transplant", "Nghi Thức Tan", message)
+		notify.SendBestEffort(db.DB, playerID, "point_transplant", "Nghi Thức Tan", message, c.Request.Context())
 		c.JSON(status, gin.H{"error": message})
 	}
 	if ritual != nil {
@@ -1784,8 +1784,8 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 			return
 		}
 		publishWorldPointsChanged(pointRegion, pointX, pointY)
-		notify.Send(db.DB, playerID, "point_transplant", "Di Dời Núi Linh",
-			fmt.Sprintf("Nghi thức hoàn tất: %s đã rời %s về Tiên Khiếu của đạo hữu! Vùng %s sẽ mọc lại mạch núi khác theo thời gian.", pointName, pointRegion, pointRegion))
+		notify.SendBestEffort(db.DB, playerID, "point_transplant", "Di Dời Núi Linh",
+			fmt.Sprintf("Nghi thức hoàn tất: %s đã rời %s về Tiên Khiếu của đạo hữu! Vùng %s sẽ mọc lại mạch núi khác theo thời gian.", pointName, pointRegion, pointRegion), c.Request.Context())
 		c.JSON(http.StatusOK, gin.H{
 			"message":   fmt.Sprintf("Di dời %s vào Tiên Khiếu thành công!", pointName),
 			"completed": true,
@@ -2030,7 +2030,7 @@ func CollectAperturePointStock(c *gin.Context) {
 		return
 	}
 	if granted {
-		notify.Send(db.DB, playerID, "aperture_harvest", "Thu Hoạch Tiên Khiếu", message)
+		notify.SendBestEffort(db.DB, playerID, "aperture_harvest", "Thu Hoạch Tiên Khiếu", message, c.Request.Context())
 	}
 	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
 		"message": message,
@@ -2269,7 +2269,7 @@ func CollectAllAperturePointStocks(c *gin.Context) {
 	message := "Không có điểm tài nguyên nào sẵn sàng thu hoạch."
 	if collected > 0 {
 		message = fmt.Sprintf("Thu hoạch %d điểm tài nguyên:\n%s", collected, strings.Join(messages, "\n"))
-		notify.Send(db.DB, playerID, "aperture_harvest", "Thu Hoạch Tiên Khiếu", message)
+		notify.SendBestEffort(db.DB, playerID, "aperture_harvest", "Thu Hoạch Tiên Khiếu", message, c.Request.Context())
 	}
 	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
 		"message": message,
@@ -2435,8 +2435,8 @@ func UpgradeAperturePoint(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Lỗi lưu nâng cấp", err))
 		return
 	}
-	notify.Send(db.DB, playerID, "aperture_upgrade", "Nâng Cấp Điểm Tài Nguyên",
-		fmt.Sprintf("Nâng cấp %s lên cấp %d thành công! Tiêu tốn %d Tiên Nguyên Thạch.", pt.Name, newLevel, upgradeCost))
+	notify.SendBestEffort(db.DB, playerID, "aperture_upgrade", "Nâng Cấp Điểm Tài Nguyên",
+		fmt.Sprintf("Nâng cấp %s lên cấp %d thành công! Tiêu tốn %d Tiên Nguyên Thạch.", pt.Name, newLevel, upgradeCost), c.Request.Context())
 	respondActionWithInventory(c, http.StatusOK, models.Player{Account: models.Account{ID: playerID}}, gin.H{
 		"message":         fmt.Sprintf("Nâng cấp %s lên cấp %d thành công! Tiêu tốn %d Tiên Nguyên Thạch.", pt.Name, newLevel, upgradeCost),
 		"new_level":       newLevel,
@@ -2573,9 +2573,9 @@ func AssignWorkerToPoint(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Lỗi lưu phân công", err))
 		return
 	}
-	notify.Send(db.DB, playerID, "worker_assigned", "⛏️ Phân Công Lao Động Dị Nhân", fmt.Sprintf(
+	notify.SendBestEffort(db.DB, playerID, "worker_assigned", "⛏️ Phân Công Lao Động Dị Nhân", fmt.Sprintf(
 		"Đã phân công %d %s vào điểm tài nguyên [%s] (+%d%% sản lượng).",
-		req.AssignedPopulation, vhRace, pointID, workerBonusPercent(req.AssignedPopulation)))
+		req.AssignedPopulation, vhRace, pointID, workerBonusPercent(req.AssignedPopulation)), c.Request.Context())
 	c.JSON(http.StatusOK, gin.H{"message": "Phân công lao động thành công"})
 }
 

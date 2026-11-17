@@ -373,7 +373,7 @@ func playerRealtimeSnapshot(player models.Player) PlayerRealtimeSnapshot {
 
 // SendSessionKickedEvent sends a session.kicked event to the player's WebSocket connection when invalidated.
 func SendSessionKickedEvent(playerID uuid.UUID) {
-	notify.Send(db.DB, playerID, "session.kicked", "Phiên đăng nhập đã hết hạn", "Tài khoản đã đăng nhập từ thiết bị khác")
+	notify.SendBestEffort(db.DB, playerID, "session.kicked", "Phiên đăng nhập đã hết hạn", "Tài khoản đã đăng nhập từ thiết bị khác")
 	_ = cache.PublishEventQuick("player:"+playerID.String(), PlayerRealtimeEvent{
 		Type:           SessionEventKicked,
 		Revision:       nextPlayerEventRevision(),

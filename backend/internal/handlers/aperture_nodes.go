@@ -595,7 +595,7 @@ func PlaceApertureNode(c *gin.Context) {
 	costDesc := strings.Join(costParts, ", ")
 
 	buildMsg := fmt.Sprintf("Xây dựng thành công %s! Tiêu hao: %s.", template.Name, costDesc)
-	notify.Send(db.DB, playerID, "aperture_build", "Xây Dựng Tiên Khiếu", buildMsg)
+	notify.SendBestEffort(db.DB, playerID, "aperture_build", "Xây Dựng Tiên Khiếu", buildMsg, c.Request.Context())
 
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &playerID,

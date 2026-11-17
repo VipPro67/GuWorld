@@ -600,17 +600,17 @@ func ConfirmTrade(c *gin.Context) {
 	if senderConfirmed && receiverConfirmed {
 		if len(senderOffer.Gus) > 0 {
 			guNames := formatGuNames(db.DB, senderOffer.Gus)
-			notify.Send(db.DB, senderID, "trade_gu_sent", "Giao dịch - Cổ trùng đã chuyển",
-				fmt.Sprintf("Bạn đã chuyển %d Cổ trùng cho %s: %s", len(senderOffer.Gus), receiverName, guNames))
-			notify.Send(db.DB, receiverID, "trade_gu_received", "Giao dịch - Nhận Cổ trùng",
-				fmt.Sprintf("%s đã chuyển cho bạn %d Cổ trùng: %s", senderName, len(senderOffer.Gus), guNames))
+			notify.SendBestEffort(db.DB, senderID, "trade_gu_sent", "Giao dịch - Cổ trùng đã chuyển",
+				fmt.Sprintf("Bạn đã chuyển %d Cổ trùng cho %s: %s", len(senderOffer.Gus), receiverName, guNames), c.Request.Context())
+			notify.SendBestEffort(db.DB, receiverID, "trade_gu_received", "Giao dịch - Nhận Cổ trùng",
+				fmt.Sprintf("%s đã chuyển cho bạn %d Cổ trùng: %s", senderName, len(senderOffer.Gus), guNames), c.Request.Context())
 		}
 		if len(receiverOffer.Gus) > 0 {
 			guNames := formatGuNames(db.DB, receiverOffer.Gus)
-			notify.Send(db.DB, receiverID, "trade_gu_sent", "Giao dịch - Cổ trùng đã chuyển",
-				fmt.Sprintf("Bạn đã chuyển %d Cổ trùng cho %s: %s", len(receiverOffer.Gus), senderName, guNames))
-			notify.Send(db.DB, senderID, "trade_gu_received", "Giao dịch - Nhận Cổ trùng",
-				fmt.Sprintf("%s đã chuyển cho bạn %d Cổ trùng: %s", receiverName, len(receiverOffer.Gus), guNames))
+			notify.SendBestEffort(db.DB, receiverID, "trade_gu_sent", "Giao dịch - Cổ trùng đã chuyển",
+				fmt.Sprintf("Bạn đã chuyển %d Cổ trùng cho %s: %s", len(receiverOffer.Gus), senderName, guNames), c.Request.Context())
+			notify.SendBestEffort(db.DB, senderID, "trade_gu_received", "Giao dịch - Nhận Cổ trùng",
+				fmt.Sprintf("%s đã chuyển cho bạn %d Cổ trùng: %s", receiverName, len(receiverOffer.Gus), guNames), c.Request.Context())
 		}
 	}
 

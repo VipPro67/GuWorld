@@ -496,7 +496,7 @@ func RefineGu(c *gin.Context) {
 	if isSuccess {
 		notifyTitle = "Luyện Cổ Thành Công"
 	}
-	notify.Send(db.DB, player.ID, "SYSTEM", notifyTitle, statusMsg)
+	notify.SendBestEffort(db.DB, player.ID, "SYSTEM", notifyTitle, statusMsg, c.Request.Context())
 
 	// Return response
 	if isSuccess {

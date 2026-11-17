@@ -194,9 +194,9 @@ func LoginPlayer(c *gin.Context) {
 			for rows.Next() {
 				var otherPID uuid.UUID
 				if err := rows.Scan(&otherPID); err == nil {
-					notify.Send(db.DB, otherPID, "security_alert",
+					notify.SendBestEffort(db.DB, otherPID, "security_alert",
 						"Cảnh báo bảo mật",
-						fmt.Sprintf("Hệ thống đã chặn yêu cầu đăng nhập tài khoản thứ 3 (%s) trong ngày từ thiết bị của đạo hữu.", player.Username))
+						fmt.Sprintf("Hệ thống đã chặn yêu cầu đăng nhập tài khoản thứ 3 (%s) trong ngày từ thiết bị của đạo hữu.", player.Username), c.Request.Context())
 				}
 			}
 		}

@@ -48,8 +48,9 @@ func GetApertureGuSwarms(c *gin.Context) {
 
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT s.id, s.aperture_id, s.gu_id, s.gu_rank, s.quantity, s.created_at, s.updated_at,
-		       COALESCE(gd.name, s.gu_id), COALESCE(gd.type, ''), COALESCE(gd.path, ARRAY[]::varchar[]),
-		       COALESCE(gd.description, ''), COALESCE(gd.food, '')
+		       COALESCE(gd.name, s.gu_id), COALESCE(gd.gu_type, ''),
+		       ARRAY(SELECT jsonb_array_elements_text(COALESCE(gd.path, '[]'::jsonb))),
+		       COALESCE(gd.description, ''), COALESCE(gd.food_types->>0, '')
 		FROM aperture_gu_swarms s
 		LEFT JOIN gu_dictionary gd ON gd.id = s.gu_id AND gd.rank = s.gu_rank
 		WHERE s.aperture_id = $1 AND s.quantity > 0

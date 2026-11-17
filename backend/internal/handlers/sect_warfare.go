@@ -668,7 +668,7 @@ func AttackSect(c *gin.Context) {
 		alert := fmt.Sprintf("[Hộ Sơn Đại Trận] Đã chặn đợt tập kích của %s! Toàn tông có 10 phút tập hợp trấn thủ trước khi sơn môn có thể bị công kích lại.", attacker.Username)
 		_ = SendSystemMessage("sect", sql.NullString{String: req.TargetSectID, Valid: true}, alert)
 		for _, id := range memberIDs {
-			_ = notify.Send(db.DB, id, "sect_attack", "Hộ Sơn Đại Trận cảnh báo", alert)
+			notify.SendBestEffort(db.DB, id, "sect_attack", "Hộ Sơn Đại Trận cảnh báo", alert, c.Request.Context())
 		}
 		c.JSON(http.StatusConflict, gin.H{"error": alert, "formation_cancelled": true, "shield_until": shieldUntil, "cooldown_until": readyAt})
 		return
@@ -711,7 +711,7 @@ func AttackSect(c *gin.Context) {
 		EnemySpeed: 8 + float64(guardian.Rank)*2, EnemyRank: guardian.Rank,
 		EnemySubRank: guardian.SubRank, AIProfile: "aggressive", TargetSectID: req.TargetSectID,
 	}
-	attacker.ActiveCombat = StartCombat(tx, &base, &attacker)
+	attacker.ActiveCombat = StartCombat(c.Request.Context(), tx, &base, &attacker)
 	var defenderCount int
 	for _, defID := range defenderIDs {
 		defender, loadErr := evaluateManaTxEquippedReadonly(tx, defID)

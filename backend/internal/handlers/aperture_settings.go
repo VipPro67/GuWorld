@@ -219,7 +219,7 @@ func RepairApertureNode(c *gin.Context) {
 	}
 
 	repairMsg := fmt.Sprintf("Sửa chữa thành công %s! Tiêu tốn %d Tiên Nguyên Thạch.", n.Name, cost)
-	notify.Send(db.DB, playerID, "aperture_repair", "Sửa Chữa Tiên Khiếu", repairMsg)
+	notify.SendBestEffort(db.DB, playerID, "aperture_repair", "Sửa Chữa Tiên Khiếu", repairMsg, c.Request.Context())
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":         repairMsg,
@@ -357,7 +357,7 @@ func UpgradeApertureNode(c *gin.Context) {
 	_ = tx.Commit()
 
 	upgradeMsg := fmt.Sprintf("Nâng cấp %s lên cấp %d thành công! Tiêu tốn %d Tiên Nguyên Thạch.", n.Name, newLevel, upgradeCost)
-	notify.Send(db.DB, playerID, "aperture_upgrade", "Nâng Cấp Tiên Khiếu", upgradeMsg)
+	notify.SendBestEffort(db.DB, playerID, "aperture_upgrade", "Nâng Cấp Tiên Khiếu", upgradeMsg, c.Request.Context())
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":         upgradeMsg,

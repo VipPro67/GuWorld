@@ -857,7 +857,7 @@ func AscensionStartCalamityCombat(c *gin.Context) {
 	combat.CombatMode = "real"
 	combat.WorldMonsterRegionID, combat.WorldMonsterID = actor.RegionID, actor.InstanceID
 	combat.AscensionCalamity = true
-	player.ActiveCombat = StartCombat(tx, &combat, &player)
+	player.ActiveCombat = StartCombat(c.Request.Context(), tx, &combat, &player)
 	combatJSON, err := json.Marshal(player.ActiveCombat)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể tạo trạng thái chiến đấu", err))
@@ -896,7 +896,7 @@ func CompleteAscensionCalamityForPlayer(ctx context.Context, playerID uuid.UUID)
 	}
 
 	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, PlayerDomain, AscensionDomain)
-	_ = notify.Send(db.DB, playerID, "ascension_calamity_victory", "ĐỊA TAI ĐÃ BỊ ĐÁNH TAN!", "Đại kiếp đã qua, ba khí Thiên Địa Nhân đã hòa quyện. Hãy mau chóng Thả Cổ bản mệnh để ngưng tụ Tiên Khiếu!")
+	notify.SendBestEffort(db.DB, playerID, "ascension_calamity_victory", "ĐỊA TAI ĐÃ BỊ ĐÁNH TAN!", "Đại kiếp đã qua, ba khí Thiên Địa Nhân đã hòa quyện. Hãy mau chóng Thả Cổ bản mệnh để ngưng tụ Tiên Khiếu!", ctx)
 	return nil
 }
 
@@ -964,8 +964,8 @@ func AscensionRelease(c *gin.Context) {
 	// Validate and destroy each chosen Gu, accumulating Dao Marks per path.
 	daoGain := models.DaoMarksMap{}
 	for _, idStr := range req.GuInstanceIDs {
-		instID, errParse := uuid.Parse(idStr)
-		if errParse != nil {
+		idStr = strings.TrimSpace(idStr)
+		if idStr == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Mã cổ không hợp lệ: " + idStr})
 			return
 		}
@@ -975,7 +975,7 @@ func AscensionRelease(c *gin.Context) {
 		err := tx.QueryRow(`
 			SELECT gu_id, gu_rank, is_vital FROM player_gu
 			WHERE id = $1 AND player_id = $2 AND status <> 'DEAD'
-		`, instID, player.ID).Scan(&guID, &guRank, &isVital)
+		`, idStr, player.ID).Scan(&guID, &guRank, &isVital)
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng không tồn tại trong túi đồ"})
 			return
@@ -991,7 +991,7 @@ func AscensionRelease(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể thả Cổ Bản Mệnh — nó vừa trấn giữ không khiếu cho đạo hữu!"})
 			return
 		}
-		reserved, reservationErr := guHasActiveProductReservation(tx, instID.String())
+		reserved, reservationErr := guHasActiveProductReservation(tx, idStr)
 		if reservationErr != nil {
 			httperr.Respond(c, httperr.Internal("Không thể kiểm tra Cổ đang được công trình giữ chỗ", reservationErr))
 			return
@@ -1017,7 +1017,7 @@ func AscensionRelease(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Lưu phái của %s chưa đạt cảnh giới Đại Sư (10.000 Chân Ý)", spec.Name)})
 			return
 		}
-		if _, err := tx.Exec(`DELETE FROM player_gu WHERE id = $1 AND player_id = $2 AND is_vital = false`, instID, player.ID); err != nil {
+		if _, err := tx.Exec(`DELETE FROM player_gu WHERE id = $1 AND player_id = $2 AND is_vital = false`, idStr, player.ID); err != nil {
 			httperr.Respond(c, httperr.Internal("Lỗi tiêu hủy cổ trùng", err))
 			return
 		}

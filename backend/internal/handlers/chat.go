@@ -542,6 +542,6 @@ func BroadcastImmortalGuLoot(playerID uuid.UUID, playerName, bossName, guID stri
 	_ = SendSystemMessage("world", sql.NullString{}, content)
 
 	if playerID != uuid.Nil {
-		notify.Send(db.DB, playerID, "IMMORTAL_GU_LOOT", "Thu Phục Tiên Cổ!", fmt.Sprintf("Chúc mừng đạo hữu đã đánh bại %s và thu phục thành công Tiên Cổ [%s] (Chuyển %d)!", bossName, guName, rank))
+		notify.SendBestEffort(db.DB, playerID, "IMMORTAL_GU_LOOT", "Thu Phục Tiên Cổ!", fmt.Sprintf("Chúc mừng đạo hữu đã đánh bại %s và thu phục thành công Tiên Cổ [%s] (Chuyển %d)!", bossName, guName, rank))
 	}
 }

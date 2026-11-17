@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -557,7 +558,7 @@ func loadFormationPetCombatants(tx *sql.Tx, playerID string, virtual bool, charg
 	return pets, remainingSoul, soulLoaded
 }
 
-func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {
+func StartCombat(ctx context.Context, tx *sql.Tx, base *models.CombatState, player *models.Player) *models.CombatState {
 	if base.CombatMode != "virtual" && base.EnemyGuInventory != nil && base.EnemyType != "PVP" {
 		var filteredGu []models.GuInstance
 		for _, g := range base.EnemyGuInventory {
@@ -595,7 +596,7 @@ func StartCombat(tx *sql.Tx, base *models.CombatState, player *models.Player) *m
 		if errParse == nil && allyUUID != player.ID {
 			// notify.Send uses a savepoint, so a member deleted after the
 			// combat snapshot cannot abort the caller's transaction.
-			notify.Send(tx, allyUUID, "PARTY_COMBAT", "Tổ Đội Giao Chiến", fmt.Sprintf("Trưởng nhóm %s đã bắt đầu giao chiến! Đội hình của bạn đã tự động tham chiến.", player.Username))
+			notify.SendBestEffort(tx, allyUUID, "PARTY_COMBAT", "Tổ Đội Giao Chiến", fmt.Sprintf("Trưởng nhóm %s đã bắt đầu giao chiến! Đội hình của bạn đã tự động tham chiến.", player.Username), ctx)
 		}
 	}
 	return initialized

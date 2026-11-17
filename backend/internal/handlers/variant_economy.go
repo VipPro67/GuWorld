@@ -179,10 +179,10 @@ func AssignWorkerToNode(c *gin.Context) {
 
 	_ = tx.Commit()
 
-	notify.Send(db.DB, playerID, "worker_assigned", "⛏️ Phân Công Lao Động Dị Nhân", fmt.Sprintf(
+	notify.SendBestEffort(db.DB, playerID, "worker_assigned", "⛏️ Phân Công Lao Động Dị Nhân", fmt.Sprintf(
 		"Đã phân công thành công %d %s vào khai thác/sản xuất tại Node [%s]!\n\n📈 Tác động:\n• Lao động phân công: %d người\n• Chủng tộc: %s",
 		req.AssignedPopulation, vhRace, nodeID, req.AssignedPopulation, vhRace,
-	))
+	), c.Request.Context())
 
 	c.JSON(http.StatusOK, gin.H{"message": "Phân công lao động thành công"})
 }
@@ -422,10 +422,10 @@ func CreateRefinementJob(c *gin.Context) {
 		"UNTIL_MATERIAL_EMPTY": "Luyện hết nguyên liệu trong kho",
 	}
 
-	notify.Send(db.DB, playerID, "refine_job_created", "🔨 Tiếp Nhận Lệnh Luyện Cổ Tự Động", fmt.Sprintf(
+	notify.SendBestEffort(db.DB, playerID, "refine_job_created", "🔨 Tiếp Nhận Lệnh Luyện Cổ Tự Động", fmt.Sprintf(
 		"Tộc Mao Dân đã tiếp nhận lệnh luyện Cổ [%s]!\n\n📋 Chi tiết công việc:\n• Chế độ luyện: %s\n• Mục tiêu: %d con\n• Khấu trừ dự kiến: %s\n• Nơi lưu trữ: Kho Tiên Khiếu",
 		actualRecipeID, modeLabels[req.Mode], req.TargetQuantity, matSummary,
-	))
+	), c.Request.Context())
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Đã tạo lệnh luyện cổ tự động", "id": id})
 }
@@ -622,10 +622,10 @@ func BuildSettlement(c *gin.Context) {
 		return
 	}
 
-	notify.Send(db.DB, playerID, "settlement_built", "🏰 Xây Dựng Thành Trì Mới Thành Công", fmt.Sprintf(
+	notify.SendBestEffort(db.DB, playerID, "settlement_built", "🏰 Xây Dựng Thành Trì Mới Thành Công", fmt.Sprintf(
 		"Đã xây dựng thành công pháo đài/định cư [%s] cho bộ tộc [%s]!\n\n📈 Thông số gia tăng:\n• Sức chứa dân số: +%d người\n• Mức độ nhà ở (Housing): +%d điểm\n• Dung lượng kho lương: +%d\n• Chỉ số an ninh: %.0f%%",
 		name, req.Race, capacity, housing, foodStorage, security,
-	))
+	), c.Request.Context())
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Xây dựng cơ sở định cư thành công!",
@@ -751,14 +751,14 @@ func UpgradeSettlement(c *gin.Context) {
 
 	_ = tx.Commit()
 
-	notify.Send(db.DB, playerID, "settlement_upgraded", "🏰 Hoàn Thành Nâng Cấp Thành Trì", fmt.Sprintf(
+	notify.SendBestEffort(db.DB, playerID, "settlement_upgraded", "🏰 Hoàn Thành Nâng Cấp Thành Trì", fmt.Sprintf(
 		"Cơ sở định cư [%s] của bộ tộc đã được nâng cấp từ [%s] lên [%s]!\n\n📈 Chỉ số cập nhật:\n• Tổng sức chứa dân số: %d người (+%d)\n• Tổng nhà ở: %d điểm (+%d)\n• Tổng kho lương thực: %d (+%d)\n• Độ an ninh: %.0f%%",
 		newName, currentType, newType,
 		newCap, newCap-currentCap,
 		newHousing, newHousing-currentHousing,
 		newFoodStorage, newFoodStorage-currentFoodStorage,
 		newSecurity,
-	))
+	), c.Request.Context())
 
 	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật và nâng cấp thành trì thành công"})
 }

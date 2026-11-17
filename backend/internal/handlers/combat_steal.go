@@ -345,9 +345,9 @@ func executePermanentSteal(tx *sql.Tx, combat *models.CombatState, attacker *mod
 	combat.StealLogMessage = fmt.Sprintf("Bàn tay vô hình [Vô Tướng Thủ] của %s đã xuyên không đoạt lấy [%s] của %s!", thiefName, targetGuName, victimName)
 
 	// Send notifications
-	notify.Send(tx, victimUUID, "GU_PERMANENT_STOLEN", "Cổ Trùng Bị Cướp!",
+	notify.SendBestEffort(tx, victimUUID, "GU_PERMANENT_STOLEN", "Cổ Trùng Bị Cướp!",
 		fmt.Sprintf("Cổ sư %s đã dùng [Vô Tướng Thủ] cướp đi vĩnh viễn Cổ trùng [%s] của bạn ngay đầu trận chiến!", thiefName, targetGuName))
-	notify.Send(tx, thiefUUID, "GU_PERMANENT_STOLEN_SUCCESS", "Đoạt Cổ Thành Công!",
+	notify.SendBestEffort(tx, thiefUUID, "GU_PERMANENT_STOLEN_SUCCESS", "Đoạt Cổ Thành Công!",
 		fmt.Sprintf("Vô Tướng Thủ đã thành công đoạt lấy Cổ trùng [%s] (Chuyển %d) từ %s!", targetGuName, targetGu.Rank, victimName))
 
 	logger.S.Infof("Permanent steal succeeded: %s stole %s (Rank %d) from %s", thiefName, targetGuName, targetGu.Rank, victimName)
@@ -426,9 +426,9 @@ func executeTempSteal(tx *sql.Tx, combat *models.CombatState, attacker *models.P
 	combat.TempStolenGuName = targetGuName
 	combat.StealLogMessage = fmt.Sprintf("[%s] của %s đã tạm thời đoạt lấy Cổ trùng [%s] của %s trong trận chiến này!", thiefSpec.Name, thiefName, targetGuName, victimName)
 
-	notify.Send(tx, victimUUID, "GU_TEMP_STOLEN", "Cổ Trùng Bị Phong Tỏa!",
+	notify.SendBestEffort(tx, victimUUID, "GU_TEMP_STOLEN", "Cổ Trùng Bị Phong Tỏa!",
 		fmt.Sprintf("Cổ sư %s đã dùng [%s] tạm thời đoạt lấy Cổ trùng [%s] của bạn trong trận này!", thiefName, thiefSpec.Name, targetGuName))
-	notify.Send(tx, thiefUUID, "GU_TEMP_STOLEN_SUCCESS", "Phong Tỏa Cổ Trùng Địch!",
+	notify.SendBestEffort(tx, thiefUUID, "GU_TEMP_STOLEN_SUCCESS", "Phong Tỏa Cổ Trùng Địch!",
 		fmt.Sprintf("[%s] đã tạm thời đoạt lấy [%s] (Chuyển %d) của %s và có thể sử dụng trong trận này!", thiefSpec.Name, targetGuName, targetGu.Rank, victimName))
 
 	logger.S.Infof("Temp steal succeeded: %s temporarily stole %s (Rank %d) from %s", thiefName, targetGuName, targetGu.Rank, victimName)

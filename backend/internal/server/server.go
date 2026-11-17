@@ -2,8 +2,12 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -360,9 +364,9 @@ func requestLogging() gin.HandlerFunc {
 		switch {
 		case status >= 500:
 			level = zapcore.ErrorLevel
-		case duration >= slowRequestThreshold:
+		case status >= 400 && status != http.StatusBadRequest:
 			level = zapcore.WarnLevel
-		case status >= 400:
+		case duration >= slowRequestThreshold:
 			level = zapcore.WarnLevel
 		}
 
@@ -389,6 +393,20 @@ func requestLogging() gin.HandlerFunc {
 				errMsg = strings.TrimSpace(c.Errors.String())
 			}
 		}
+		var requestErr error
+		for _, requestError := range c.Errors {
+			if requestErr == nil {
+				requestErr = requestError.Err
+			} else {
+				requestErr = errors.Join(requestErr, requestError.Err)
+			}
+		}
+		if requestErr == nil && status >= 400 && errMsg != "" {
+			requestErr = errors.New(errMsg)
+		}
+		if requestErr != nil && status < 400 || status >= 500 {
+			level = zapcore.ErrorLevel
+		}
 
 		isTruncated, _ := bodyTruncated.(bool)
 
@@ -404,17 +422,33 @@ func requestLogging() gin.HandlerFunc {
 			respBodyField = zap.String("response_body", "")
 		}
 
-		if status >= 400 {
-			if checked := logger.L.Check(level, "http_request_error"); checked != nil {
-				checked.Write(
-					zap.Any("trace_id", traceID), zap.String("method", method), zap.String("path", path),
-					zap.String("route", c.FullPath()), zap.Int("status", status), zap.Float64("duration_ms", float64(duration.Microseconds())/1000),
-					zap.String("client_ip", clientIP), zap.Any("player_id", playerID), zap.Any("username", username),
-					zap.Any("request_body", requestBody), zap.Bool("body_truncated", isTruncated),
-					respBodyField, zap.Bool("response_body_truncated", responseBodyTruncated), zap.String("error", errMsg),
-					zap.String("user_agent", c.Request.UserAgent()),
-				)
+		if status >= 400 || requestErr != nil {
+			errorKind := "internal"
+			if status >= 400 && status < 500 {
+				errorKind = "client"
+				if status == http.StatusBadRequest {
+					errorKind = "validation"
+				}
 			}
+			fields := []zap.Field{
+				zap.Any("trace_id", traceID), zap.String("method", method), zap.String("path", path),
+				zap.String("route", c.FullPath()), zap.Int("status", status), zap.Float64("duration_ms", float64(duration.Microseconds())/1000),
+				zap.String("client_ip", clientIP), zap.Any("player_id", playerID), zap.Any("username", username),
+				zap.Any("request_body", requestBody), zap.Bool("body_truncated", isTruncated),
+				zap.String("error", errMsg), zap.String("error_kind", errorKind),
+				respBodyField, zap.Bool("response_body_truncated", responseBodyTruncated),
+				zap.String("user_agent", c.Request.UserAgent()),
+			}
+			fields = append(fields, logger.ErrorFields(requestErr)...)
+			if stack, ok := c.Get("panic_stacktrace"); ok {
+				if stackText, ok := stack.(string); ok && stackText != "" {
+					fields = append(fields, zap.String("stacktrace", stackText))
+				}
+			}
+			if checked := logger.L.Check(level, "http_request_error"); checked != nil {
+				checked.Write(fields...)
+			}
+			return
 		}
 
 		if checked := logger.L.Check(level, "http_request_completed"); checked != nil {
@@ -431,6 +465,60 @@ func requestLogging() gin.HandlerFunc {
 			checked.Write(fields...)
 		}
 	}
+}
+
+// requestRecovery lets the outer request logger record recovered panics with
+// the same trace ID and request context as ordinary handler errors.
+func requestRecovery() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				c.Set("panic_stacktrace", string(debug.Stack()))
+				_ = c.Error(fmt.Errorf("panic: %v", recovered))
+				c.AbortWithStatus(http.StatusInternalServerError)
+			}
+		}()
+		c.Next()
+	}
+}
+
+func recoverMiddlewarePanic(c *gin.Context, recovered interface{}) {
+	traceID := c.GetString("trace_id")
+	if traceID == "" {
+		traceID = monitor.GenerateTraceID()
+		c.Set("trace_id", traceID)
+	}
+	c.Header("X-Trace-ID", traceID)
+	err := fmt.Errorf("panic: %v", recovered)
+	stacktrace := string(debug.Stack())
+	status := c.Writer.Status()
+	if status < 400 {
+		status = http.StatusInternalServerError
+	}
+	fields := []zap.Field{
+		zap.String("trace_id", traceID), zap.String("method", c.Request.Method),
+		zap.String("path", c.Request.URL.Path), zap.String("route", c.FullPath()),
+		zap.Int("status", status), zap.String("error", err.Error()),
+		zap.String("error_kind", "internal"), zap.String("stacktrace", stacktrace),
+	}
+	if playerID, ok := c.Get("player_id"); ok {
+		fields = append(fields, zap.Any("player_id", playerID))
+	}
+	ctx := logger.WithTraceID(c.Request.Context(), traceID)
+	logger.LogError(ctx, "http_request_error", err, fields...)
+	errorChain, rootCause := logger.ErrorDetails(err)
+	monitor.GlobalTracker.RecordTraceOnly(monitor.RequestTrace{
+		ID: traceID, Timestamp: time.Now(), Method: c.Request.Method,
+		Path: c.Request.URL.Path, Route: c.FullPath(), Status: status,
+		ClientIP: c.ClientIP(), Error: err.Error(), ErrorKind: "internal",
+		ErrorChain: errorChain, RootCause: rootCause, Stacktrace: stacktrace,
+		ErrorMessage: err.Error(),
+	})
+	c.AbortWithStatus(status)
+}
+
+func requestPanicFallback() gin.HandlerFunc {
+	return gin.CustomRecoveryWithWriter(io.Discard, recoverMiddlewarePanic)
 }
 
 // RealtimeWorldAdmission is the gateway surface the router needs for handoff
@@ -474,13 +562,13 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 	gin.DefaultWriter = logger.GinWriter()
 	gin.DefaultErrorWriter = logger.GinWriter()
 	r := gin.New()
-	r.Use(gin.Recovery())
-
+	r.Use(requestPanicFallback())
 	// Trace intake must run first so trace_id is bound to both context and headers.
 	r.Use(traceIntakeMiddleware())
 	// Capture the response before requestLogging reads the values from the context.
 	r.Use(requestLogging())
 	r.Use(monitor.Middleware())
+	r.Use(requestRecovery())
 
 	// CORS Middleware
 	r.Use(func(c *gin.Context) {

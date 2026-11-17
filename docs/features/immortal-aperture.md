@@ -4,6 +4,8 @@
 
 Tiên Khiếu là không gian riêng của người chơi tại Rank 6+, có node/resource point, worker, NPC, swarm, portal và hệ thống tribulation.
 
+Danh sách Đàn Cổ lấy tên, loại, lưu phái, mô tả và thức ăn từ `gu_dictionary`; nếu thiếu bản ghi từ điển thì vẫn trả ID Gu để nhận diện đàn.
+
 ## Điều kiện mở và quyền truy cập
 
 Player cần đạt Rank 6 và anchor khi không đang trong aperture khác. Chủ sở hữu đặt access policy. Môn Hộ được hiện cho chủ, theo policy mở/đồng môn, hoặc khi điểm dò deterministic đạt điểm che giấu của chủ cộng `concealment_power`. Hai phía dùng STAT và realm/Đạo của scorer hiện có; passive `INVESTIGATION` tăng điểm dò, còn `DISGUISE` tăng điểm che giấu. Passive conditions được chiếu theo race viewer/owner và rank khi scorer kiểm tra portal. Dò thành công hiện tọa độ chính xác nhưng không tiết lộ chủ nhân, mã Tiên Khiếu hay policy cổng. Người đã nhìn thấy Môn Hộ có thể vào trong phạm vi 3 ô; kết quả dò thành công vượt qua giới hạn PARTY/SECT.

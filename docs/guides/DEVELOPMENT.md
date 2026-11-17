@@ -80,7 +80,9 @@ Worker hiện là goroutine polling loop, không phải queue. Mọi ticker lặ
 
 ## Quan sát lỗi
 
-Backend gắn trace ID cho request và cung cấp thống kê/traces trong Admin → **Giám sát**. Không thêm endpoint debug public để lộ dữ liệu runtime. `DEBUG_ERRORS` chỉ dùng ngoài production khi cần response lỗi chi tiết.
+Backend ghi một `http_request_error` cho mỗi request lỗi; `http_request_completed` chỉ dành cho request thành công. Lỗi 400 dự kiến được ghi ở mức INFO (`error_kind=validation`), 4xx khác ở WARN và 5xx ở ERROR. Log lỗi gồm trace ID, loại lỗi, chuỗi error đã wrap và `root_cause`; panic có stacktrace. `httperr.Respond` gắn lỗi vào Gin context để middleware giữ nguyên cause và chịu trách nhiệm ghi log.
+
+Worker ghi một `background_worker_failed` cho mỗi lần chạy lỗi, gồm `worker_run_id`, chuỗi error và root cause; panic có stacktrace. Cùng `worker_run_id` xuất hiện trong trace ở Admin → **Giám sát**. Request errors và worker failures đều được lưu trong trace ring; trace chi tiết hiển thị cause chain và panic stacktrace. Không thêm endpoint debug public để lộ dữ liệu runtime. `DEBUG_ERRORS` chỉ dùng ngoài production khi cần response lỗi chi tiết.
 
 ## Khi cập nhật docs
 

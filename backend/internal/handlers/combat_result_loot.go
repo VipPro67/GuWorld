@@ -13,6 +13,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
+	"go.uber.org/zap"
 )
 
 // immortalGuLootAnnouncement is a world-chat announcement (Tiên Cổ xuất thế)
@@ -282,6 +283,8 @@ func applyCombatVictoryLoot(tx *sql.Tx, player *models.Player, activeCombat *mod
 				lootDetailLogs = append(lootDetailLogs, lootMsg)
 				if n, err := notify.SendDeferred(tx, player.ID, "combat_loot", "Chiến lợi phẩm", lootMsg); err == nil {
 					pendingNotifications = append(pendingNotifications, n)
+				} else {
+					logger.LogError(nil, "combat_loot_notification_failed", err, zap.String("player_id", player.ID.String()))
 				}
 			}
 		}

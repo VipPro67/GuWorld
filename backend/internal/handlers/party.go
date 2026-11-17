@@ -211,7 +211,7 @@ func InvitePlayer(c *gin.Context) {
 		return
 	}
 
-	notify.Send(tx, targetPlayer.ID, "PARTY_INVITE", "Lời Mời Tổ Đội", fmt.Sprintf("Cổ sư %s đã mời bạn tham gia tổ đội!", player.Username))
+	notify.SendBestEffort(tx, targetPlayer.ID, "PARTY_INVITE", "Lời Mời Tổ Đội", fmt.Sprintf("Cổ sư %s đã mời bạn tham gia tổ đội!", player.Username), c.Request.Context())
 
 	if err := tx.Commit(); err != nil {
 		httperr.Respond(c, httperr.Internal("Database error", err))
@@ -294,7 +294,7 @@ func LeaveParty(c *gin.Context) {
 
 	for _, m := range newMembers {
 		if mUUID, errM := uuid.Parse(m.ID); errM == nil {
-			notify.Send(tx, mUUID, "PARTY_LEAVE", "Cập Nhật Tổ Đội", fmt.Sprintf("Cổ sư %s đã rời khỏi tổ đội.", player.Username))
+			notify.SendBestEffort(tx, mUUID, "PARTY_LEAVE", "Cập Nhật Tổ Đội", fmt.Sprintf("Cổ sư %s đã rời khỏi tổ đội.", player.Username), c.Request.Context())
 		}
 	}
 
@@ -498,7 +498,7 @@ func RespondToInvitation(c *gin.Context) {
 
 	regionalWarning := ""
 	if leaderRegion.Valid {
-		regionalWarning = applyDestination(tx, &player, leaderRegion.String, leaderX, leaderY)
+		regionalWarning = applyDestination(c.Request.Context(), tx, &player, leaderRegion.String, leaderX, leaderY)
 	}
 	_, err = tx.Exec("UPDATE players SET party_id = $1, current_region = $2, x = $3, y = $4, statuses = $5 WHERE id = $6", partyID, player.CurrentRegion, player.X, player.Y, player.Statuses, player.ID)
 	if err != nil {
@@ -511,7 +511,7 @@ func RespondToInvitation(c *gin.Context) {
 	_, _ = tx.Exec("DELETE FROM party_invitations WHERE invitee_id = $1 AND status = 'PENDING'", player.ID)
 
 	if leaderUUID, errL := uuid.Parse(leaderID); errL == nil {
-		notify.Send(tx, leaderUUID, "PARTY_JOIN", "Thành Viên Mới", fmt.Sprintf("Cổ sư %s đã chấp nhận lời mời và gia nhập tổ đội!", player.Username))
+		notify.SendBestEffort(tx, leaderUUID, "PARTY_JOIN", "Thành Viên Mới", fmt.Sprintf("Cổ sư %s đã chấp nhận lời mời và gia nhập tổ đội!", player.Username), c.Request.Context())
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -675,7 +675,7 @@ func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMe
 				}
 				logger.S.Warnf("[Áp Chế Giới Vực] Thành viên tổ đội %s (%s) bị áp chế khi theo đội trưởng %s vượt Giới Vực Bích từ %s sang %s (giảm %d%%, thời gian %v)",
 					m.username, m.id, leader.Username, oldLZ.Name, newLZ.Name, debuffInt, duration)
-				_ = notify.Send(tx, m.id, "regional_wall_suppression", "Áp Chế Giới Vực (Tổ Đội)", partyNotifyContent)
+				notify.SendBestEffort(tx, m.id, "regional_wall_suppression", "Áp Chế Giới Vực (Tổ Đội)", partyNotifyContent)
 			}
 			if _, errExec := tx.Exec("UPDATE players SET current_region = $1, x = $2, y = $3, statuses = $4 WHERE id = $5", leader.CurrentRegion, leader.X, leader.Y, m.statuses, m.id); errExec != nil {
 				logger.S.Errorf("SyncPartyMembersLocation: failed to update member %s with regional wall debuff: %v", m.id, errExec)

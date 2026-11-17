@@ -592,12 +592,12 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 
 	// Grouped notification for normal starved Gus
 	if title, content := FormatStarvedGuNotification(normalDead); title != "" {
-		notify.Send(tx, playerID, "gu_death", title, content)
+		notify.SendBestEffort(tx, playerID, "gu_death", title, content)
 	}
 
 	// Grouped notification for vital starved Gus
 	if title, content := FormatVitalGuNotification(vitalDead); title != "" {
-		notify.Send(tx, playerID, "vital_gu_death", title, content)
+		notify.SendBestEffort(tx, playerID, "vital_gu_death", title, content)
 	}
 
 	return nil

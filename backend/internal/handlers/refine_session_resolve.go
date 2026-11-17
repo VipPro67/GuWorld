@@ -423,7 +423,7 @@ func resolveRefineSession(ctx context.Context, sessionID, reason string) (*refin
 	if outcome == OutcomeSuccess {
 		notifyTitle = "Luyện Cổ Thành Công"
 	}
-	notify.Send(db.DB, player.ID, "SYSTEM", notifyTitle, msg.String())
+	notify.SendBestEffort(db.DB, player.ID, "SYSTEM", notifyTitle, msg.String(), ctx)
 
 	// World-chat announcement for R6+ immortal Gu — only after the resolve has
 	// committed, so a rolled-back attempt can never broadcast twice (the

@@ -155,7 +155,7 @@ func maybeGrantFakeRegionalWallStatus(tx *sql.Tx, player *models.Player) *simula
 	}
 	formationMsg := fmt.Sprintf("⚠️ Đạo hữu bị đối phương kích hoạt Ngũ Hành Thiên Chướng Trận phản chiếu, gánh chịu [Áp Chế Giới Vực] (Công/Thủ/Tốc giảm %.1f%% trong %d phút).", -debuffPct*100, durationMinutes)
 	logger.S.Warnf("[Áp Chế Giới Vực] Người chơi %s bị áp chế bởi Ngũ Hành Thiên Chướng Trận (giảm %.1f%% trong %d phút)", defenderUUID, -debuffPct*100, durationMinutes)
-	_ = notify.Send(tx, defenderUUID, "regional_wall_suppression", "Áp Chế Giới Vực (Trận Pháp)", formationMsg)
+	notify.SendBestEffort(tx, defenderUUID, "regional_wall_suppression", "Áp Chế Giới Vực (Trận Pháp)", formationMsg)
 	return &simulator.CombatLog{
 		Action: "REGIONAL_WALL_SUPPRESSION_APPLIED",
 		Detail: fmt.Sprintf("Ngũ Hành Thiên Chướng Trận phản chiếu! Kẻ địch nhận [Áp Chế Giới Vực] (công/thủ/tốc giảm %.1f%% trong %d phút).", -debuffPct*100, durationMinutes),

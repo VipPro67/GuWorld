@@ -120,7 +120,7 @@ func AddSatKhiStatus(tx *sql.Tx, killerID *uuid.UUID, gain int) {
 
 	// Persist the notification with the penalty transaction. Realtime death
 	// settlement also sends a post-commit WebSocket notification to the killer.
-	_ = notify.Send(tx, *killerID, "sat_khi_increase", "Sát Khí gia tăng!",
+	notify.SendBestEffort(tx, *killerID, "sat_khi_increase", "Sát Khí gia tăng!",
 		fmt.Sprintf("Tích tụ oán khí đồ sát! Sát Khí của bạn tăng %d tầng (lên Tầng %d). Nếu bị đánh bại, lượng tài sản đánh rơi sẽ gia tăng x%.1f!", gain, newLevel, 1.0+float64(newLevel)*0.5))
 
 	// Broadcast wanted / hunt notice when killer has slaughtered multiple players (>= 3 kills / Sát Khí level >= 3)
@@ -588,18 +588,18 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 			attackerName = "Kẻ thù"
 		}
 		if summary != "" {
-			notify.Send(tx, loserID, "death_drop", "Tử đạo - Bị hạ gục (Tổn thất tài sản)",
+			notify.SendBestEffort(tx, loserID, "death_drop", "Tử đạo - Bị hạ gục (Tổn thất tài sản)",
 				fmt.Sprintf("Bạn đã bị Cổ Sư [%s] hạ gục tại (%d, %d)! Tổn thất: %s. (Lưu ý: Thiên Đạo chấn nát tiêu hủy vĩnh viễn một phần tài nguyên; phần còn lại rơi tại chỗ và sẽ tan biến sau 10 phút). Bạn đã được đưa về nơi an dưỡng và hồi sinh!", attackerName, loserX, loserY, summary))
-			notify.Send(tx, *winnerID, "loot_gained", "Kẻ thù bị hạ gục",
+			notify.SendBestEffort(tx, *winnerID, "loot_gained", "Kẻ thù bị hạ gục",
 				fmt.Sprintf("Bạn đã hạ gục Cổ Sư [%s]! Chiến lợi phẩm của đối phương rơi tại (%d, %d): %s. (Lưu ý: Một phần tài sản đối phương đã bị tiêu hủy vĩnh viễn trong trận chiến).", loserName, loserX, loserY, summary))
 		} else {
-			notify.Send(tx, loserID, "death_drop", "Tử đạo - Bị hạ gục",
+			notify.SendBestEffort(tx, loserID, "death_drop", "Tử đạo - Bị hạ gục",
 				fmt.Sprintf("Bạn đã bị Cổ Sư [%s] hạ gục tại (%d, %d). May mắn không bị rơi rớt tài sản! Bạn đã được đưa về nơi an dưỡng và hồi sinh!", attackerName, loserX, loserY))
-			notify.Send(tx, *winnerID, "loot_gained", "Kẻ thù bị hạ gục",
+			notify.SendBestEffort(tx, *winnerID, "loot_gained", "Kẻ thù bị hạ gục",
 				fmt.Sprintf("Bạn đã hạ gục Cổ Sư [%s] tại (%d, %d)! Đối phương không có tài sản rơi rớt.", loserName, loserX, loserY))
 		}
 	} else if summary != "" {
-		notify.Send(tx, loserID, "death_drop", "Tử đạo - Mất tài sản",
+		notify.SendBestEffort(tx, loserID, "death_drop", "Tử đạo - Mất tài sản",
 			fmt.Sprintf("Bạn đã tử đạo tại (%d, %d)! Tổn thất: %s. (Lưu ý: Thiên Đạo chấn nát tiêu hủy vĩnh viễn một phần tài nguyên; phần còn lại rơi tại chỗ và sẽ tan biến sau 10 phút).", loserX, loserY, summary))
 	}
 

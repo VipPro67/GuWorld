@@ -833,8 +833,8 @@ func AcceptTradeOffer(c *gin.Context) {
 	})
 
 	// Notify the trade offer creator that their offer was accepted
-	notify.Send(db.DB, creatorID, "trade_offer_accepted", "Đơn Trao Đổi Đã Khớp",
-		fmt.Sprintf("Đạo hữu %s đã chấp nhận đơn trao đổi auto của bạn. Giao dịch hoàn tất!", acceptor.Username))
+	notify.SendBestEffort(db.DB, creatorID, "trade_offer_accepted", "Đơn Trao Đổi Đã Khớp",
+		fmt.Sprintf("Đạo hữu %s đã chấp nhận đơn trao đổi auto của bạn. Giao dịch hoàn tất!", acceptor.Username), c.Request.Context())
 
 	updatedAcceptor := acceptor
 	if tx2, err2 := db.DB.Begin(); err2 == nil {

@@ -95,7 +95,7 @@ func notifyPlayerBanned(playerID uuid.UUID, reason string) {
 	if reason != "" {
 		content += " Lý do: " + reason
 	}
-	_ = notify.Send(db.DB, playerID, "session.kicked", "Tài khoản đã bị khóa", content)
+	notify.SendBestEffort(db.DB, playerID, "session.kicked", "Tài khoản đã bị khóa", content)
 	_ = cache.PublishEventQuick("player:"+playerID.String(), PlayerRealtimeEvent{
 		Type:           SessionEventKicked,
 		Revision:       nextPlayerEventRevision(),

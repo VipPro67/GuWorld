@@ -7,27 +7,29 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
+	"go.uber.org/zap"
 )
 
 var workerEventRecorder struct {
 	sync.RWMutex
-	fn func(workerName string, err error, duration time.Duration)
+	fn func(workerName, workerRunID string, err error, duration time.Duration, stacktrace string)
 }
 
 // SetWorkerEventRecorder wires an external telemetry collector (e.g. monitor.RecordWorkerEvent).
-func SetWorkerEventRecorder(fn func(workerName string, err error, duration time.Duration)) {
+func SetWorkerEventRecorder(fn func(workerName, workerRunID string, err error, duration time.Duration, stacktrace string)) {
 	workerEventRecorder.Lock()
 	workerEventRecorder.fn = fn
 	workerEventRecorder.Unlock()
 }
 
-func recordWorkerEvent(name string, err error, duration time.Duration) {
+func recordWorkerEvent(name, runID string, err error, duration time.Duration, stacktrace string) {
 	workerEventRecorder.RLock()
 	recorder := workerEventRecorder.fn
 	workerEventRecorder.RUnlock()
 	if recorder != nil {
-		recorder(name, err, duration)
+		recorder(name, runID, err, duration, stacktrace)
 	}
 }
 
@@ -77,15 +79,26 @@ func SafeRun(name string, ctx context.Context, fn func(context.Context)) {
 // and dispatched to the worker event recorder.
 func SafeRunE(name string, ctx context.Context, fn func(context.Context) error) {
 	start := time.Now()
+	runID := uuid.NewString()
 	var runErr error
+	var stacktrace string
 	defer func() {
 		dur := time.Since(start)
 		if p := recover(); p != nil {
-			logger.S.Errorf("%s panicked: %v\n%s", name, p, debug.Stack())
-			recordWorkerEvent(name, fmt.Errorf("panic: %v", p), dur)
-		} else if runErr != nil {
-			logger.S.Errorf("%s failed: %v", name, runErr)
-			recordWorkerEvent(name, runErr, dur)
+			runErr = fmt.Errorf("panic: %v", p)
+			stacktrace = string(debug.Stack())
+		}
+		if runErr != nil {
+			fields := []zap.Field{
+				zap.String("worker", name),
+				zap.String("worker_run_id", runID),
+				zap.Float64("duration_ms", float64(dur.Microseconds())/1000),
+			}
+			if stacktrace != "" {
+				fields = append(fields, zap.String("stacktrace", stacktrace))
+			}
+			logger.LogError(ctx, "background_worker_failed", runErr, fields...)
+			recordWorkerEvent(name, runID, runErr, dur, stacktrace)
 		}
 	}()
 	runErr = fn(ctx)

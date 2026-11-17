@@ -183,7 +183,7 @@ func EngageTribulation(c *gin.Context) {
 		ApertureMaxHP:      float64(apMaxHP),
 	}
 
-	state := StartCombat(tx, &base, &player)
+	state := StartCombat(c.Request.Context(), tx, &base, &player)
 
 	// Fix the first enemy combatant (built from flat fields): tribulation enemies
 	// have no Gu inventory and use basic attacks only, so we just correct its Kind.

@@ -214,7 +214,7 @@ func respondMovementError(c *gin.Context, err error) bool {
 
 // applyDestination moves the in-memory player and applies the regional wall
 // debuff when the region changes. Persistence stays with the caller.
-func applyDestination(tx *sql.Tx, player *models.Player, region string, x, y int) string {
+func applyDestination(ctx context.Context, tx *sql.Tx, player *models.Player, region string, x, y int) string {
 	oldRegion := player.CurrentRegion
 	if region != "" {
 		player.CurrentRegion = region
@@ -223,7 +223,7 @@ func applyDestination(tx *sql.Tx, player *models.Player, region string, x, y int
 	player.X = x
 	player.Y = y
 	if player.CurrentRegion != oldRegion {
-		return CheckAndApplyRegionalWallDebuffBetween(player, oldRegion, player.CurrentRegion, tx)
+		return applyRegionalWallDebuff(ctx, player, largeZoneForRegion(oldRegion), largeZoneForRegion(player.CurrentRegion), tx)
 	}
 	return ""
 }
@@ -262,7 +262,7 @@ func ExecuteSpatialTransition(ctx context.Context, tx *sql.Tx, player *models.Pl
 		return nil, errMove
 	}
 
-	debuffMsg := applyDestination(tx, player, spec.targetRegion, spec.x, spec.y)
+	debuffMsg := applyDestination(ctx, tx, player, spec.targetRegion, spec.x, spec.y)
 	player.WorldZoneID = player.CurrentRegion
 
 	if _, err := tx.ExecContext(ctx, `

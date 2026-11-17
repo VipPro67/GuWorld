@@ -8,7 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
-	"go.uber.org/zap"
 )
 
 // AppError is a structured error carrying an HTTP status code, safe user message,
@@ -112,8 +111,8 @@ func isDebugMode() bool {
 // Respond handles error emission across the handler seam:
 // 1. Unwraps and classifies error (AppError vs arbitrary error).
 // 2. Notifies Gin via c.Error(err) so monitor and middlewares capture the real error.
-// 3. Emits structured contextual log to Zap (including trace_id, route, player_id).
-// 4. Returns standardized sanitized JSON response: {"error": message, "trace_id": trace_id}.
+// 3. Returns a standardized sanitized JSON response. The request logging
+// middleware owns the single error event and records this error with request context.
 func Respond(c *gin.Context, err error) {
 	if c == nil || err == nil {
 		return
@@ -145,25 +144,6 @@ func Respond(c *gin.Context, err error) {
 	traceID := logger.TraceIDFromContext(ctx)
 	if traceID == "" {
 		traceID = c.GetString("trace_id")
-	}
-
-	playerID, _ := c.Get("player_id")
-
-	// Structured logging with context
-	logFields := []zap.Field{
-		zap.String("trace_id", traceID),
-		zap.String("method", c.Request.Method),
-		zap.String("path", c.Request.URL.Path),
-		zap.String("route", c.FullPath()),
-		zap.Int("status", code),
-		zap.Any("player_id", playerID),
-		zap.Error(internalErr),
-	}
-
-	if code >= 500 {
-		logger.LFromContext(ctx).Error("http_handler_internal_error", logFields...)
-	} else if code >= 400 {
-		logger.LFromContext(ctx).Warn("http_handler_client_error", logFields...)
 	}
 
 	resp := gin.H{

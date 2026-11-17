@@ -1,6 +1,8 @@
 package monitor
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"net/http/httptest"
 	"strings"
@@ -143,6 +145,27 @@ func TestRecordTraceOnlyDoesNotAffectHTTPMetrics(t *testing.T) {
 	}
 }
 
+func TestRecordWorkerEventKeepsRunIDAndRootCause(t *testing.T) {
+	originalTracker := GlobalTracker
+	GlobalTracker = NewRequestTracker()
+	defer func() { GlobalTracker = originalTracker }()
+
+	root := errors.New("database unavailable")
+	err := fmt.Errorf("save worker result: %w", root)
+	RecordWorkerEvent("growth", "run-123", err, 25*time.Millisecond, "panic stack")
+	result := GlobalTracker.FilterTraces(FilterOptions{Method: "WORKER", Limit: 10})
+	if result.Total != 1 || len(result.Traces) != 1 {
+		t.Fatalf("worker event not recorded: %+v", result)
+	}
+	trace := result.Traces[0]
+	if trace.ID != "run-123" || trace.WorkerRunID != "run-123" {
+		t.Fatalf("worker run identity not preserved: %+v", trace)
+	}
+	if trace.RootCause != "database unavailable" || trace.Stacktrace != "panic stack" || len(trace.ErrorChain) != 2 {
+		t.Fatalf("worker cause details not preserved: %+v", trace)
+	}
+}
+
 func TestRequestTracker_FilterTraces(t *testing.T) {
 	tracker := NewRequestTracker()
 
@@ -203,6 +226,19 @@ func TestRequestTracker_FilterTraces(t *testing.T) {
 	resEmpty := tracker.FilterTraces(FilterOptions{})
 	if resEmpty.Total != 0 {
 		t.Fatalf("expected 0 traces after reset, got %d", resEmpty.Total)
+	}
+}
+
+func TestRequestTracker_SearchesErrorCause(t *testing.T) {
+	tracker := NewRequestTracker()
+	tracker.RecordCompleted(RequestTrace{
+		ID: "trace-root-cause", Timestamp: time.Now(), Method: "POST", Path: "/api/player/save",
+		Status: 500, Error: "save player failed", ErrorChain: []string{"save player failed", "deadlock detected"},
+		RootCause: "deadlock detected",
+	})
+	result := tracker.FilterTraces(FilterOptions{Search: "deadlock", Limit: 10})
+	if result.Total != 1 || result.Traces[0].ID != "trace-root-cause" {
+		t.Fatalf("root-cause search result = %+v", result)
 	}
 }
 
