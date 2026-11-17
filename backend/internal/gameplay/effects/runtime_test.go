@@ -8,14 +8,14 @@ import (
 )
 
 func TestCompileCreatesImmutableTypedStatus(t *testing.T) {
-	source := []Block{{ID: "hit", Trigger: TriggerOnAction, Target: Target{Selector: TargetSingle}, Operations: []Operation{{Op: OpStatus, StatusID: statusfx.StatusBurn, Value: 12, Turns: 3, Chance: .5}}}}
+	source := []Block{{ID: "hit", Trigger: TriggerOnAction, Target: Target{Selector: TargetSingle}, Operations: []Operation{{Op: OpStatus, StatusID: statusfx.StatusBurn, Value: 12, Turns: 3, Chance: .5, StackPolicy: "MAX"}}}}
 	compiled, err := (Compiler{}).Compile(source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	source[0].Operations[0].Value = 99
 	action := compiled.CompileCombatAction()
-	if got := action.Operations[0].Status; got == nil || got.ID != statusfx.StatusBurn || got.Value != 12 || got.Turns != 3 || got.Chance != .5 {
+	if got := action.Operations[0].Status; got == nil || got.ID != statusfx.StatusBurn || got.Value != 12 || got.Turns != 3 || got.Chance != .5 || got.EffectID != "hit:0:0" || got.StackPolicy != "MAX" {
 		t.Fatalf("unexpected compiled status: %+v", got)
 	}
 	action.Operations[0].Status.Value = 55
@@ -97,6 +97,63 @@ func TestCompileNormalizesConditionOperator(t *testing.T) {
 	}
 }
 
+func TestRaceConditionsMatchExactActorAndTargetKeys(t *testing.T) {
+	compiled, err := (Compiler{}).Compile([]Block{{
+		Trigger: TriggerOnAction, Target: Target{Selector: TargetSingle},
+		Conditions: []Condition{
+			{Field: "ACTOR_RACE", Operator: "EQ", Value: "human"},
+			{Field: "TARGET_RACE", Operator: "NE", Value: "rockman"},
+		},
+		Operations: []Operation{{Op: OpDamage, SubType: "FLAT", Value: 1}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := compiled.Evaluate(Context{
+		Actor:  Snapshot{Race: "human"},
+		Target: Snapshot{Race: "merman"},
+	}, Event{Trigger: TriggerOnAction})
+	if err != nil || len(result.Commands) != 1 {
+		t.Fatalf("Evaluate(matching race keys) = (%+v, %v), want one command", result, err)
+	}
+
+	result, err = compiled.Evaluate(Context{
+		Actor:  Snapshot{Race: "human"},
+		Target: Snapshot{Race: "rockman"},
+	}, Event{Trigger: TriggerOnAction})
+	if err != nil || len(result.Commands) != 0 {
+		t.Fatalf("Evaluate(non-matching target race) = (%+v, %v), want no commands", result, err)
+	}
+
+	result, err = compiled.Evaluate(Context{Actor: Snapshot{Race: "human"}}, Event{Trigger: TriggerOnAction})
+	if err != nil || len(result.Commands) != 0 {
+		t.Fatalf("Evaluate(missing target race) = (%+v, %v), want no commands and no error", result, err)
+	}
+}
+
+func TestCompilerRejectsInvalidRaceConditionValues(t *testing.T) {
+	tests := []struct {
+		name      string
+		condition Condition
+	}{
+		{name: "numeric race value", condition: Condition{Field: "TARGET_RACE", Operator: "EQ", Value: 1}},
+		{name: "ordered race operator", condition: Condition{Field: "TARGET_RACE", Operator: "GT", Value: "human"}},
+		{name: "string numeric value", condition: Condition{Field: "RANK", Operator: "EQ", Value: "six"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := (Compiler{}).Compile([]Block{{
+				Trigger: TriggerOnAction, Target: Target{Selector: TargetSingle},
+				Conditions: []Condition{tt.condition}, Operations: []Operation{{Op: OpDamage, SubType: "FLAT", Value: 1}},
+			}})
+			if err == nil {
+				t.Fatalf("Compile(%+v) succeeded, want invalid condition error", tt.condition)
+			}
+		})
+	}
+}
+
 func TestCapabilityQueryReturnsDefensiveCopy(t *testing.T) {
 	compiled, err := (Compiler{}).Compile([]Block{{
 		Trigger: TriggerCapability,
@@ -157,6 +214,26 @@ func TestLastNativeParamFloatReturnsLastMatchingValue(t *testing.T) {
 	}
 	if got, ok := compiled.LastNativeParamFloat(TriggerAlwaysOn, "growth_duration_hours", "value"); !ok || got != 200 {
 		t.Fatalf("LastNativeParamFloat() = %v, %v; want 200, true", got, ok)
+	}
+}
+
+func TestUnscopedPassiveProjectionsExcludeConditionalBlocks(t *testing.T) {
+	compiled, err := (Compiler{}).Compile([]Block{{
+		Trigger:    TriggerAlwaysOn,
+		Target:     Target{Selector: TargetSelf},
+		Conditions: []Condition{{Field: "ACTOR_RACE", Operator: "EQ", Value: "human"}},
+		Operations: []Operation{{
+			Op: OpStatMod, Stat: "ATTACK", SubType: "ADD_FLAT", Value: 200,
+		}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := compiled.StatValue(TriggerAlwaysOn, "ATTACK", "ADD_FLAT"); got != 0 {
+		t.Fatalf("unscoped stat projection = %v, want 0", got)
+	}
+	if got := compiled.Passives(); len(got) != 0 {
+		t.Fatalf("unscoped passive projection = %+v, want none", got)
 	}
 }
 

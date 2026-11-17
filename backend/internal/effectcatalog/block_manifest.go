@@ -3,7 +3,9 @@ package effectcatalog
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
+	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
@@ -55,9 +57,87 @@ var StatusCatalog = func() map[string]bool {
 	return m
 }()
 var UnitCatalog = values("FLAT", "PERCENT", "RATIO", "POINTS")
-var StackPolicyCatalog = values("REPLACE", "REFRESH", "STACK", "MAX", "IGNORE")
-var ConditionFields = values("HP_PERCENT", "ACTOR_HP_PERCENT", "MANA_PERCENT", "TURN", "TARGET_HP_PERCENT", "STACKS", "RANK", "MASTERY")
+var StackPolicyCatalog = values("REPLACE", "REFRESH", "STACK", "MAX", "MIN", "IGNORE")
+var ConditionValueTypes = map[string]string{
+	"HP_PERCENT":        "number",
+	"ACTOR_HP_PERCENT":  "number",
+	"MANA_PERCENT":      "number",
+	"TURN":              "number",
+	"TARGET_HP_PERCENT": "number",
+	"STACKS":            "number",
+	"RANK":              "number",
+	"MASTERY":           "number",
+	"ACTOR_RACE":        "string",
+	"TARGET_RACE":       "string",
+}
+var ConditionFields = func() map[string]bool {
+	fields := make(map[string]bool, len(ConditionValueTypes))
+	for field := range ConditionValueTypes {
+		fields[field] = true
+	}
+	return fields
+}()
 var ConditionOperators = values("EQ", "NE", "LT", "LTE", "GT", "GTE")
+
+// NormalizeConditionValue validates a condition value against its registered
+// field type and returns the runtime representation used by ConditionsMatch.
+func NormalizeConditionValue(field, operator string, value any) (any, error) {
+	field = strings.ToUpper(strings.TrimSpace(field))
+	operator = strings.ToUpper(strings.TrimSpace(operator))
+	if !ConditionFields[field] {
+		return nil, fmt.Errorf("unknown condition field %q", field)
+	}
+	if !ConditionOperators[operator] {
+		return nil, fmt.Errorf("unknown condition operator %q", operator)
+	}
+	if ConditionValueTypes[field] == "string" {
+		if operator != "EQ" && operator != "NE" {
+			return nil, fmt.Errorf("condition field %q only supports EQ and NE", field)
+		}
+		text, ok := value.(string)
+		if !ok || strings.TrimSpace(text) == "" {
+			return nil, fmt.Errorf("condition field %q requires a non-empty string value", field)
+		}
+		return strings.TrimSpace(text), nil
+	}
+
+	number, ok := conditionNumber(value)
+	if !ok {
+		return nil, fmt.Errorf("condition field %q requires a numeric value", field)
+	}
+	return number, nil
+}
+
+func conditionNumber(value any) (float64, bool) {
+	switch number := value.(type) {
+	case float64:
+		return number, !math.IsNaN(number) && !math.IsInf(number, 0)
+	case float32:
+		return float64(number), !math.IsNaN(float64(number)) && !math.IsInf(float64(number), 0)
+	case int:
+		return float64(number), true
+	case int64:
+		return float64(number), true
+	case int32:
+		return float64(number), true
+	case int16:
+		return float64(number), true
+	case int8:
+		return float64(number), true
+	case uint:
+		return float64(number), true
+	case uint64:
+		return float64(number), true
+	case uint32:
+		return float64(number), true
+	case uint16:
+		return float64(number), true
+	case uint8:
+		return float64(number), true
+	default:
+		return 0, false
+	}
+}
 
 type ParamSpec struct {
 	Type     string          `json:"type"`
@@ -152,7 +232,7 @@ func init() {
 		}
 	}
 	register("ON_CONSUME", "item_use", "SOVEREIGN_BODY_TRANSFORM", "SACRIFICE_APTITUDE", "RANK_PROGRESS", "ADD_SOUL_MAX", "ADD_LIFESPAN_YEARS", "RESTORE_SOUL_HP", "RESTORE_MENTAL", "INCREASE_TIME_SPEED", "REDUCE_STRESS", "ADD_THOUGHT_MAX", "DECREASE_TIME_SPEED", "MAN_BEAST_BURIAL", "POISON_VOW", "SPRING_EGG_HATCH", "STONE_APERTURE", "THIRD_WATCH", "RESTORE_HUNGER", "RESTORE_HP", "INCREASE_HUMAN_QI", "HEAL_APERTURE", "INCREASE_APERTURE_AREA", "INCREASE_APERTURE_TIME_RATE", "RANDOM_CONSTITUTION", "RANDOM_RACE", "OPEN_MINE_CHEST", "OPEN_IMMORTAL_MINE_CHEST", "ADD_DAO_MARKS", "IMMORTAL_ONLY", "MORTAL_ONLY", "MIN_RANK", "MAX_RANK", "RESTORE_MANA", "SOUL_BOOST", "REMOVE_NEGATIVE_STATUS", "LIFESPAN_BOOST", "CHANGE_RACE", "EXIT_SPATIAL_REALM")
-	register("ALWAYS_ON", "gamefx", "STAT_MODS", "REFINE_SUCCESS", "DAO_MARK_MODIFIER", "PATH_DAMAGE_MODIFIER", "PATH_RESISTANCE_MODIFIER", "LUCK", "MAX_MANA", "MANA_REGEN", "CULTIVATION_EFFICIENCY", "DAO_MARK_GAIN", "HEALING_RECEIVED", "HP_REGEN", "MENTAL_RESISTANCE", "SOUL_DEFENSE", "SOUL_REGEN", "TENACITY", "CC_RESIST", "APERTURE_STRESS", "NON_CONFLICTING_DAO_MARKS", "IMMORTAL", "DISABLE_HP_REGEN", "DISABLE_MANA_REGEN", "DISABLE_RESOURCE_REGEN", "DISABLE_SOUL_REGEN")
+	register("ALWAYS_ON", "gamefx", "STAT_MODS", "REFINE_SUCCESS", "DAO_MARK_MODIFIER", "PATH_DAMAGE_MODIFIER", "PATH_RESISTANCE_MODIFIER", "RACE_DAMAGE_MODIFIER", "RACE_RESISTANCE_MODIFIER", "LUCK", "MAX_MANA", "MANA_REGEN", "CULTIVATION_EFFICIENCY", "DAO_MARK_GAIN", "HEALING_RECEIVED", "HP_REGEN", "MENTAL_RESISTANCE", "SOUL_DEFENSE", "SOUL_REGEN", "TENACITY", "CC_RESIST", "APERTURE_STRESS", "NON_CONFLICTING_DAO_MARKS", "IMMORTAL", "DISABLE_HP_REGEN", "DISABLE_MANA_REGEN", "DISABLE_RESOURCE_REGEN", "DISABLE_SOUL_REGEN")
 	register("ON_TICK", "growth", "MANA_REGEN_TICK", "THOUGHT_REGEN_TICK", "SOUL_REGEN_TICK", "GENERATE_STONES_TICK", "GENERATE_IMMORTAL_STONES_TICK")
 	register("ALWAYS_ON", "growth", "GROWTH_DURATION_HOURS")
 	register("ON_USE", "world", "RECORD_MESSAGE")
@@ -289,19 +369,20 @@ func init() {
 }
 
 type Metadata struct {
-	SchemaVersion      int                  `json:"schema_version"`
-	Triggers           []string             `json:"triggers"`
-	Targets            []string             `json:"targets"`
-	Operations         []OperationMetadata  `json:"operations"`
-	Stats              []string             `json:"stats"`
-	Statuses           []string             `json:"statuses"`
-	Resources          []string             `json:"resources"`
-	Units              []string             `json:"units"`
-	StackPolicies      []string             `json:"stack_policies"`
-	ConditionFields    []string             `json:"condition_fields"`
-	ConditionOperators []string             `json:"condition_operators"`
-	NativeCodes        []string             `json:"native_codes"`
-	NativeHooks        []NativeHookMetadata `json:"native_hooks"`
+	SchemaVersion       int                  `json:"schema_version"`
+	Triggers            []string             `json:"triggers"`
+	Targets             []string             `json:"targets"`
+	Operations          []OperationMetadata  `json:"operations"`
+	Stats               []string             `json:"stats"`
+	Statuses            []string             `json:"statuses"`
+	Resources           []string             `json:"resources"`
+	Units               []string             `json:"units"`
+	StackPolicies       []string             `json:"stack_policies"`
+	ConditionFields     []string             `json:"condition_fields"`
+	ConditionValueTypes map[string]string    `json:"condition_value_types"`
+	ConditionOperators  []string             `json:"condition_operators"`
+	NativeCodes         []string             `json:"native_codes"`
+	NativeHooks         []NativeHookMetadata `json:"native_hooks"`
 }
 type OperationMetadata struct {
 	Name           string   `json:"name"`
@@ -337,5 +418,20 @@ func CatalogMetadata() Metadata {
 		h := NativeHooks[code]
 		hooks = append(hooks, NativeHookMetadata{code, h.Domain, sortedKeys(h.Triggers), h.Params})
 	}
-	return Metadata{BlockSchemaVersion, sortedKeys(TriggerCatalog), sortedKeys(TargetCatalog), ops, sortedKeys(StatCatalog), sortedKeys(StatusCatalog), sortedKeys(ResourceCatalog), sortedKeys(UnitCatalog), sortedKeys(StackPolicyCatalog), sortedKeys(ConditionFields), sortedKeys(ConditionOperators), sortedKeys(NativeHooks), hooks}
+	return Metadata{
+		SchemaVersion:       BlockSchemaVersion,
+		Triggers:            sortedKeys(TriggerCatalog),
+		Targets:             sortedKeys(TargetCatalog),
+		Operations:          ops,
+		Stats:               sortedKeys(StatCatalog),
+		Statuses:            sortedKeys(StatusCatalog),
+		Resources:           sortedKeys(ResourceCatalog),
+		Units:               sortedKeys(UnitCatalog),
+		StackPolicies:       sortedKeys(StackPolicyCatalog),
+		ConditionFields:     sortedKeys(ConditionFields),
+		ConditionValueTypes: ConditionValueTypes,
+		ConditionOperators:  sortedKeys(ConditionOperators),
+		NativeCodes:         sortedKeys(NativeHooks),
+		NativeHooks:         hooks,
+	}
 }

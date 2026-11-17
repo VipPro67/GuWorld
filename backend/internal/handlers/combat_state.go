@@ -409,10 +409,10 @@ func loadSingleFormationNPC(tx *sql.Tx, npcID, ownerID string, virtual bool) (*m
 	var c models.Combatant
 	var path string
 	if err := tx.QueryRow(`
-		SELECT id,name,rank,sub_rank,hp,max_hp,base_attack,base_defense,speed,path
+		SELECT id,name,race,rank,sub_rank,hp,max_hp,base_attack,base_defense,speed,path
 		FROM non_player_actors WHERE id = $1 AND owner_player_id = $2 AND actor_kind = 'VARIANT_NPC'
 		AND lifecycle_state = 'ACTIVE' AND execution_state = 'STORED' AND role = 'NONE'
-	`, npcID, ownerID).Scan(&c.ID, &c.Name, &c.Rank, &c.SubRank, &c.HP, &c.MaxHP, &c.BaseAttack, &c.BaseDefense, &c.Speed, &path); err != nil {
+	`, npcID, ownerID).Scan(&c.ID, &c.Name, &c.Race, &c.Rank, &c.SubRank, &c.HP, &c.MaxHP, &c.BaseAttack, &c.BaseDefense, &c.Speed, &path); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -435,7 +435,7 @@ func loadSingleFormationNPC(tx *sql.Tx, npcID, ownerID string, virtual bool) (*m
 }
 
 func loadFormationNPCCombatants(tx *sql.Tx, playerID string, virtual bool) ([]models.Combatant, error) {
-	rows, err := tx.Query(`SELECT id,name,rank,sub_rank,hp,max_hp,base_attack,base_defense,speed,formation_slot,path
+	rows, err := tx.Query(`SELECT id,name,race,rank,sub_rank,hp,max_hp,base_attack,base_defense,speed,formation_slot,path
 		FROM non_player_actors WHERE owner_player_id=$1 AND actor_kind='VARIANT_NPC'
 		AND lifecycle_state='ACTIVE' AND execution_state='STORED' AND role='NONE' AND formation_slot>0
 		ORDER BY formation_slot FOR UPDATE`, playerID)
@@ -454,7 +454,7 @@ func loadFormationNPCCombatants(tx *sql.Tx, playerID string, virtual bool) ([]mo
 	var buffered []npcRow
 	for rows.Next() {
 		var n npcRow
-		if err := rows.Scan(&n.c.ID, &n.c.Name, &n.c.Rank, &n.c.SubRank, &n.c.HP, &n.c.MaxHP, &n.c.BaseAttack, &n.c.BaseDefense, &n.c.Speed, &n.slot, &n.path); err != nil {
+		if err := rows.Scan(&n.c.ID, &n.c.Name, &n.c.Race, &n.c.Rank, &n.c.SubRank, &n.c.HP, &n.c.MaxHP, &n.c.BaseAttack, &n.c.BaseDefense, &n.c.Speed, &n.slot, &n.path); err != nil {
 			rows.Close()
 			return nil, err
 		}

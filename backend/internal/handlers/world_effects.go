@@ -15,7 +15,7 @@ import (
 )
 
 func worldUseOperationAllowed(op gameplayeffects.Operation, target gameplayeffects.Target) bool {
-	if op.StackPolicy != "" {
+	if op.StackPolicy != "" && op.Op != gameplayeffects.OpStatus {
 		return false
 	}
 	if target.Selector != gameplayeffects.TargetSelf && target.Selector != "" {
@@ -55,7 +55,7 @@ func worldUseOperationAllowed(op gameplayeffects.Operation, target gameplayeffec
 // before applying its first mutation so an unsupported later command cannot
 // leave an earlier heal/status partially committed.
 func validateWorldUseCommand(command gameplayeffects.Command, rank int) error {
-	if command.Target != gameplayeffects.TargetSelf || command.Domain != gameplayeffects.DomainCombat || command.StackPolicy != "" {
+	if command.Target != gameplayeffects.TargetSelf || command.Domain != gameplayeffects.DomainCombat || (command.StackPolicy != "" && command.Operation != gameplayeffects.OpStatus) {
 		return fmt.Errorf("ON_USE adapter only supports self-target combat commands")
 	}
 	if command.Operation == gameplayeffects.OpStatus {
@@ -107,6 +107,10 @@ func validateWorldUseCommand(command gameplayeffects.Command, rank int) error {
 // applyWorldUseCommands owns world mutations for the supported ON_USE
 // subset: self HP/mana recovery, flight, temporary world concealment, and haste.
 func applyWorldUseCommands(player *models.Player, commands []gameplayeffects.Command, rank int, source string) (float64, float64, int, int, int, error) {
+	return applyWorldUseCommandsWithProvenance(player, commands, rank, source, "")
+}
+
+func applyWorldUseCommandsWithProvenance(player *models.Player, commands []gameplayeffects.Command, rank int, source, sourceID string) (float64, float64, int, int, int, error) {
 	var healedHP, restoredMana float64
 	flightDurationMinutes := 0
 	stealthConcealment := 0
@@ -136,7 +140,7 @@ func applyWorldUseCommands(player *models.Player, commands []gameplayeffects.Com
 			}
 			switch strings.ToUpper(command.Status.ID) {
 			case statusfx.StatusFlying:
-				player.Statuses.Add(StatusFlying, source, time.Duration(durationMinutes)*time.Minute, command.Status.Value)
+				player.Statuses.ApplyEffect(StatusFlying, source, sourceID, command.Status.EffectID, "world", command.StackPolicy, time.Duration(durationMinutes)*time.Minute, command.Status.Value)
 				flightDurationMinutes = durationMinutes
 			case statusfx.StatusHaste:
 				value := command.Status.Value
@@ -146,7 +150,7 @@ func applyWorldUseCommands(player *models.Player, commands []gameplayeffects.Com
 				if value > 100 {
 					return 0, 0, 0, 0, 0, fmt.Errorf("ON_USE haste value exceeds world speed cap")
 				}
-				player.Statuses.Add(statusfx.StatusHaste, source, time.Duration(durationMinutes)*time.Minute, value)
+				player.Statuses.ApplyEffect(statusfx.StatusHaste, source, sourceID, command.Status.EffectID, "world", command.StackPolicy, time.Duration(durationMinutes)*time.Minute, value)
 				hasteDurationMinutes = durationMinutes
 			case statusfx.StatusStealth:
 				value := command.Status.Value
@@ -157,7 +161,7 @@ func applyWorldUseCommands(player *models.Player, commands []gameplayeffects.Com
 					return 0, 0, 0, 0, 0, fmt.Errorf("ON_USE stealth value exceeds world concealment cap")
 				}
 				stealthConcealment = int(math.Round(value))
-				player.Statuses.Add(statusfx.StatusStealth, source, time.Duration(durationMinutes)*time.Minute, float64(stealthConcealment))
+				player.Statuses.ApplyEffect(statusfx.StatusStealth, source, sourceID, command.Status.EffectID, "world", command.StackPolicy, time.Duration(durationMinutes)*time.Minute, float64(stealthConcealment))
 			default:
 				return 0, 0, 0, 0, 0, fmt.Errorf("ON_USE adapter does not support status %q", command.Status.ID)
 			}
@@ -239,13 +243,14 @@ func executeWorldUseEffect(
 	rank int,
 	energyCost float64,
 	sourceTitle string,
+	sourceID string,
 	guInstanceIDs []string,
 ) (*worldUseExecutionResult, error) {
 	if player.CurrentMana < energyCost {
 		return nil, fmt.Errorf("%s", insufficientEnergyMessage(player))
 	}
 	snapshot := gameplayeffects.Snapshot{
-		ID: player.ID.String(), HP: player.HP, MaxHP: gamefx.EffectiveMaxHP(player),
+		ID: player.ID.String(), Race: player.Race, HP: player.HP, MaxHP: gamefx.EffectiveMaxHP(player),
 		Mana: player.CurrentMana, MaxMana: gamefx.EffectiveMaxMana(player),
 	}
 	if evalCtx.Actor.ID == "" {
@@ -258,7 +263,7 @@ func executeWorldUseEffect(
 	if err != nil {
 		return nil, fmt.Errorf("không thể đánh giá effect ON_USE: %w", err)
 	}
-	healed, restoredMana, flight, stealth, haste, err := applyWorldUseCommands(player, result.Commands, rank, sourceTitle)
+	healed, restoredMana, flight, stealth, haste, err := applyWorldUseCommandsWithProvenance(player, result.Commands, rank, sourceTitle, sourceID)
 	if err != nil {
 		return nil, fmt.Errorf("executor ON_USE từ chối effect không hỗ trợ: %w", err)
 	}

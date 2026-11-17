@@ -73,6 +73,33 @@ func TestWorldUseAdapterAppliesWorldFlightStatus(t *testing.T) {
 	}
 }
 
+func TestWorldUseStatusStackPolicyAndProvenance(t *testing.T) {
+	player := models.Player{}
+	block := effects.Block{ID: "world-haste", Trigger: effects.TriggerOnUse, Target: effects.Target{Selector: effects.TargetSelf}, Operations: []effects.Operation{{Op: effects.OpStatus, StatusID: statusfx.StatusHaste, Turns: 10, Value: 20, Chance: 1, StackPolicy: "STACK"}}}
+	if !worldUseOperationAllowed(block.Operations[0], block.Target) {
+		t.Fatal("STATUS stack policy should be allowed")
+	}
+	compiled, err := (effects.Compiler{}).Compile([]effects.Block{block})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := compiled.Evaluate(effects.Context{}, effects.Event{Trigger: effects.TriggerOnUse})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{"gu-a", "gu-b"} {
+		if _, _, _, _, _, err := applyWorldUseCommandsWithProvenance(&player, result.Commands, 5, source, source); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(player.Statuses) != 2 || player.Statuses[0].SourceID == player.Statuses[1].SourceID || player.Statuses[0].Context != "world" || player.Statuses[0].EffectID == "" {
+		t.Fatalf("expected separate provenance-bearing statuses, got %+v", player.Statuses)
+	}
+	if worldUseOperationAllowed(effects.Operation{Op: effects.OpHeal, StackPolicy: "STACK", Value: 1}, effects.Target{Selector: effects.TargetSelf}) {
+		t.Fatal("HEAL stack policy should remain unsupported")
+	}
+}
+
 func TestWorldUseAdapterAppliesWorldStealthAsConcealment(t *testing.T) {
 	player := models.Player{}
 	player.Rank = 5
@@ -190,21 +217,23 @@ func TestWorldUseOperationPolicyRejectsZeroValueRecovery(t *testing.T) {
 	}
 }
 
-func TestWorldUsePolicyAndRuntimeRejectUnsupportedStatusStackPolicy(t *testing.T) {
+func TestWorldUsePolicyAndRuntimeAcceptStatusStackPolicy(t *testing.T) {
 	target := effects.Target{Selector: effects.TargetSelf}
 	op := effects.Operation{Op: effects.OpStatus, StatusID: statusfx.StatusHaste, Turns: 5, Value: 10, Chance: 1, StackPolicy: "STACK"}
-	if worldUseOperationAllowed(op, target) {
-		t.Fatal("unsupported STATUS stack policy passed builder policy")
+	if !worldUseOperationAllowed(op, target) {
+		t.Fatal("supported STATUS stack policy rejected by builder policy")
 	}
 	player := models.Player{}
+	player.HP = 50
+	player.BaseHP = 100
 	commands := []effects.Command{
 		{Domain: effects.DomainCombat, Operation: effects.OpHeal, SubType: "FLAT", Target: effects.TargetSelf, Value: 20},
 		{Domain: effects.DomainCombat, Operation: effects.OpStatus, Target: effects.TargetSelf, StackPolicy: "STACK", Status: &statusfx.StatusOp{ID: statusfx.StatusHaste, Turns: 5, Value: 10, Chance: 1}},
 	}
-	if _, _, _, _, _, err := applyWorldUseCommands(&player, commands, 5, "test"); err == nil {
-		t.Fatal("runtime adapter accepted an unsupported status stack policy")
+	if _, _, _, _, _, err := applyWorldUseCommands(&player, commands, 5, "test"); err != nil {
+		t.Fatalf("runtime adapter rejected a supported status stack policy: %v", err)
 	}
-	if player.HP != 0 || player.Statuses.Has(statusfx.StatusHaste) {
-		t.Fatalf("preflight partially applied unsupported status: HP=%.0f statuses=%+v", player.HP, player.Statuses)
+	if player.HP != 70 || !player.Statuses.Has(statusfx.StatusHaste) {
+		t.Fatalf("expected recovery and status to apply: HP=%.0f statuses=%+v", player.HP, player.Statuses)
 	}
 }

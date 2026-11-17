@@ -18,6 +18,10 @@ Chọn mục tiêu để inspect nếu ở gần; dùng remote divination khi c�
 
 Inspect cục bộ trong cùng vùng dùng khoảng cách Euclidean và phạm vi `15 + 2*playerRank + 2*Σ(INVESTIGATION của Gu ACTIVE, equipped)`. Cùng party hoặc cùng sect được bypass kiểm tra tầm cục bộ. Divination thường tiêu tối thiểu 100 Primeval Stones; resource bonus bằng 10% chi phí. Divination bằng immortal stones yêu cầu Rank 6+, tối thiểu 1 stone và bonus theo lượng gửi nhân 5. Divine Gu dùng hệ số immortal 6. Resonance Scan tốn 50 mana + 200 Primeval Stones; Sever Clues tốn 20 mana. Đây là cost hiện trong handler.
 
+Passive `STAT_MOD INVESTIGATION` và `STAT_MOD DISGUISE` được cộng vào input trinh sát/che giấu. Scorer Thiên Cơ giữ trọng số Gu hiện có; màn hồ sơ lân cận cộng cùng giá trị flat vào cách so sánh hiện có. Passive có conditions được scorer/profile chiếu theo race tác nhân, race mục tiêu và rank hiện có trong flow; field không có context sẽ khiến riêng block đó không áp dụng. Trong inspect/divination người chơi, chúng không thay đổi kiểm tra quyền, phạm vi inspect, chi phí hay persistence của handler.
+
+Map marker dùng các pillar STAT và realm/Đạo của cùng scorer để dò Môn Hộ; không thêm clue hay random roll. Điểm dò cần đạt điểm che giấu của chủ cộng `concealment_power` để marker trả tọa độ chính xác. Passive `INVESTIGATION` tăng input dò, còn passive `DISGUISE` tăng điểm che giấu. Handler portal giữ quyền quyết định vào cửa; dò thành công vượt policy PARTY/SECT nhưng vẫn phải cùng vùng, trong 3 ô và không ở realtime combat.
+
 - Phạm vi inspect ngoài party/sect là `15 + rank*2 + 2*sum(INVESTIGATION của Gu đang trang bị)` ô Euclidean.
 - Divination tiêu hao Stones; lựa chọn immortal stone yêu cầu Rank 6+ và áp dụng bonus mạnh hơn.
 - Không thể inspect mục tiêu đang sở hữu realtime session; server trả conflict.
@@ -37,7 +41,7 @@ Các hệ số và trạng thái scouting nằm trong handlers/config/schema; Gu
 
 ## Mã nguồn liên quan
 
-- Backend: `backend/internal/handlers/scouting.go` và các handler scouting liên quan.
+- Backend: `backend/internal/handlers/scouting.go`, `backend/internal/gamefx/scouting_engine.go` và các handler scouting liên quan.
 - Frontend: `frontend/src/components/DivinationModal.tsx`, `TrackingRadarDrawer.tsx`, `frontend/src/store/slices/scoutingSlice.ts`.
 
 ## API liên quan

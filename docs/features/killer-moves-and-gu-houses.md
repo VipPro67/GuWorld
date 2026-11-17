@@ -89,6 +89,7 @@ Sử dụng khi combat/profile cho phép; action combat đi qua combat session p
 2. Gọi `/gu-houses/preview`, xem warnings, profile và tài nguyên cần thiết.
 3. Tạo rồi equip. Active house giữ core Gu bằng owner-typed reservation.
 4. Dùng action/ON_USE effect có trong profile; server kiểm tra house đang equipped và core vẫn reserved cho house đó.
+   Status world được lưu có provenance; dùng lại cùng Gu/effect sẽ refresh thời hạn, còn Gu khác có thể giữ status riêng hoặc áp dụng policy `MAX`/`MIN`/`REPLACE`/`IGNORE`.
 5. Unequip hoặc repair qua route tương ứng. Không sửa/xóa core bằng inventory trong lúc còn active reservation.
 
 ## Luật, chi phí và giới hạn

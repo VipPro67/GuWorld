@@ -144,6 +144,8 @@ func adaptBlockCombatOperations(actor *models.Combatant, spec *models.GuDictiona
 				return nil, fmt.Errorf("effect %q has an unresolved combat status", op.BlockID)
 			}
 			status := *op.Status
+			status.Context = "combat"
+			status.EffectID = spec.ID + ":" + status.EffectID
 			if status.Chance > 0 {
 				status.Chance += 0.05 * float64(max(0, spec.Rank-1))
 				if status.Chance > 0.95 {

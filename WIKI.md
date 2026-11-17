@@ -62,7 +62,7 @@ Các công thức cấp cao hoặc bị giới hạn theo rank cần phiên luy�
 
 ### Sát Chiêu và Tiên Cổ Ốc
 
-Sát Chiêu được tạo từ các Cổ/thành phần mà catalog cho phép kết hợp. Preview cho biết cấu hình có hợp lệ trước khi lưu. Khi trang bị/kích hoạt, các Cổ thành phần có thể bị giữ chỗ; không thể tùy ý dùng hoặc chuyển chúng trong lúc sản phẩm còn chiếm dụng. Tiên Cổ Ốc cũng có preview, tạo, trang bị, sử dụng và sửa chữa theo profile riêng. Không phải mọi Cổ đều tương thích với mọi sản phẩm.
+Sát Chiêu được tạo từ các Cổ/thành phần mà catalog cho phép kết hợp. Preview cho biết cấu hình có hợp lệ trước khi lưu. Khi trang bị/kích hoạt, các Cổ thành phần có thể bị giữ chỗ; không thể tùy ý dùng hoặc chuyển chúng trong lúc sản phẩm còn chiếm dụng. Tiên Cổ Ốc cũng có preview, tạo, trang bị, sử dụng và sửa chữa theo profile riêng. Một số effect `ON_USE` áp status world có lưu nguồn và thời hạn; các policy xếp chồng được áp dụng theo effect đã chọn. Không phải mọi Cổ đều tương thích với mọi sản phẩm.
 
 Ví dụ effect mới từ Tiên Cổ lục chuyển: Xuân Tiễn có thể gây Làm Chậm trong 2 lượt, còn Liệu Quang Giáp có thể thanh tẩy hiệu ứng bất lợi của bản thân. Chúng chỉ xuất hiện trong Sát Chiêu nếu người chơi sở hữu Cổ tương ứng và bản preview chấp nhận effect đó.
 
@@ -72,7 +72,7 @@ Các đợt effect theo lưu phái đã mở thêm lựa chọn cho toàn bộ 4
 
 ### Bản đồ và di chuyển
 
-Khám Phá Dã Ngoại hiển thị bản đồ ô theo vùng, người chơi, quái, portal, điểm tài nguyên và vật phẩm rơi trên đất; chú giải phân biệt điểm dịch chuyển, Nguyên Tuyền, chiến lợi phẩm, cổng Bí Cảnh và cổng Tiên Khiếu. Thay đổi ô map, portal, drop, điểm tài nguyên và vòng đời quái/boss được chuyển tới người chơi trong đúng region/map/instance qua World Change Feed để màn hình đang mở cập nhật ngay; revision snapshot giúp client đồng bộ lại sau khi mất kết nối hoặc hụt event. Tiên Khiếu rộng 20×20, nhưng khách chỉ thấy khu vực quanh vị trí của mình theo tầm nhìn thường; dữ liệu người chơi, tác nhân quái, chiến lợi phẩm và mỏ cũng chỉ trả về trong phạm vi nhìn thấy. Khách có thể thu hoạch mỏ khi ở gần và tự rời Tiên Khiếu qua nút Rời Tiên Khiếu, không cần chủ phê duyệt. Chủ Hạ Khiếu được chuyển sang tab Bản đồ & Phòng thủ với toàn cảnh 20×20. Di chuyển trong Tiên Khiếu giới hạn ở tọa độ 0–19 trên mỗi trục. Chọn người chơi mở popup xem hồ sơ, tiến gần/khai chiến hoặc giao dịch tại chỗ; chọn chiến lợi phẩm để xem nội dung và nhặt khi đứng đúng tọa độ. Giao dịch tại chỗ cần cùng khu vực và cách tối đa 10 ô, không cần Cổ liên lạc. Giao dịch khởi tạo từ chat là giao dịch từ xa, cả hai bên cần có Thông Thiên Cổ và Thần Niệm Cổ. Di chuyển hoặc chuyển vùng sẽ được server kiểm tra theo vị trí, trạng thái và quyền movement hiện tại. Khi một realtime session đang nắm quyền điều khiển vị trí, một số lệnh di chuyển HTTP có thể bị từ chối.
+Khám Phá Dã Ngoại hiển thị bản đồ ô theo vùng, người chơi, quái, portal, điểm tài nguyên và vật phẩm rơi trên đất; chú giải phân biệt điểm dịch chuyển, Nguyên Tuyền, chiến lợi phẩm, cổng Bí Cảnh và cổng Tiên Khiếu. Thay đổi ô map, portal, drop, điểm tài nguyên và vòng đời quái/boss được chuyển tới người chơi trong đúng region/map/instance qua World Change Feed để màn hình đang mở cập nhật ngay; revision snapshot giúp client đồng bộ lại sau khi mất kết nối hoặc hụt event. Môn Hộ được hiện theo policy, quan hệ tổ đội/tông môn hoặc khi điểm trinh sát đạt ngưỡng che giấu; dò thành công sẽ lộ tọa độ chính xác và cho phép vào trong phạm vi 3 ô. Chủ Tiên Khiếu được báo khi có khách vào. Tiên Khiếu rộng 20×20, nhưng khách chỉ thấy khu vực quanh vị trí của mình theo tầm nhìn thường; dữ liệu người chơi, tác nhân quái, chiến lợi phẩm và mỏ cũng chỉ trả về trong phạm vi nhìn thấy. Khách có thể thu hoạch mỏ khi ở gần và tự rời Tiên Khiếu qua nút Rời Tiên Khiếu, không cần chủ phê duyệt. Chủ Hạ Khiếu được chuyển sang tab Bản đồ & Phòng thủ với toàn cảnh 20×20. Di chuyển trong Tiên Khiếu giới hạn ở tọa độ 0–19 trên mỗi trục. Chọn người chơi mở popup xem hồ sơ, tiến gần/khai chiến hoặc giao dịch tại chỗ; chọn chiến lợi phẩm để xem nội dung và nhặt khi đứng đúng tọa độ. Giao dịch tại chỗ cần cùng khu vực và cách tối đa 10 ô, không cần Cổ liên lạc. Giao dịch khởi tạo từ chat là giao dịch từ xa, cả hai bên cần có Thông Thiên Cổ và Thần Niệm Cổ. Di chuyển hoặc chuyển vùng sẽ được server kiểm tra theo vị trí, trạng thái và quyền movement hiện tại. Khi một realtime session đang nắm quyền điều khiển vị trí, một số lệnh di chuyển HTTP có thể bị từ chối.
 
 ### Nhặt vật phẩm rơi
 
@@ -88,7 +88,7 @@ Một số điểm ngoài thế giới hoặc trong Tiên Khiếu cho phép thu 
 
 ### Thiên Cơ Các
 
-Trinh sát gồm xem người chơi ở gần, suy diễn mục tiêu/Cổ, đánh dấu truy tung, cắt manh mối và quét cộng hưởng. Mỗi hành động có thể tiêu tốn tài nguyên, phụ thuộc chênh lệch cảnh giới và hiệu ứng che giấu. Kết quả là thông tin theo luật trinh sát, không đảm bảo tiết lộ toàn bộ trạng thái mục tiêu.
+Trinh sát gồm xem người chơi ở gần, suy diễn mục tiêu/Cổ, đánh dấu truy tung, cắt manh mối và quét cộng hưởng. Mỗi hành động có thể tiêu tốn tài nguyên, phụ thuộc chênh lệch cảnh giới và hiệu ứng che giấu. Passive `INVESTIGATION`/`DISGUISE` effect đóng góp vào input điểm trinh sát và che giấu theo scorer hiện có. Kết quả là thông tin theo luật trinh sát, không đảm bảo tiết lộ toàn bộ trạng thái mục tiêu.
 
 ## Chiến đấu, tổ đội và sủng vật
 
@@ -96,7 +96,7 @@ Trinh sát gồm xem người chơi ở gần, suy diễn mục tiêu/Cổ, đá
 
 Khi gặp encounter, có thể chạy tự động hoặc mở session điều khiển. Nếu hiệu ứng lúc bắt đầu trận kết thúc encounter ngay, kết quả được settle và báo cáo hiện tức thì; session đã có log kết thúc nhưng còn trạng thái active cũng được tự hoàn tất khi tải lại. Ở bước chuẩn bị, PvP ảo có thể hủy ngay; PvP thật cần cả hai người đồng ý và khi hủy sẽ gỡ trạng thái chờ của cả hai; hai bên khóa đội hình thì session tự vào, còn sau 45 giây server tự mô phỏng nếu chưa mở session. Encounter PvE do quái chủ động tấn công không thể rút lui trước khi bắt đầu; sau đó có thể chọn đánh hoặc bỏ chạy trong lượt. PvP giữ kế hoạch của mỗi bên đến lúc cả hai khóa hoặc timeout; revision cũ cần tải lại snapshot trước khi gửi lại.
 
-Combat được mô phỏng ở server theo lượt. Kết quả có thể gồm HP/tài nguyên thay đổi, trạng thái, loot, capture, flee hoặc lịch sử/replay. Chỉnh sửa client hay gửi lại command không thay đổi kết quả đã settlement.
+Combat được mô phỏng ở server theo lượt. Effect condition trong combat có thể kiểm tra race key chính xác của tác nhân hoặc từng mục tiêu; nếu actor không cung cấp race, condition không khớp. Race damage so khớp race mục tiêu; race resistance so khớp race người tấn công, thiếu race thì không áp dụng. Status từ Block v2 giữ provenance và snapshot theo Gu instance/effect/target trong encounter; cùng nguồn áp lại sẽ refresh, nguồn khác giữ riêng trừ khi policy chỉ định `STACK`, `MAX`, `MIN`, `REPLACE` hoặc `IGNORE`. Các bonus/kháng lưu phái dùng path chính của action; path phụ không được xét nếu action chưa khai báo logic đa path. Kết quả có thể gồm HP/tài nguyên thay đổi, trạng thái, loot, capture, flee hoặc lịch sử/replay. Chỉnh sửa client hay gửi lại command không thay đổi kết quả đã settlement.
 
 ### Phòng Tập và chiến thuật tự động
 
@@ -119,7 +119,7 @@ Tiên Khiếu mở ở Rank 6. Từ màn hình này, người chơi quản lý:
 - **Tốc độ thời gian:** chọn mức cho phép; tốc độ ảnh hưởng một số quá trình và mức tiêu hao/regen.
 - **Hàng đợi luyện chế:** tạo, theo dõi và hủy job khi còn được phép.
 - **Đàn Cổ:** đưa Cổ phù hợp vào swarm hoặc materialize lại khi thao tác được phép.
-- **Cổng và khách:** neo/mở portal, vào/ra, quản lý quyền khách hoặc liên minh theo trạng thái aperture.
+- **Cổng và khách:** neo/mở portal, vào/ra, quản lý quyền khách hoặc liên minh theo trạng thái aperture. Chủ nhận thông báo khi có khách vào; trục xuất trong realtime combat bị từ chối và không tự chạy lại sau trận. Trục xuất hủy nghi thức di dời mỏ đang do khách thực hiện, mỏ ở lại Tiên Khiếu.
 - **Đạo ngân và tai kiếp:** theo dõi thuộc tính aperture, xử lý dấu ấn/cleanse và các phiên tribulation có combat.
 
 Các thao tác có thể tiêu tốn tài nguyên, yêu cầu vị trí/quyền hoặc bị khóa bởi trạng thái aperture. Worker xử lý một số chu kỳ sản xuất và mô phỏng; dữ liệu UI có thể cập nhật theo tick.

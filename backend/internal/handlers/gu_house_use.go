@@ -126,7 +126,7 @@ func UseGuHouse(c *gin.Context) {
 		return
 	}
 	cost := gamefx.EnergyCost(&player, &spec)
-	outcome, execErr := executeWorldUseEffect(tx, &player, compiled, gameplayeffects.Context{Rank: gu.Rank}, gu.Rank, cost, houseName, []string{req.CoreGuInstanceID})
+	outcome, execErr := executeWorldUseEffect(tx, &player, compiled, gameplayeffects.Context{Rank: gu.Rank}, gu.Rank, cost, houseName, req.CoreGuInstanceID, []string{req.CoreGuInstanceID})
 	if execErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": execErr.Error()})
 		return

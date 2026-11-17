@@ -10,9 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/playerstate"
+	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
 // GetAperturePortal returns the active world portal for the host's aperture.
@@ -85,16 +88,14 @@ func ManageAperturePortal(c *gin.Context) {
 	}
 
 	var regionID string
-	var px, py float64
-	var apID uuid.UUID
 	_ = db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT p.region_id, p.x, p.y, p.aperture_id
+		SELECT p.region_id
 		FROM aperture_portals p
 		JOIN immortal_apertures a ON a.id = p.aperture_id
 		WHERE a.player_id = $1 AND p.is_active = true
-	`, playerID).Scan(&regionID, &px, &py, &apID)
+	`, playerID).Scan(&regionID)
 	if regionID != "" {
-		publishWorldCellChange("portal_update", WorldCellEvent{RegionID: regionID, X: int(px), Y: int(py), CellType: "AperturePortal", ContentID: apID.String()})
+		publishAperturePortalMarkerChange("portal_update", regionID)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật Môn Hộ thành công", "access_policy": req.AccessPolicy})
@@ -175,18 +176,22 @@ func EnterAperturePortal(c *gin.Context) {
 
 	// 2. Fetch Portal & Host Aperture
 	var portal models.AperturePortal
-	var hostRank int
+	var portalOwner models.Player
 	var hostPartyID sql.NullString
 	var hostSectID sql.NullString
 	err = tx.QueryRowContext(c.Request.Context(), `
-		SELECT p.id, p.aperture_id, p.owner_id, p.region_id, p.x, p.y, p.name, p.access_policy, p.is_active,
-		       h.rank, h.party_id, sm.sect_id
+		SELECT p.id, p.aperture_id, p.owner_id, p.region_id, p.x, p.y, p.name, p.access_policy, p.concealment_power, p.is_active,
+		       h.rank, h.party_id, sm.sect_id, h.path_masteries, COALESCE(h.race, ''), COALESCE(h.constitution, ''),
+		       COALESCE(h.statuses, '{}'::jsonb), h.hp, h.base_hp, h.current_mana, h.max_mana,
+		       COALESCE(owner_aperture.dao_marks, '{}'::jsonb), `+db.GuInventoryAggregateEquipped("h.id")+`
 		FROM aperture_portals p
 		JOIN players h ON h.id = p.owner_id
 		LEFT JOIN sect_members sm ON sm.player_id = h.id
+		LEFT JOIN immortal_apertures owner_aperture ON owner_aperture.player_id = h.id
 		WHERE p.id = $1 AND p.is_active = true
 	`, portalUUID).Scan(&portal.ID, &portal.ApertureID, &portal.OwnerID, &portal.RegionID, &portal.X, &portal.Y,
-		&portal.Name, &portal.AccessPolicy, &portal.IsActive, &hostRank, &hostPartyID, &hostSectID)
+		&portal.Name, &portal.AccessPolicy, &portal.ConcealmentPower, &portal.IsActive, &portalOwner.Rank, &hostPartyID, &hostSectID,
+		&portalOwner.PathMasteries, &portalOwner.Race, &portalOwner.Constitution, &portalOwner.Statuses, &portalOwner.HP, &portalOwner.BaseHP, &portalOwner.CurrentMana, &portalOwner.MaxMana, &portalOwner.DaoMarks, &portalOwner.GuInventory)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Môn Hộ không tồn tại hoặc đã khép lại"})
 		return
@@ -211,27 +216,42 @@ func EnterAperturePortal(c *gin.Context) {
 		return
 	}
 
-	// 4. Access Policy Enforcement
-	switch portal.AccessPolicy {
-	case "PARTY":
-		if !hostPartyID.Valid || hostPartyID.String == "" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Chủ Khiếu không trong tổ đội nào"})
-			return
-		}
-		var guestPartyID sql.NullString
-		_ = tx.QueryRowContext(c.Request.Context(), `SELECT party_id FROM players WHERE id = $1`, playerID).Scan(&guestPartyID)
-		if !guestPartyID.Valid || guestPartyID.String != hostPartyID.String {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Môn Hộ chỉ mở cho thành viên Tổ Đội của Chủ Khiếu"})
-			return
-		}
-	case "SECT":
-		if !hostSectID.Valid || hostSectID.String == "" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Chủ Khiếu không có Tông Môn"})
-			return
-		}
-		if !guestSectID.Valid || guestSectID.String != hostSectID.String {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Môn Hộ chỉ mở cho đồng môn cùng Tông Môn"})
-			return
+	// 4. A successful deterministic scouting check reveals the portal and
+	// permits entry regardless of its normal party/sect visibility policy.
+	scoutingViewer, err := playerstate.Load(tx, guest.ID, playerstate.Options{Gu: playerstate.GuEquipped})
+	if err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra năng lực trinh sát Môn Hộ.", err))
+		return
+	}
+	discoveryPower := gamefx.AperturePortalDiscoveryPower(&scoutingViewer, models.FilterEquippedActive(scoutingViewer.GuInventory), scoutingViewer.DaoMarks, &portalOwner)
+	portalDefense := gamefx.AperturePortalConcealmentPower(&portalOwner, models.FilterEquippedActive(portalOwner.GuInventory), portalOwner.DaoMarks, &scoutingViewer, portal.RegionID, guest.CurrentRegion, portal.ConcealmentPower)
+	canDiscoverPortal := gamefx.CanDiscoverAperturePortal(discoveryPower, portalDefense)
+	if !canDiscoverPortal && portal.AccessPolicy == "HIDDEN" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu chưa dò thấy Môn Hộ đã được che giấu."})
+		return
+	}
+	if !canDiscoverPortal {
+		switch portal.AccessPolicy {
+		case "PARTY":
+			if !hostPartyID.Valid || hostPartyID.String == "" {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Chủ Khiếu không trong tổ đội nào"})
+				return
+			}
+			var guestPartyID sql.NullString
+			_ = tx.QueryRowContext(c.Request.Context(), `SELECT party_id FROM players WHERE id = $1`, playerID).Scan(&guestPartyID)
+			if !guestPartyID.Valid || guestPartyID.String != hostPartyID.String {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Môn Hộ chỉ mở cho thành viên Tổ Đội của Chủ Khiếu"})
+				return
+			}
+		case "SECT":
+			if !hostSectID.Valid || hostSectID.String == "" {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Chủ Khiếu không có Tông Môn"})
+				return
+			}
+			if !guestSectID.Valid || guestSectID.String != hostSectID.String {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Môn Hộ chỉ mở cho đồng môn cùng Tông Môn"})
+				return
+			}
 		}
 	}
 
@@ -261,6 +281,16 @@ func EnterAperturePortal(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Lỗi chuyển dịch vào Tiên Khiếu: "+err.Error(), err))
 		return
 	}
+	ownerID, parseErr := uuid.Parse(portal.OwnerID)
+	if parseErr != nil {
+		httperr.Respond(c, httperr.Internal("Mã chủ Tiên Khiếu không hợp lệ", parseErr))
+		return
+	}
+	ownerNotification, err := notify.SendDeferred(tx, ownerID, "aperture_guest_entered", "Có người vào Tiên Khiếu", guest.Username+" đã bước vào Tiên Khiếu của bạn qua Môn Hộ.")
+	if err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể ghi thông báo cho chủ Tiên Khiếu", err))
+		return
+	}
 
 	if err := tx.Commit(); err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi hoàn tất bước vào Môn Hộ", err))
@@ -270,6 +300,9 @@ func EnterAperturePortal(c *gin.Context) {
 	if handedOff {
 		middleware.FinishRealtimeHandoff(playerID)
 		realtimeFinished = true
+	}
+	if ownerNotification.ID != "" {
+		notify.Publish(ownerNotification)
 	}
 	portalApUUID, _ := uuid.Parse(portal.ApertureID)
 	syncSpatialPlayer(playerID, "aperture_interior", 10, 10, portalApUUID)
@@ -581,6 +614,21 @@ func EvictGuest(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Khách không có mặt trong Tiên Khiếu"})
 		return
 	}
+	if err := cancelAperturePointTransplant(tx, guestUUID); err != nil {
+		httperr.Respond(c, httperr.Internal("Lỗi hủy nghi thức di dời mỏ của khách", err))
+		return
+	}
+	// The earlier check avoids unnecessary handoff work, while this locked
+	// recheck closes the race with a combat session starting before eviction.
+	var lockedCombat sql.NullString
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT active_combat::text FROM players WHERE id=$1 FOR UPDATE`, guestUUID).Scan(&lockedCombat); err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể kiểm tra combat của khách", err))
+		return
+	}
+	if lockedCombat.Valid && lockedCombat.String != "null" {
+		c.JSON(http.StatusConflict, gin.H{"error": "Không thể trục xuất khách khi họ đang trong trận chiến thời gian thực."})
+		return
+	}
 
 	// Teleport guest outside
 	_, err = tx.ExecContext(c.Request.Context(), `
@@ -607,6 +655,52 @@ func EvictGuest(c *gin.Context) {
 	syncSpatialPlayer(guestUUID, returnRegion, int(returnX), int(returnY), uuid.Nil)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã trục xuất khách ra ngoài Môn Hộ thế giới thành công."})
+}
+
+// cancelAperturePointTransplant keeps the shared point→ritual lock order used
+// by transplant and point-list operations. The ritual may disappear or change
+// point between the unlocked lookup and the delete, so retry until the current
+// ritual is removed or no ritual remains.
+func cancelAperturePointTransplant(tx *sql.Tx, playerID uuid.UUID) error {
+	for {
+		var pointID string
+		err := tx.QueryRow(`SELECT point_id::text FROM aperture_point_transplants WHERE player_id = $1`, playerID).Scan(&pointID)
+		if err == sql.ErrNoRows {
+			// Serialize with a transplant that has validated the guest's old
+			// location but has not inserted its ritual yet. Its post-lock location
+			// recheck will observe the committed eviction and roll back.
+			var lockedPlayerID uuid.UUID
+			return tx.QueryRow(`SELECT id FROM players WHERE id = $1 FOR UPDATE`, playerID).Scan(&lockedPlayerID)
+		}
+		if err != nil {
+			return err
+		}
+
+		var lockedPointID string
+		err = tx.QueryRow(`SELECT id::text FROM aperture_resource_points WHERE id = $1 FOR UPDATE`, pointID).Scan(&lockedPointID)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		// TransplantWorldPoint burns mana (locking the player row) before it
+		// upserts the ritual. Take that same player lock before deleting the
+		// ritual, so an in-flight transplant can finish before eviction acts.
+		var lockedPlayerID uuid.UUID
+		if err := tx.QueryRow(`SELECT id FROM players WHERE id = $1 FOR UPDATE`, playerID).Scan(&lockedPlayerID); err != nil {
+			return err
+		}
+
+		result, err := tx.Exec(`DELETE FROM aperture_point_transplants WHERE player_id = $1 AND point_id = $2`, playerID, pointID)
+		if err != nil {
+			return err
+		}
+		deleted, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if deleted > 0 {
+			return nil
+		}
+	}
 }
 
 // SignAllianceContract creates or updates an Information-path agreement between host and guest.

@@ -182,6 +182,8 @@ export const EFFECT_CONDITIONS: GlossaryTarget[] = [
   { code: "STACKS", label: "Số tầng", note: "Số tầng hiệu ứng/trạng thái đang có." },
   { code: "RANK", label: "Cảnh giới", note: "So sánh cảnh giới người dùng hoặc Cổ." },
   { code: "MASTERY", label: "Chân Ý", note: "Mức lưu phái/chân ý liên quan." },
+  { code: "ACTOR_RACE", label: "Chủng tộc tác nhân", note: "So khớp chính xác race key của tác nhân; chỉ dùng EQ/NE." },
+  { code: "TARGET_RACE", label: "Chủng tộc mục tiêu", note: "So khớp chính xác race key của từng mục tiêu; chỉ dùng EQ/NE." },
 ];
 
 export const EFFECT_CONDITION_OPERATORS: GlossaryTarget[] = [
@@ -221,9 +223,9 @@ export const EFFECT_STATS: GlossaryTarget[] = [
   { code: "ALL", label: "Toàn Chỉ Số", note: "Áp dụng đồng thời cho Công/Thủ/Máu/Tốc." },
   { code: "MANA", label: "Chân Nguyên", note: "Tài nguyên thi triển kỹ năng." },
   { code: "MOVEMENT", label: "Di Chuyển", note: "Số ô tối đa mỗi lần di chuyển trên bản đồ." },
-  { code: "INVESTIGATION", label: "Điều Tra", note: "Khả năng do thám/điều tra." },
+  { code: "INVESTIGATION", label: "Điều Tra", note: "Khả năng do thám/điều tra; passive race/constitution/status bonus cộng vào input scorer trước trọng số hiện có." },
   { code: "HEARING", label: "Thính Giác", note: "Phát hiện mục tiêu/ẩn thân." },
-  { code: "DISGUISE", label: "Ngụy Trang", note: "Mức che giấu khí tức, chống trinh sát." },
+  { code: "DISGUISE", label: "Ngụy Trang", note: "Mức che giấu khí tức, chống trinh sát; passive race/constitution/status bonus cộng vào input scorer trước trọng số hiện có." },
   { code: "TIME_SPEED", label: "Tốc Độ Thời Gian", note: "Hệ số trôi thời gian trong Không Khiếu." },
   { code: "REFINE_SUCCESS", label: "Tỷ Lệ Luyện Cổ", note: "Tăng/giảm cơ hội hợp luyện." },
   { code: "REFINE_MANA_TIER", label: "Tinh Luyện Chân Nguyên", note: "Cấp tinh luyện, cộng sát thương kỹ năng." },
@@ -486,6 +488,8 @@ export const NATIVE_HOOKS: NativeHookEntry[] = [
   { code: "DAO_MARK_MODIFIER", label: "Gia Tăng Đạo Ngân", trigger: "ALWAYS_ON", status: "active", group: "stat", behavior: "Hệ số Đạo Ngân theo lưu phái; được tổng hợp từ race/constitution/status rồi dùng ở các flow Dao Marks có hỗ trợ." },
   { code: "PATH_DAMAGE_MODIFIER", label: "Tăng Sát Thương Lưu Phái", trigger: "ALWAYS_ON", status: "active", group: "stat", behavior: "Cộng bonus sát thương theo path trong combat; nguồn có thể là race, constitution hoặc status." },
   { code: "PATH_RESISTANCE_MODIFIER", label: "Kháng Sát Thương Lưu Phái", trigger: "ALWAYS_ON", status: "active", group: "stat", behavior: "Giảm sát thương nhận theo path ở combat; nguồn có thể là race, constitution hoặc status. Gu dùng STAT_MOD PATH_RESISTANCE." },
+  { code: "RACE_DAMAGE_MODIFIER", label: "Tăng Sát Thương Theo Chủng Tộc", trigger: "ALWAYS_ON", status: "active", group: "stat", behavior: "Cộng modifier theo race key chính xác của mục tiêu; được nhân riêng với Path và DaoCombat trong simulator." },
+  { code: "RACE_RESISTANCE_MODIFIER", label: "Kháng Theo Chủng Tộc", trigger: "ALWAYS_ON", status: "active", group: "stat", behavior: "Giảm sát thương theo race key chính xác của kẻ tấn công; là bucket riêng với Path resistance và DaoCombat." },
   { code: "REFINE_SUCCESS", label: "Tỷ Lệ Luyện Cổ", trigger: "ALWAYS_ON", status: "active", group: "stat", behavior: "Điều chỉnh tỉ lệ quick refine/conceive tại các flow đọc refine bonus; kết quả còn phụ thuộc recipe và rank." },
   { code: "MANA_REGEN", label: "Hồi Chân Nguyên", trigger: "ALWAYS_ON", status: "active", group: "stat", behavior: "Cộng vào hồi Chân Nguyên ngoài combat qua player service." },
   { code: "MAX_MANA", label: "Chân Nguyên Tối Đa", trigger: "ALWAYS_ON", status: "active", group: "stat", behavior: "Cộng vào effective max mana; các flow dùng effective max sẽ tính theo giá trị sau khi áp dụng bonus." },

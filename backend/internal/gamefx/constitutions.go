@@ -155,12 +155,15 @@ func AllConstitutions() []ConstitutionDef {
 
 // addEffects merges src into dst, adding every modifier.
 func addEffects(dst *Effects, src Effects) {
+	dst.ConditionalBlocks = append(dst.ConditionalBlocks, src.ConditionalBlocks...)
 	if dst.StatMods == nil {
 		dst.StatMods = map[string]float64{}
 	}
 	for k, v := range src.StatMods {
 		dst.StatMods[k] += v
 	}
+	dst.ScoutingInvestigationBonus += src.ScoutingInvestigationBonus
+	dst.ScoutingDisguiseBonus += src.ScoutingDisguiseBonus
 	dst.RefineBonus += src.RefineBonus
 	if dst.DaoNganBonus == nil {
 		dst.DaoNganBonus = map[string]float64{}
@@ -179,6 +182,18 @@ func addEffects(dst *Effects, src Effects) {
 	}
 	for k, v := range src.PathResistanceBonus {
 		dst.PathResistanceBonus[k] += v
+	}
+	if dst.RaceDamageBonus == nil {
+		dst.RaceDamageBonus = map[string]float64{}
+	}
+	for k, v := range src.RaceDamageBonus {
+		dst.RaceDamageBonus[k] += v
+	}
+	if dst.RaceResistanceBonus == nil {
+		dst.RaceResistanceBonus = map[string]float64{}
+	}
+	for k, v := range src.RaceResistanceBonus {
+		dst.RaceResistanceBonus[k] += v
 	}
 	dst.LuckBonus += src.LuckBonus
 	dst.MaxManaBonus += src.MaxManaBonus

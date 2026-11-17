@@ -523,9 +523,10 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                     const buffMult = b.buff_mult || 1;
                     const critMult = b.crit_mult || 1;
                     const pathBonus = b.path_bonus || 0;
+                    const raceDamageBonus = b.race_damage_bonus || 0;
 
                     // 1. Raw Output Damage
-                    const rawOutputDmg = baseDmg * skillMult * daoMult * buffMult * critMult * (1 + pathBonus) * targetDaoResonance;
+                    const rawOutputDmg = baseDmg * skillMult * daoMult * buffMult * critMult * (1 + pathBonus) * (1 + raceDamageBonus) * targetDaoResonance;
 
                     // 2. Defense Reduction (Trừ giáp)
                     const targetDef = b.target_def || 0;
@@ -533,9 +534,10 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
 
                     // 3. Path Resistance & Damage Reduction (Kháng hệ & Giảm ST)
                     const pathResist = b.path_resist || 0;
+                    const raceResistance = b.race_resistance || 0;
                     const naturalResist = b.natural_resist || 0;
                     const dmgReduction = b.damage_reduction || 0;
-                    const finalDmg = b.final_damage || Math.max(1, afterDefDmg * (1 - naturalResist) * (1 - pathResist) * (1 - dmgReduction));
+                    const finalDmg = b.final_damage || Math.max(1, afterDefDmg * (1 - naturalResist) * (1 - pathResist) * (1 - raceResistance) * (1 - dmgReduction));
 
                     // 4. Shield Absorbed & HP Lost
                     const shieldAbsorbed = b.shield_absorbed || 0;
@@ -875,12 +877,9 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
 
                           {/* 3. Shield or Final */}
                           <div className="flex items-center gap-1">
-                            {pathResist > 0 || dmgReduction > 0 ? (
+                            {naturalResist > 0 || pathResist > 0 || raceResistance !== 0 || dmgReduction > 0 ? (
                               <>
-                                <span className="text-zinc-500">Kháng:</span>
-                                <span className="text-emerald-400 font-bold">
-                                  -{((pathResist + dmgReduction) * 100).toFixed(0)}%
-                                </span>
+                                <span className="text-zinc-500">Có hệ số kháng/giảm ST</span>
                                 <span className="text-zinc-500">➔</span>
                               </>
                             ) : null}
@@ -957,6 +956,12 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                                   <span className="text-emerald-300 font-bold">+{(pathBonus * 100).toFixed(0)}%</span>
                                 </div>
                               )}
+                              {raceDamageBonus !== 0 && (
+                                <div className="flex justify-between items-center">
+                                  <span>Tăng ST vs race {b.race_damage_target}:</span>
+                                  <span className="text-emerald-300 font-bold">{raceDamageBonus > 0 ? "+" : ""}{(raceDamageBonus * 100).toFixed(0)}%</span>
+                                </div>
+                              )}
                               {b.attacker_attack && (b.attacker_attack.mods?.length ?? 0) > 0 && (
                                 <StatProvenanceRows prov={b.attacker_attack} label="Tấn Công" />
                               )}
@@ -987,10 +992,24 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                                 <span>ST Sau Trừ Giáp:</span>
                                 <span className="text-cyan-200 font-bold"><Num value={afterDefDmg} /></span>
                               </div>
-                              <div className="flex justify-between items-center">
-                                <span>Kháng Thuộc Tính:</span>
-                                <span className="text-emerald-300 font-bold">{(pathResist * 100).toFixed(0)}% Kháng</span>
-                              </div>
+                              {naturalResist > 0 && (
+                                <div className="flex justify-between items-center">
+                                  <span>Kháng Đạo Ngân:</span>
+                                  <span className="text-emerald-300 font-bold">{(naturalResist * 100).toFixed(0)}%</span>
+                                </div>
+                              )}
+                              {pathResist > 0 && (
+                                <div className="flex justify-between items-center">
+                                  <span>Kháng Lưu Phái:</span>
+                                  <span className="text-emerald-300 font-bold">{(pathResist * 100).toFixed(0)}%</span>
+                                </div>
+                              )}
+                              {raceResistance !== 0 && (
+                                <div className="flex justify-between items-center">
+                                  <span>Kháng vs race {b.race_resist_attacker}:</span>
+                                  <span className="text-emerald-300 font-bold">{raceResistance < 0 ? "−" : ""}{(Math.abs(raceResistance) * 100).toFixed(0)}%</span>
+                                </div>
+                              )}
                               {dmgReduction > 0 && (
                                 <div className="flex justify-between items-center">
                                   <span>Giảm Sát Thương:</span>

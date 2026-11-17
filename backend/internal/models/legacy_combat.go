@@ -64,6 +64,8 @@ type CombatState struct {
 	EnemyStatusEffects     []StatusEffect       `json:"enemy_status_effects,omitempty"`
 	PlayerStatusEffects    []StatusEffect       `json:"player_status_effects,omitempty"`
 	EnemyPathResistance    map[string]float64   `json:"enemy_path_resistance,omitempty"`
+	EnemyRaceDamageBonus   map[string]float64   `json:"enemy_race_damage_bonus,omitempty"`
+	EnemyRaceResistance    map[string]float64   `json:"enemy_race_resistance,omitempty"`
 	EnemyMentalResistance  float64              `json:"enemy_mental_resistance,omitempty"`
 	EnemyTenacity          float64              `json:"enemy_tenacity,omitempty"`
 	EnemyCCResist          float64              `json:"enemy_cc_resist,omitempty"`

@@ -70,6 +70,9 @@ func operationConditionsMatch(actor, target *CombatantAuto, conditions []gamepla
 		"TURN": float64(turn),
 	}
 	if actor != nil {
+		if race := strings.TrimSpace(actor.Race); race != "" {
+			values["ACTOR_RACE"] = race
+		}
 		if actor.MaxHP > 0 {
 			values["HP_PERCENT"] = actor.HP / actor.MaxHP
 			values["ACTOR_HP_PERCENT"] = actor.HP / actor.MaxHP
@@ -81,8 +84,13 @@ func operationConditionsMatch(actor, target *CombatantAuto, conditions []gamepla
 			values["MASTERY"] = float64(gamefx.PathMasteryLevel(actor.PathMasteries[gamefx.CleanPath(paths[0])]))
 		}
 	}
-	if target != nil && target.MaxHP > 0 {
-		values["TARGET_HP_PERCENT"] = target.HP / target.MaxHP
+	if target != nil {
+		if target.MaxHP > 0 {
+			values["TARGET_HP_PERCENT"] = target.HP / target.MaxHP
+		}
+		if race := strings.TrimSpace(target.Race); race != "" {
+			values["TARGET_RACE"] = race
+		}
 	}
 	matches, err := gameplayeffects.ConditionsMatch(conditions, values)
 	return err == nil && matches

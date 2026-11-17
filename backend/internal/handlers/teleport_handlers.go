@@ -1062,7 +1062,7 @@ func TravelTeleport(c *gin.Context) {
 			dest.EffectEnabled = false
 			arrivalEffectMessage = "Effect Trận Pháp đích lỗi hoặc đã cũ nên được tự tháo; chuyến đi vẫn tiếp tục"
 		} else {
-			arrivalEffectMessage, err = applyTeleportArrayArrivalEffect(&player, destEffectProfile)
+			arrivalEffectMessage, err = applyTeleportArrayArrivalEffect(&player, destEffectProfile, dest.ID)
 			if err != nil {
 				c.JSON(http.StatusConflict, gin.H{"error": "Effect Trận Pháp đích lỗi khi thực thi; chuyến đi đã bị hủy"})
 				return

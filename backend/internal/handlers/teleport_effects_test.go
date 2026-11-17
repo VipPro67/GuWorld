@@ -38,11 +38,11 @@ func TestTeleportArrayArrivalEffectAppliesComposedWorldHaste(t *testing.T) {
 	player := models.Player{}
 	player.ID = uuid.New()
 	player.Rank, player.SubRank = 1, 1
-	message, err := applyTeleportArrayArrivalEffect(&player, raw)
+	message, err := applyTeleportArrayArrivalEffect(&player, raw, "array-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if message != "Tăng Tốc 9 phút" || !player.Statuses.Has(statusfx.StatusHaste) {
+	if message != "Tăng Tốc 9 phút" || !player.Statuses.Has(statusfx.StatusHaste) || len(player.Statuses) != 1 || player.Statuses[0].SourceID != "array-1" {
 		t.Fatalf("arrival effect message=%q statuses=%+v", message, player.Statuses)
 	}
 	if got := CalculatePlayerStats(&player)["speed"]; got != 11.2 {
@@ -71,7 +71,7 @@ func TestTeleportArrayArrivalEffectRejectsUnsupportedCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := applyTeleportArrayArrivalEffect(&models.Player{}, raw); err == nil {
+	if _, err := applyTeleportArrayArrivalEffect(&models.Player{}, raw, "array-1"); err == nil {
 		t.Fatal("unsupported travel operation was accepted")
 	}
 }

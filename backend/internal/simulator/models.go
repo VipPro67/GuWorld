@@ -277,22 +277,32 @@ func CompiledCombatMechanics(compiled *gameplayeffects.Compiled, action bool) []
 
 // Effect represents an active buff or debuff on a combatant.
 type Effect struct {
-	ID         string // effect constant (EffectSlow, EffectWeak, etc.)
-	Type       string // "buff" or "debuff"
-	Tier       int    // tier level (1-5) for scaling
-	Value      int    // computed percent or duration (from TierToPercent / TierToDuration)
-	Duration   int    // remaining turns
-	SourcePath string // optional dao path source for cleansing traps
+	ID          string // effect constant (EffectSlow, EffectWeak, etc.)
+	Type        string // "buff" or "debuff"
+	Tier        int    // tier level (1-5) for scaling
+	Value       int    // computed percent or duration (from TierToPercent / TierToDuration)
+	Duration    int    // remaining turns
+	SourcePath  string // optional dao path source for cleansing traps
+	SourceID    string
+	EffectID    string
+	Context     string
+	StackPolicy string
 }
 
 // DoTEffect tracks a damage-over-time or heal-over-time effect on a combatant.
 type DoTEffect struct {
-	Type          string  // "bleed", "poison", "regen"
-	Value         float64 // damage or heal per turn
-	Turns         int     // remaining turns
-	DirectHP      bool    // true if damage subtracts directly from HP bypassing shield
-	SourcePath    string  // Dao path of the action that applied this effect
-	SourceDaoMult float64 // source's effective Dao multiplier snapshotted at application
+	Type            string  // "bleed", "poison", "regen"
+	Value           float64 // damage or heal per turn
+	Turns           int     // remaining turns
+	DirectHP        bool    // true if damage subtracts directly from HP bypassing shield
+	SourcePath      string  // Dao path of the action that applied this effect
+	SourceDaoMult   float64 // source's effective Dao multiplier snapshotted at application
+	SourceRace      string  // exact race key used by race resistance on later ticks
+	RaceDamageBonus float64 // target-specific damage bucket snapshotted on application
+	SourceID        string
+	EffectID        string
+	Context         string
+	StackPolicy     string
 }
 
 // DaoMarks represents the dao marks of a combatant, grouped by path.
@@ -303,6 +313,7 @@ type CombatantAuto struct {
 	ID                string
 	Name              string
 	Kind              string // "Player", "Enemy", "Boss", "Minion"
+	Race              string
 	Rank              int
 	SubRank           int
 	GridX             int // 1=Front, 2=Mid, 3=Back
@@ -338,6 +349,8 @@ type CombatantAuto struct {
 	DaoBonus                map[string]float64       // additive dao-path multiplier (path affinity)
 	PathDamageBonus         map[string]float64       // additive damage multiplier for a path
 	PathResistance          map[string]float64       // additive damage reduction taken for a path
+	RaceDamageBonus         map[string]float64       // additive damage multiplier against an exact target race key
+	RaceResistance          map[string]float64       // additive damage reduction against an exact attacker race key
 	HealingReceived         float64                  // multiplier bonus on healing received
 	HealingReceivedPenalty  float64                  // additive healing reduction from active effects
 	MentalResistance        float64                  // chance (0-1) to resist control effects
@@ -596,9 +609,13 @@ type DamageBreakdown struct {
 	BuffMult           float64 `json:"buff_mult,omitempty"`
 	CritMult           float64 `json:"crit_mult,omitempty"`
 	PathBonus          float64 `json:"path_bonus,omitempty"`
+	RaceDamageBonus    float64 `json:"race_damage_bonus,omitempty"`
+	RaceDamageTarget   string  `json:"race_damage_target,omitempty"`
 	TargetDef          float64 `json:"target_def,omitempty"`
 	NaturalResist      float64 `json:"natural_resist,omitempty"`
 	PathResist         float64 `json:"path_resist,omitempty"`
+	RaceResistance     float64 `json:"race_resistance,omitempty"`
+	RaceResistAttacker string  `json:"race_resist_attacker,omitempty"`
 	DamageReduction    float64 `json:"damage_reduction,omitempty"`
 	ShieldAbsorbed     float64 `json:"shield_absorbed,omitempty"`
 	HPDamage           float64 `json:"hp_damage,omitempty"`

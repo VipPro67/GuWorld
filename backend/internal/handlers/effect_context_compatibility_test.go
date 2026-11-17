@@ -19,3 +19,16 @@ func TestCompositionSourceConditionsMatchProductExecutor(t *testing.T) {
 		t.Fatal("composition source must reject STACKS because the simulator action context does not supply it")
 	}
 }
+
+func TestRaceConditionsAreAvailableOnlyInContextsWithRaceValues(t *testing.T) {
+	race := []gameplayeffects.Condition{{Field: "TARGET_RACE", Operator: "EQ", Value: "merman"}}
+	if reason := unsupportedConditionReason("TURN_BASED_COMBAT", race); reason != "" {
+		t.Fatalf("unsupportedConditionReason(TURN_BASED_COMBAT, race) = %q, want supported", reason)
+	}
+	if reason := unsupportedConditionReason("TELEPORT_ARRAY_ARRIVAL", race); reason != "" {
+		t.Fatalf("unsupportedConditionReason(TELEPORT_ARRAY_ARRIVAL, race) = %q, want supported", reason)
+	}
+	if reason := unsupportedConditionReason("UNKNOWN_CONTEXT", race); reason == "" {
+		t.Fatal("unsupportedConditionReason(UNKNOWN_CONTEXT, race) succeeded, want unsupported context")
+	}
+}

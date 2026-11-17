@@ -30,6 +30,40 @@ func TestBlockV2AcceptsCataloguedOperation(t *testing.T) {
 	}
 }
 
+func TestBlockV2ValidatesConditionValueTypes(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{
+			name: "race key string",
+			raw:  `[{"id":"RACE_GATE","trigger":"ON_ACTION","target":{"selector":"TARGET"},"conditions":[{"field":"TARGET_RACE","operator":"EQ","value":"merman"}],"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":1}]}]`,
+			want: true,
+		},
+		{
+			name: "race key cannot use numeric value",
+			raw:  `[{"id":"RACE_GATE","trigger":"ON_ACTION","target":{"selector":"TARGET"},"conditions":[{"field":"TARGET_RACE","operator":"EQ","value":1}],"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":1}]}]`,
+		},
+		{
+			name: "numeric condition cannot use string value",
+			raw:  `[{"id":"RANK_GATE","trigger":"ON_ACTION","target":{"selector":"TARGET"},"conditions":[{"field":"RANK","operator":"EQ","value":"six"}],"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":1}]}]`,
+		},
+		{
+			name: "race condition only supports equality operators",
+			raw:  `[{"id":"RACE_GATE","trigger":"ON_ACTION","target":{"selector":"TARGET"},"conditions":[{"field":"TARGET_RACE","operator":"GT","value":"merman"}],"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":1}]}]`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			issues := ValidateBlockV2([]byte(tt.raw), Location{Source: "test"})
+			if got := len(issues) == 0; got != tt.want {
+				t.Fatalf("ValidateBlockV2(%s) accepted = %t, want %t; issues=%+v", tt.raw, got, tt.want, issues)
+			}
+		})
+	}
+}
+
 func TestBlockV2ReportsPreciseOperationLocation(t *testing.T) {
 	raw := []byte(`{"schema_version":2,"legacy":{},"blocks":[{"id":"ON_DEATH_TEST","trigger":"ON_DEATH","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"REBORN","params":{"chance":2,"typo":true}}]}]}`)
 	issues := ValidateBlockV2(raw, Location{Source: "item", Row: 7, Key: "phoenix"})

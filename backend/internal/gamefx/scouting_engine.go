@@ -124,6 +124,19 @@ func sumInvestigation(gus []models.GuInstance) float64 {
 	return sum
 }
 
+func scoutingInvestigation(player *models.Player, gus []models.GuInstance, target *models.Player) float64 {
+	values := PlayerConditionValues(player)
+	if target != nil && target.Race != "" {
+		values["TARGET_RACE"] = target.Race
+	}
+	projected, err := GetWithConditions(player, values)
+	if err != nil {
+		projected = Get(player)
+	}
+	bonus := projected.ScoutingInvestigationBonus
+	return sumInvestigation(gus) + bonus*ScoutingInvestigationWeight
+}
+
 func sumDisguise(gus []models.GuInstance) (disguise float64, perfect bool, conceal bool) {
 	for _, gu := range gus {
 		if spec, ok := models.GetGu(gu.GuID, gu.Rank); ok {
@@ -164,7 +177,7 @@ func DeductionBreakdown(
 	// Pillar 1: Cổ stats (scouting). INVESTIGATION carries ScoutingInvestigationWeight
 	// so trinh sát Gu are a real pillar instead of a rounding error.
 	basePower := BaseRankPower(viewer.Rank)
-	stat := basePower + sumInvestigation(viewerGus)
+	stat := basePower + scoutingInvestigation(viewer, viewerGus, target)
 
 	// Pillar 2: Cảnh giới lưu phái (dominant) + đạo ngân (minor).
 	// The flat attain base is the single biggest lever on the pillar, and dao
@@ -235,6 +248,30 @@ func DeductionBreakdown(
 	}
 }
 
+// AperturePortalDiscoveryPower returns the deterministic scouting pillars used
+// to find a concealed aperture portal. Clues and luck are intentionally
+// excluded: passive scouting effects modify the declared scorer inputs, while
+// the portal's concealment power is compared by the map-marker consumer.
+func AperturePortalDiscoveryPower(viewer *models.Player, viewerGus []models.GuInstance, viewerDaoMarks models.DaoMarksMap, target *models.Player) float64 {
+	score := DeductionBreakdown(viewer, viewerGus, viewerDaoMarks, models.DivinationRequest{}, target, 0, false, false, 0)
+	return score.Stat + score.RealmDao
+}
+
+// AperturePortalConcealmentPower evaluates the portal owner's existing
+// concealment scorer at the portal's world region, then adds portal-specific
+// concealment power.
+func AperturePortalConcealmentPower(owner *models.Player, ownerGus []models.GuInstance, ownerDaoMarks models.DaoMarksMap, viewer *models.Player, portalRegion, viewerRegion string, portalPower int) float64 {
+	portalOwner := *owner
+	portalOwner.CurrentRegion = portalRegion
+	return ConcealmentBreakdownForViewer(&portalOwner, ownerGus, ownerDaoMarks, viewer, viewerRegion).Total + math.Max(0, float64(portalPower))
+}
+
+// CanDiscoverAperturePortal reports whether the deterministic discovery score
+// meets the portal's concealment score. Equality counts as a successful pierce.
+func CanDiscoverAperturePortal(discoveryPower, portalConcealment float64) bool {
+	return discoveryPower >= portalConcealment
+}
+
 // CalculateDeductionPower computes P_div for the divining player.
 // Kept for compatibility; new code should use DeductionBreakdown.
 func CalculateDeductionPower(
@@ -256,10 +293,44 @@ func ConcealmentBreakdown(
 	targetDaoMarks models.DaoMarksMap,
 	viewerRegion string,
 ) models.DefenseDetail {
+	return concealmentBreakdown(target, targetGus, targetDaoMarks, nil, viewerRegion)
+}
+
+// ConcealmentBreakdownForViewer evaluates target passives against the current
+// viewer/target context used by inspect, divination, and portal discovery.
+func ConcealmentBreakdownForViewer(
+	target *models.Player,
+	targetGus []models.GuInstance,
+	targetDaoMarks models.DaoMarksMap,
+	viewer *models.Player,
+	viewerRegion string,
+) models.DefenseDetail {
+	return concealmentBreakdown(target, targetGus, targetDaoMarks, viewer, viewerRegion)
+}
+
+func concealmentBreakdown(
+	target *models.Player,
+	targetGus []models.GuInstance,
+	targetDaoMarks models.DaoMarksMap,
+	viewer *models.Player,
+	viewerRegion string,
+) models.DefenseDetail {
 	baseDefense := BaseRankPower(target.Rank)
 
 	// Pillar 1: disguise / concealment stats.
 	disguiseSum, hasPerfectDisguise, hasConceal := sumDisguise(targetGus)
+	values := PlayerConditionValues(target)
+	if viewer != nil && viewer.Race != "" {
+		values["ACTOR_RACE"] = viewer.Race
+	}
+	if target.Race != "" {
+		values["TARGET_RACE"] = target.Race
+	}
+	projected, err := GetWithConditions(target, values)
+	if err != nil {
+		projected = Get(target)
+	}
+	disguiseSum += projected.ScoutingDisguiseBonus * ScoutingDisguiseWeight
 	capabilityBonus := 0.0
 	if hasPerfectDisguise {
 		capabilityBonus += 80.0
@@ -382,7 +453,7 @@ func EvaluateInspect(
 ) (delta float64, myScore models.ScoreDetail) {
 	clues := models.DivinationRequest{TargetUsername: target.Username}
 	myScore = DeductionBreakdown(viewer, viewerGus, viewerDao, clues, target, 0, false, false, 20.0)
-	def := ConcealmentBreakdown(target, targetGus, targetDao, viewer.CurrentRegion)
+	def := ConcealmentBreakdownForViewer(target, targetGus, targetDao, viewer, viewer.CurrentRegion)
 
 	pierce := heavenPierce(viewer, viewerDao)
 	if pierce > def.Veil {
@@ -414,7 +485,7 @@ func EvaluateDivination(
 	suspectedGuValid bool,
 ) (statusType string, delta float64, backfireRatio float64, myScore models.ScoreDetail) {
 	myScore = DeductionBreakdown(viewer, viewerGus, viewerDao, clues, target, resourceBonus, itemClueValid, suspectedGuValid, 0)
-	def := ConcealmentBreakdown(target, targetGus, targetDao, viewer.CurrentRegion)
+	def := ConcealmentBreakdownForViewer(target, targetGus, targetDao, viewer, viewer.CurrentRegion)
 
 	pierce := heavenPierce(viewer, viewerDao)
 	if pierce > def.Veil {
@@ -482,7 +553,7 @@ func EvaluateGuDivination(
 	resourceBonus float64,
 ) (statusType string, delta float64, backfireHPRatio float64, backfireSoulRatio float64, myScore models.ScoreDetail) {
 	basePower := BaseRankPower(viewer.Rank)
-	investigationSum := sumInvestigation(viewerGus)
+	investigationSum := scoutingInvestigation(viewer, viewerGus, nil)
 
 	paths := append([]string{"wisdom", "information", "refinement"}, targetGu.Path...)
 	attainBase, attainMult := GetPathAttainment(viewer.PathMasteries, paths...)

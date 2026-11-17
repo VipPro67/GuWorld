@@ -6,11 +6,11 @@ Tiên Khiếu là không gian riêng của người chơi tại Rank 6+, có nod
 
 ## Điều kiện mở và quyền truy cập
 
-Player cần đạt Rank 6 và anchor khi không đang trong aperture khác. Chủ sở hữu đặt access policy; khách vào theo quyền OPEN, PARTY, SECT, KEY, APPROVAL hoặc HIDDEN.
+Player cần đạt Rank 6 và anchor khi không đang trong aperture khác. Chủ sở hữu đặt access policy. Môn Hộ được hiện cho chủ, theo policy mở/đồng môn, hoặc khi điểm dò deterministic đạt điểm che giấu của chủ cộng `concealment_power`. Hai phía dùng STAT và realm/Đạo của scorer hiện có; passive `INVESTIGATION` tăng điểm dò, còn `DISGUISE` tăng điểm che giấu. Passive conditions được chiếu theo race viewer/owner và rank khi scorer kiểm tra portal. Dò thành công hiện tọa độ chính xác nhưng không tiết lộ chủ nhân, mã Tiên Khiếu hay policy cổng. Người đã nhìn thấy Môn Hộ có thể vào trong phạm vi 3 ô; kết quả dò thành công vượt qua giới hạn PARTY/SECT.
 
 ## Cách sử dụng
 
-Anchor aperture, quản lý node và worker, phân quyền khách, rồi mở portal để di chuyển. Tribulation được khởi động và giải quyết theo lượt; khách có thể tham gia nếu luật session cho phép.
+Anchor aperture, quản lý node và worker, đặt policy che giấu/hiển thị, rồi mở portal để di chuyển. Khi khách vào, chủ nhận notification. Chủ có thể trục xuất khách sau khi khách rời realtime combat; yêu cầu trong lúc combat bị từ chối, không xếp hàng. Trục xuất hủy ngay nghi thức di dời mỏ đang do khách thực hiện và mỏ vẫn ở nguyên Tiên Khiếu. Tribulation được khởi động và giải quyết theo lượt; khách có thể tham gia nếu luật session cho phép.
 
 Khi Hạ Khiếu, chủ được chuyển tới tab Bản đồ & Phòng thủ với toàn cảnh lưới 20×20. Khách đã vào qua Môn Hộ chỉ thấy map khám phá quanh vị trí theo tầm nhìn thường; API chỉ trả người chơi, tác nhân quái, chiến lợi phẩm và mỏ trong phạm vi này. Khách có thể thu hoạch điểm tài nguyên khi ở trong phạm vi và tự rời Tiên Khiếu qua nút Rời Tiên Khiếu mà không cần chủ phê duyệt. Khi rời, khách trở về vị trí Môn Hộ bên ngoài. Các thao tác quản trị Tiên Khiếu vẫn theo quyền chủ hiện có.
 
@@ -20,7 +20,7 @@ Thay đổi ô map và Môn Hộ được cập nhật qua `world:change` chỉ 
 
 - Rank 6+ mới dùng aperture.
 - Không thể anchor bên trong aperture khác.
-- Portal entry kiểm tra world, combat và policy; chỉ có gateway phù hợp mới cho vào.
+- Portal entry kiểm tra world, combat, khoảng cách 3 ô và policy. Người dò thành công Môn Hộ được vào bất kể policy PARTY/SECT; cổng HIDDEN yêu cầu điểm dò đạt điểm che giấu của chủ cộng `concealment_power`.
 - Grid, người chơi, mỏ, quái và chiến lợi phẩm của Tiên Khiếu được giới hạn theo `map_instance_id`; khách chỉ nhận dữ liệu trong tầm nhìn thường và chỉ đọc mỏ khi còn trong roster, đúng instance.
 - Lưới và phạm vi di chuyển của Tiên Khiếu dùng tọa độ 0–19 trên mỗi trục.
 - Thu hoạch mỏ Tiên Khiếu ghi tài nguyên vào túi của người thao tác; khách cần ở trong phạm vi 6 ô. Khách có thể tự rời Tiên Khiếu bất cứ lúc nào qua `POST /api/immortal-aperture/leave`; chủ không cần phê duyệt.
@@ -41,7 +41,7 @@ Node, resource, worker, NPC, swarm và tribulation parameters nằm trong schema
 
 ## Mã nguồn liên quan
 
-- Backend: `backend/internal/handlers/aperture_core.go`, `aperture_portal.go`, `aperture_points.go`, `exploration_grid.go`, `ground_drops.go`, `tribulation_multiform.go`, `tribulation_handlers.go`, `legacy_engage_tribulation.go`, `legacy_resolve_tribulation.go`.
+- Backend: `backend/internal/handlers/aperture_core.go`, `aperture_portal.go`, `aperture_points.go`, `exploration_grid.go`, `ground_drops.go`, `backend/internal/gamefx/scouting_engine.go`, `tribulation_multiform.go`, `tribulation_handlers.go`, `legacy_engage_tribulation.go`, `legacy_resolve_tribulation.go`.
 - Frontend: `frontend/src/store/slices/apertureSlice.ts`, `frontend/src/components/ImmortalApertureView.tsx` và `frontend/src/components/ExplorationMap.tsx`.
 
 ## Hệ thống Đa Dạng Hóa Tai Kiếp (Multi-form Tribulation)

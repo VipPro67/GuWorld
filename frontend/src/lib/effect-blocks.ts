@@ -9,7 +9,7 @@ export interface EffectTarget {
 export interface EffectCondition {
   field: string;
   operator: string;
-  value: number;
+  value: number | string;
 }
 
 export interface EffectOperation {
@@ -65,6 +65,7 @@ export interface EffectCatalogMetadata {
   schema_version?: number; triggers: string[]; targets: string[]; operations: EffectCatalogOperation[];
   stats: string[]; statuses: string[]; resources: string[]; units: string[];
   stack_policies: string[]; condition_fields: string[]; condition_operators: string[];
+  condition_value_types?: Record<string, "number" | "string">;
   native_codes: string[]; native_hooks: EffectNativeHook[];
 }
 
@@ -128,6 +129,12 @@ export function effectEnvelope(value: EffectLike): EffectEnvelope {
     }
     if (obj.path_resistance && typeof obj.path_resistance === "object" && Object.keys(obj.path_resistance).length > 0) {
       addOp("PATH_RESISTANCE_MODIFIER", "PATH_RESISTANCE_MODIFIER", obj.path_resistance);
+    }
+    if (obj.race_damage && typeof obj.race_damage === "object" && Object.keys(obj.race_damage).length > 0) {
+      addOp("RACE_DAMAGE_MODIFIER", "RACE_DAMAGE_MODIFIER", obj.race_damage);
+    }
+    if (obj.race_resistance && typeof obj.race_resistance === "object" && Object.keys(obj.race_resistance).length > 0) {
+      addOp("RACE_RESISTANCE_MODIFIER", "RACE_RESISTANCE_MODIFIER", obj.race_resistance);
     }
     if (typeof obj.refine === "number" && obj.refine !== 0) addOp("REFINE_SUCCESS", "REFINE_SUCCESS", obj.refine);
     if (typeof obj.luck === "number" && obj.luck !== 0) addOp("LUCK", "LUCK", obj.luck);

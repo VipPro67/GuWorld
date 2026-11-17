@@ -311,6 +311,10 @@ export interface PlayerStatusInstance {
   expires_at?: string | null;
   source?: string;
   value?: number;
+  source_id?: string;
+  effect_id?: string;
+  context?: string;
+  stack_policy?: string;
 }
 
 

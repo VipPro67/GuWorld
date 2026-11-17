@@ -10,8 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/playerstate"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
@@ -48,10 +50,10 @@ type TeleportMarker struct {
 }
 
 type AperturePortalMarker struct {
-	OwnerID          string `json:"owner_id"`
-	ApertureID       string `json:"aperture_id"`
-	AccessPolicy     string `json:"access_policy"`
-	ConcealmentPower int    `json:"concealment_power"`
+	OwnerID          string `json:"owner_id,omitempty"`
+	ApertureID       string `json:"aperture_id,omitempty"`
+	AccessPolicy     string `json:"access_policy,omitempty"`
+	ConcealmentPower int    `json:"concealment_power,omitempty"`
 	IsMine           bool   `json:"is_mine"`
 }
 
@@ -153,22 +155,25 @@ func teleportMarkersInRegion(regionID string, authID uuid.UUID, mySectID *string
 }
 
 // aperturePortalMarkersInRegion returns active immortal aperture gateways in this region.
-// Observers only see portals if they own them, if the portal is public/sect-accessible,
-// or if their Scouting capability is strong enough to pierce the portal's ConcealmentPower.
-func aperturePortalMarkersInRegion(regionID string, authID uuid.UUID, mySectID *string) []MapMarkerView {
-	query := `
-		SELECT p.id, p.name, p.owner_id, p.aperture_id, p.x, p.y, p.access_policy, p.concealment_power, (p.owner_id = $1) AS is_mine
+// Observers see portals they own, portals exposed by their party/sect policy,
+// generally visible policies, or portals their scouting score can discover.
+func aperturePortalMarkersInRegion(regionID, viewerRegion string, authID uuid.UUID, mySectID, myPartyID *string, viewer *models.Player) []MapMarkerView {
+	rows, err := db.DB.Query(`
+		SELECT p.id, p.name, p.owner_id, p.aperture_id, p.x, p.y, p.access_policy, p.concealment_power,
+		       host.rank, host.path_masteries, COALESCE(host.race, ''), COALESCE(host.constitution, ''),
+		       COALESCE(host.statuses, '{}'::jsonb), host.hp, host.base_hp, host.current_mana, host.max_mana,
+		       COALESCE(owner_aperture.dao_marks, '{}'::jsonb), `+db.GuInventoryAggregateEquipped("host.id")+`,
+		       (p.owner_id = $1) AS is_mine,
+		       COALESCE(p.access_policy = 'SECT' AND EXISTS (
+		           SELECT 1 FROM sect_members sm WHERE sm.player_id = p.owner_id AND sm.sect_id = $3
+		       ), false) AS same_sect,
+		       COALESCE(p.access_policy = 'PARTY' AND EXISTS (
+		           SELECT 1 FROM players host WHERE host.id = p.owner_id AND host.party_id = $4 AND host.party_id IS NOT NULL
+		       ), false) AS same_party
 		FROM aperture_portals p
-		WHERE p.is_active = TRUE AND p.region_id = $2
-		  AND (p.owner_id = $1 OR p.access_policy IN ('OPEN', 'KEY', 'APPROVAL')`
-	args := []interface{}{authID, regionID}
-	if mySectID != nil && *mySectID != "" {
-		query += " OR (p.access_policy = 'SECT' AND EXISTS (SELECT 1 FROM sect_members sm WHERE sm.player_id = p.owner_id AND sm.sect_id = $3))"
-		args = append(args, *mySectID)
-	}
-	query += ")"
-
-	rows, err := db.DB.Query(query, args...)
+		JOIN players host ON host.id = p.owner_id
+		LEFT JOIN immortal_apertures owner_aperture ON owner_aperture.player_id = host.id
+		WHERE p.is_active = TRUE AND p.region_id = $2`, authID, regionID, nullableString(mySectID), nullableString(myPartyID))
 	if err != nil {
 		logger.S.Warnf("Failed to load aperture portal markers for region %s: %v", regionID, err)
 		return nil
@@ -180,26 +185,53 @@ func aperturePortalMarkersInRegion(regionID string, authID uuid.UUID, mySectID *
 		var (
 			id, name, ownerID, apertureID string
 			x, y                          float64
+			owner                         models.Player
 			detail                        AperturePortalMarker
+			isSameSect, isSameParty       bool
 		)
-		if err := rows.Scan(&id, &name, &ownerID, &apertureID, &x, &y, &detail.AccessPolicy, &detail.ConcealmentPower, &detail.IsMine); err != nil {
+		if err := rows.Scan(&id, &name, &ownerID, &apertureID, &x, &y, &detail.AccessPolicy, &detail.ConcealmentPower,
+			&owner.Rank, &owner.PathMasteries, &owner.Race, &owner.Constitution, &owner.Statuses, &owner.HP, &owner.BaseHP, &owner.CurrentMana, &owner.MaxMana, &owner.DaoMarks, &owner.GuInventory,
+			&detail.IsMine, &isSameSect, &isSameParty); err != nil {
 			continue
 		}
-		detail.OwnerID = ownerID
-		detail.ApertureID = apertureID
 		detail.IsMine = (ownerID == authID.String())
+		owner.CurrentRegion = regionID
+		scoutingPower := gamefx.AperturePortalDiscoveryPower(viewer, models.FilterEquippedActive(viewer.GuInventory), viewer.DaoMarks, &owner)
+		portalDefense := gamefx.AperturePortalConcealmentPower(&owner, models.FilterEquippedActive(owner.GuInventory), owner.DaoMarks, viewer, regionID, viewerRegion, detail.ConcealmentPower)
+		policyVisible := aperturePortalPolicyVisible(detail.AccessPolicy, detail.IsMine, isSameSect, isSameParty)
+		if !policyVisible && !gamefx.CanDiscoverAperturePortal(scoutingPower, portalDefense) {
+			continue
+		}
+		marker := aperturePortalMarker(id, regionID, int(x), int(y), name, detail, ownerID, apertureID, policyVisible)
 
-		out = append(out, MapMarkerView{
-			ID:       id,
-			Kind:     "aperture_portal",
-			RegionID: regionID,
-			X:        int(x),
-			Y:        int(y),
-			Name:     name,
-			Detail:   detail,
-		})
+		out = append(out, marker)
 	}
 	return out
+}
+
+func nullableString(value *string) interface{} {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+func aperturePortalPolicyVisible(policy string, isMine, sameSect, sameParty bool) bool {
+	return isMine || policy == "OPEN" || policy == "KEY" || policy == "APPROVAL" || policy == "SECT" && sameSect || policy == "PARTY" && sameParty
+}
+
+func aperturePortalMarker(id, regionID string, x, y int, name string, detail AperturePortalMarker, ownerID, apertureID string, policyVisible bool) MapMarkerView {
+	if !policyVisible && !detail.IsMine {
+		name = "Môn Hộ ẩn"
+		detail.OwnerID = ""
+		detail.ApertureID = ""
+		detail.AccessPolicy = ""
+		detail.ConcealmentPower = 0
+	} else {
+		detail.OwnerID = ownerID
+		detail.ApertureID = apertureID
+	}
+	return MapMarkerView{ID: id, Kind: "aperture_portal", RegionID: regionID, X: x, Y: y, Name: name, Detail: detail}
 }
 
 // merchantMarkersInRegion returns active placed merchants located on the map
@@ -252,18 +284,18 @@ func GetZoneMapObjects(c *gin.Context) {
 		return
 	}
 
-	regionID := strings.TrimSpace(c.Query("region"))
-	if regionID == "" {
-		player, err := playerstate.Load(db.DB, authID, playerstate.Options{})
-		if err != nil {
-			if playerstate.IsNotFound(err) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi."})
-				return
-			}
-			httperr.Respond(c, httperr.Internal("Không thể xác định khu vực hiện tại.", err))
+	viewer, err := playerstate.Load(db.DB, authID, playerstate.Options{Gu: playerstate.GuEquipped})
+	if err != nil {
+		if playerstate.IsNotFound(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy người chơi."})
 			return
 		}
-		regionID = player.CurrentRegion
+		httperr.Respond(c, httperr.Internal("Không thể tải năng lực trinh sát.", err))
+		return
+	}
+	regionID := strings.TrimSpace(c.Query("region"))
+	if regionID == "" {
+		regionID = viewer.CurrentRegion
 	}
 	if regionID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Thiếu khu vực."})
@@ -273,11 +305,16 @@ func GetZoneMapObjects(c *gin.Context) {
 	_ = ensureRegionMerchants(regionID)
 
 	mySectID := getPlayerSectID(nil, authID)
+	var myPartyID *string
+	if viewer.PartyID != nil {
+		partyID := viewer.PartyID.String()
+		myPartyID = &partyID
+	}
 
 	out := make([]MapMarkerView, 0)
 	out = append(out, sectMarkersInRegion(regionID, mySectID)...)
 	out = append(out, teleportMarkersInRegion(regionID, authID, mySectID)...)
-	out = append(out, aperturePortalMarkersInRegion(regionID, authID, mySectID)...)
+	out = append(out, aperturePortalMarkersInRegion(regionID, viewer.CurrentRegion, authID, mySectID, myPartyID, &viewer)...)
 	out = append(out, merchantMarkersInRegion(regionID)...)
 	c.JSON(http.StatusOK, out)
 }

@@ -1031,7 +1031,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                       <div className="text-[10px] text-zinc-500 font-mono">Trạng Thái</div>
                       {player.statuses && player.statuses.length > 0 ? (
                         <div className="flex flex-col gap-1.5 mt-1">
-                          {player.statuses.map((s: PlayerStatusInstance) => {
+                          {player.statuses.map((s: PlayerStatusInstance, index: number) => {
                             let displayName = statusDictionary?.[s.id]?.name || s.id;
                             if (s.id.startsWith("cd_gu_")) {
                               const instanceId = s.id.substring(6);
@@ -1048,7 +1048,7 @@ export const Aperture: React.FC<ApertureProps> = ({
                             const statusEffects = statusDictionary?.[s.id]?.effects;
                             const regionalWallPct = s.id === "regional_wall_suppression" ? Math.round(Math.abs(s.value ?? 0) * 100) : null;
                             return (
-                              <div key={s.id} className="flex flex-col gap-1">
+                              <div key={`${s.id}-${s.source_id || ""}-${s.effect_id || ""}-${s.context || ""}-${index}`} className="flex flex-col gap-1">
                                 <span className="text-[10px] px-2 py-0.5 rounded-lg bg-rose-950/40 text-rose-400 border border-rose-900/40 font-mono font-semibold w-fit">
                                   {displayName}{statusRemainLabel(s.expires_at)}
                                 </span>

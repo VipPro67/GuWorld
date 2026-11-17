@@ -1225,6 +1225,32 @@ func TestDamageBreakdownCarriesStatProvenance(t *testing.T) {
 	}
 }
 
+func TestRaceDamageBucketsUseExactTargetAndAttackerKeys(t *testing.T) {
+	actor := newTestCombatant("ally", "Player", 1000, 0)
+	actor.Race = "human"
+	actor.RaceDamageBonus = map[string]float64{"merman": 0.5}
+	actor.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: 100, DamageMult: 1, TargetType: "SINGLE"}}
+	target := newTestCombatant("enemy", "Enemy", 1000, 0)
+	target.Race = "merman"
+	target.RaceResistance = map[string]float64{"human": 0.25}
+
+	logs := Simulate(&CombatState{Seed: 91, Allies: []*CombatantAuto{actor}, Enemies: []*CombatantAuto{target}})
+	for _, entry := range logs {
+		if entry.Breakdown == nil || entry.Breakdown.BaseDamage != 100 {
+			continue
+		}
+		breakdown := entry.Breakdown
+		if breakdown.RaceDamageBonus != 0.5 || breakdown.RaceDamageTarget != "merman" || breakdown.RaceResistance != 0.25 || breakdown.RaceResistAttacker != "human" {
+			t.Fatalf("race buckets were not attributed to exact opposing race keys: %+v", breakdown)
+		}
+		if breakdown.FinalDamage != 112.5 {
+			t.Fatalf("race modifiers yielded %.2f final damage, want 112.50", breakdown.FinalDamage)
+		}
+		return
+	}
+	t.Fatal("expected an ordinary damage breakdown")
+}
+
 // TestCasterAttenuationInCombat verifies that when a Rank 9 immortal uses a Rank 4
 // Gu for self-buff (Bất Hoại), Caster Attenuation suppresses the proc chance.
 func TestCasterAttenuationInCombat(t *testing.T) {
@@ -1500,5 +1526,15 @@ func TestManaRestoreAndCleanse(t *testing.T) {
 		if eff.Type == "debuff" {
 			t.Errorf("expected no debuffs on attacker after cleanse, found %s", eff.ID)
 		}
+	}
+}
+
+func TestPathBonusUsesPrimaryActionPath(t *testing.T) {
+	bonuses := map[string]float64{"fire": 0.1, "dream": 0.6}
+	if got := pathBonus(bonuses, []string{"fire", "dream"}); got != 0.1 {
+		t.Fatalf("primary path bonus = %v, want 0.1", got)
+	}
+	if got := pathBonus(bonuses, nil); got != 0 {
+		t.Fatalf("pathless action bonus = %v, want 0", got)
 	}
 }
