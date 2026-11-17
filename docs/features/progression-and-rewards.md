@@ -50,6 +50,7 @@ Bind referral qua `/player/referrals/bind`, xem số liệu qua `/player/referra
 - Daily mission chưa hoàn thành không thể claim; claim trùng bị chặn.
 - Achievement reward ownership độc lập với việc chọn title/frame.
 - Invalid/expired/already redeemed gift code hoặc referral state không hợp lệ sẽ trả lỗi domain.
+- Gift code cấp Tiên Cổ đã tồn tại toàn server trả conflict và rollback toàn bộ lần đổi mã.
 
 ## Liên hệ với hệ thống khác
 

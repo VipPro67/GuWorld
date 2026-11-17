@@ -436,6 +436,10 @@ func RedeemGiftCode(c *gin.Context) {
 		}
 	}
 	if err := db.AddPlayerGusBulk(tx, player.ID.String(), applyResult.NewGus); err != nil {
+		if db.IsImmortalConflict(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Tiên Cổ này đã tồn tại trong thiên hạ, không thể nhận trùng"})
+			return
+		}
 		httperr.Respond(c, httperr.Internal("Lỗi cập nhật cổ trùng", err))
 		return
 	}
