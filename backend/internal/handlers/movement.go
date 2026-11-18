@@ -267,9 +267,9 @@ func ExecuteSpatialTransition(ctx context.Context, tx *sql.Tx, player *models.Pl
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE players
-		SET current_region = $1, x = $2, y = $3, primeval_stones = $4, immortal_stones = $5, statuses = $6,
+		SET current_region = $1, x = $2::integer, y = $3::integer, primeval_stones = $4, immortal_stones = $5, statuses = $6,
 		    world_zone_id = $1, world_instance_id = '', map_instance_id = NULL,
-		    world_safe_x = $2, world_safe_y = $3,
+		    world_safe_x = $2::double precision, world_safe_y = $3::double precision,
 		    world_location_revision = world_location_revision + 1, version = version + 1
 		WHERE id = $7
 	`, player.CurrentRegion, player.X, player.Y, player.PrimevalStones, player.ImmortalStones, player.Statuses,
@@ -302,7 +302,7 @@ func RelocatePlayerRespawn(ctx context.Context, tx *sql.Tx, playerID uuid.UUID, 
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE players SET hp=1,current_region=$1,world_zone_id=$1,world_instance_id='',map_instance_id=NULL,
-			x=$2,y=$3,world_safe_x=$2,world_safe_y=$3,
+			x=$2::integer,y=$3::integer,world_safe_x=$2::double precision,world_safe_y=$3::double precision,
 			world_location_revision=world_location_revision+1,version=version+1
 		WHERE id=$4
 	`, region, x, y, playerID); err != nil {
