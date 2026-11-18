@@ -801,7 +801,10 @@ func Middleware() gin.HandlerFunc {
 		if responseBytes < 0 {
 			responseBytes = 0
 		}
-		errMsg := rw.ErrorMessage()
+		errMsg := ""
+		if status >= http.StatusBadRequest {
+			errMsg = rw.ErrorMessage()
+		}
 		var requestErr error
 		if len(c.Errors) > 0 {
 			if len(c.Errors) == 1 {

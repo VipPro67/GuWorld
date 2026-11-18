@@ -4,11 +4,48 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
+
+func TestMiddlewareDoesNotRecordSuccessfulResponseAsError(t *testing.T) {
+	originalTracker := GlobalTracker
+	GlobalTracker = NewRequestTracker()
+	defer func() { GlobalTracker = originalTracker }()
+
+	originalGinMode := gin.Mode()
+	gin.SetMode(gin.TestMode)
+	defer gin.SetMode(originalGinMode)
+	router := gin.New()
+	router.Use(Middleware())
+	responseBody := `{"gus":[{"id":"gu-1","name":"sample"}]}`
+	router.GET("/api/player/inventory/gus", func(c *gin.Context) {
+		c.Data(http.StatusOK, "application/json; charset=utf-8", []byte(responseBody))
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/api/player/inventory/gus", nil)
+	router.ServeHTTP(httptest.NewRecorder(), request)
+
+	result := GlobalTracker.FilterTraces(FilterOptions{Limit: 1})
+	if len(result.Traces) != 1 {
+		t.Fatalf("expected one request trace, got %d", len(result.Traces))
+	}
+	trace := result.Traces[0]
+	if trace.Status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", trace.Status, http.StatusOK)
+	}
+	if trace.Error != "" || trace.RootCause != "" {
+		t.Fatalf("successful response was recorded as an error: error=%q root_cause=%q", trace.Error, trace.RootCause)
+	}
+	if trace.ResponseBody != responseBody {
+		t.Fatalf("response body = %q, want %q", trace.ResponseBody, responseBody)
+	}
+}
 
 func TestCaptureRequestBodyRedactsAndPreservesJSON(t *testing.T) {
 	body := `{"username":"alice","password":"secret","nested":{"access_token":"abc"}}`
