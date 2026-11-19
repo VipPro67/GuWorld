@@ -974,7 +974,7 @@ func AscensionRelease(c *gin.Context) {
 		var isVital bool
 		err := tx.QueryRow(`
 			SELECT gu_id, gu_rank, is_vital FROM player_gu
-			WHERE id = $1 AND player_id = $2 AND status <> 'DEAD'
+			WHERE id = $1 AND player_id = $2 AND state <> 'DEAD'
 		`, idStr, player.ID).Scan(&guID, &guRank, &isVital)
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ trùng không tồn tại trong túi đồ"})
