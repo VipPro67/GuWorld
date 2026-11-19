@@ -24,9 +24,11 @@ export const typeColor = (t?: string) => {
 
 export const gridXLabel = (x?: number) => {
   switch (x) {
-    case 1: return "Tiền";
-    case 2: return "Trung";
-    case 3: return "Hậu";
+    case 1:
+    case 2: return "Tiền";
+    case 3: return "Trung";
+    case 4:
+    case 5: return "Hậu";
     default: return "?";
   }
 };

@@ -119,15 +119,17 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 	base.Enemies = []models.Combatant{enemyCombatant}
 
 	allySlots := [][2]int{
-		{2, 3}, // index 0 (player) -> visual center-back (middle row, leftmost column)
-		{2, 1}, // index 1 (pet slot 1) -> visual center-front (middle row, rightmost column)
-		{1, 1}, // index 2 (pet slot 2) -> visual top-front (top row, rightmost column)
-		{3, 1}, // index 3 (pet slot 3) -> visual bottom-front (bottom row, rightmost column)
-		{2, 2}, // index 4 (pet slot 4) -> visual center-mid (middle row, middle column)
-		{1, 2}, // index 5 (pet slot 5) -> visual top-mid (top row, middle column)
-		{3, 2}, // index 6 (pet slot 6) -> visual bottom-mid (bottom row, middle column)
-		{1, 3}, // index 7 (pet slot 7) -> visual top-back (top row, leftmost column)
-		{3, 3}, // index 8 (pet slot 8) -> visual bottom-back (bottom row, leftmost column)
+		{5, 3}, // player: center-back
+		{1, 3}, // follower slot 1: center-front
+		{1, 2}, // follower slot 2: upper-front
+		{1, 4}, // follower slot 3: lower-front
+		{3, 3}, // follower slot 4: center-mid
+		{3, 2}, // follower slot 5: upper-mid
+		{3, 4}, // follower slot 6: lower-mid
+		{5, 2}, // follower slot 7: upper-back
+		{5, 4}, // follower slot 8: lower-back
+		{1, 1}, {1, 5}, {2, 1}, {2, 2}, {2, 3}, {2, 4}, {2, 5},
+		{3, 1}, {3, 5}, {4, 1}, {4, 2}, {4, 3}, {4, 4}, {4, 5}, {5, 1}, {5, 5},
 	}
 
 	// Load formation pets into Allies (soul cost applies on real combat, once per combat)
@@ -282,15 +284,17 @@ func InitializeCombatState(tx *sql.Tx, base *models.CombatState, player *models.
 	}
 
 	enemySlots := [][2]int{
-		{2, 3}, // index 0 (boss/main enemy) -> visual center-back (middle row, rightmost column)
-		{2, 1}, // index 1 -> visual center-front (middle row, leftmost column)
-		{1, 1}, // index 2 -> visual top-front (top row, leftmost column)
-		{3, 1}, // index 3 -> visual bottom-front (bottom row, leftmost column)
-		{2, 2}, // index 4 -> visual center-mid (middle row, middle column)
-		{1, 2}, // index 5 -> visual top-mid (top row, middle column)
-		{3, 2}, // index 6 -> visual bottom-mid (bottom row, middle column)
-		{1, 3}, // index 7 -> visual top-back (top row, rightmost column)
-		{3, 3}, // index 8 -> visual bottom-back (bottom row, rightmost column)
+		{3, 5}, // boss/main enemy: center-back
+		{3, 1}, // center-front
+		{2, 1}, // upper-front
+		{4, 1}, // lower-front
+		{3, 3}, // center-mid
+		{2, 3}, // upper-mid
+		{4, 3}, // lower-mid
+		{2, 5}, // upper-back
+		{4, 5}, // lower-back
+		{1, 1}, {1, 2}, {1, 3}, {1, 4}, {1, 5}, {2, 2}, {2, 4},
+		{3, 2}, {3, 4}, {4, 2}, {4, 4}, {5, 1}, {5, 2}, {5, 3}, {5, 4}, {5, 5},
 	}
 	for idx := range base.Enemies {
 		if idx < len(enemySlots) {

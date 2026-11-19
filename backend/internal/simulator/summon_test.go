@@ -39,8 +39,8 @@ func TestSummonMonsterSpawnsRankScaledMinion(t *testing.T) {
 			if c.BaseDmg != 41.25 {
 				t.Fatalf("minion damage = %.2f, want 41.25", c.BaseDmg)
 			}
-			if c.GridX != 1 || c.GridY != 2 {
-				t.Fatalf("minion grid = (%d,%d), want frontline (1,2)", c.GridX, c.GridY)
+			if c.GridX != 1 || c.GridY != 3 {
+				t.Fatalf("minion grid = (%d,%d), want frontline (1,3)", c.GridX, c.GridY)
 			}
 			if c.Speed != ally.Speed {
 				t.Fatalf("minion speed = %.0f, want caster speed %.0f", c.Speed, ally.Speed)
@@ -240,8 +240,8 @@ func TestBattleStartSummonWolfFrontline(t *testing.T) {
 	if !found {
 		t.Fatal("expected Địa Lang Vương minion at battle start")
 	}
-	if ally.GridX != 2 {
-		t.Fatalf("caster GridX = %d, want 2 (pulled to mid)", ally.GridX)
+	if ally.GridX != 3 {
+		t.Fatalf("caster GridX = %d, want 3 (pulled to mid)", ally.GridX)
 	}
 	if !hasDetail(logs, "Địa Lang Vương") {
 		t.Fatal("missing SUMMONED log for Địa Lang Vương")

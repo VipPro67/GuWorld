@@ -614,7 +614,9 @@ func combatSessionSide(side []*simulator.CombatantAuto, pendingActor string, opp
 		}
 		entry := gin.H{"id": combatant.ID, "name": combatant.Name, "kind": combatant.Kind,
 			"hp": combatant.HP, "max_hp": combatant.MaxHP, "mana": combatant.Mana,
-			"max_mana": combatant.MaxMana, "dead": combatant.IsDead}
+			"max_mana": combatant.MaxMana, "dead": combatant.IsDead,
+			"grid_x": combatant.GridX, "grid_y": combatant.GridY,
+			"rank": combatant.Rank, "sub_rank": combatant.SubRank, "shield": combatant.VirtualShield}
 		if combatant.GuHouse != nil {
 			entry["gu_house"] = gin.H{
 				"id":               combatant.GuHouse.ID,

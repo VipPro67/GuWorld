@@ -6,7 +6,7 @@ import { useUIStore } from "@/store/useUIStore";
 import { AUTHENTICATED_SESSION } from "@/store/useGameStore";
 import type { AuthResponse, Player } from "@/store/useGameStore";
 import { invalidateCache } from "@/lib/fetch";
-import { getUiPreferences } from "@/lib/ui-preferences";
+import { APERTURE_NOTICE_VERSION, getUiPreferences } from "@/lib/ui-preferences";
 import { resetInventorySliceModuleState } from "@/store/slices/inventorySlice";
 import { resetWorldSliceModuleState } from "@/store/slices/worldSlice";
 import { resetProfileSliceModuleState } from "@/store/slices/profileSlice";
@@ -71,7 +71,7 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       get().addLog(`Đồng chí ${data.player.username} đã quy vị!`);
       const today = new Date().toISOString().split('T')[0];
       const hiddenUntil = getUiPreferences().changelogHideUntil;
-      if (hiddenUntil !== today) {
+      if (hiddenUntil !== today || getUiPreferences().apertureNoticeVersion !== APERTURE_NOTICE_VERSION) {
         useUIStore.getState().setShowChangelog(true);
       }
       return true;
@@ -178,6 +178,7 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       get().subscribePlayerEvents();
       get().subscribeTradeEvents();
       get().addLog(`Cổ sư ${data.player.username} khai mở Không Khiếu! Tư chất: ${data.player.aptitude_type} (${data.player.aptitude_percent}%)`);
+      useUIStore.getState().setShowChangelog(true);
       return true;
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));

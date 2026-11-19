@@ -88,11 +88,11 @@ func hasMinion(state *CombatState, actorID string) bool {
 func summonGrid(position string) (int, int) {
 	switch position {
 	case "mid":
-		return 2, 2
+		return 3, 3
 	case "back":
-		return 3, 2
+		return 5, 3
 	default:
-		return 1, 2 // frontline
+		return 1, 3 // frontline
 	}
 }
 
@@ -168,7 +168,7 @@ func spawnWolfFrontline(actor *CombatantAuto, isAlly bool, state *CombatState, d
 		Name:    "Địa Lang Vương (Triệu hồi)",
 		Kind:    "Minion",
 		GridX:   1, // Frontline
-		GridY:   2, // Mid
+		GridY:   3, // Mid
 		MaxHP:   minionHP,
 		HP:      minionHP,
 		BaseDmg: actor.BaseDmg / 3.0 * daoMult,
@@ -179,7 +179,7 @@ func spawnWolfFrontline(actor *CombatantAuto, isAlly bool, state *CombatState, d
 	} else {
 		state.Enemies = append(state.Enemies, minion)
 	}
-	actor.GridX = 2 // Move actor to Mid
+	actor.GridX = 3 // Move actor to Mid
 	detail := fmt.Sprintf("%s triệu hồi Địa Lang Vương (%.0f HP) lên tiền tuyến để đỡ đòn!", actor.Name, minionHP)
 	if daoMult > 1.0 {
 		detail = fmt.Sprintf("%s triệu hồi Địa Lang Vương (%.0f HP, Đạo Ngân ×%.2f) lên tiền tuyến để đỡ đòn!", actor.Name, minionHP, daoMult)
@@ -911,8 +911,8 @@ func cloneMechanics(source []CombatMechanic) []CombatMechanic {
 }
 
 func getFirstAliveDeterministic(alive []*CombatantAuto) *CombatantAuto {
-	for _, col := range []int{1, 2, 3} {
-		for _, targetY := range []int{1, 2, 3} {
+	for col := 1; col <= 5; col++ {
+		for targetY := 1; targetY <= 5; targetY++ {
 			for _, e := range alive {
 				if e.GridX == col && e.GridY == targetY {
 					return e
@@ -924,6 +924,61 @@ func getFirstAliveDeterministic(alive []*CombatantAuto) *CombatantAuto {
 		return alive[0]
 	}
 	return nil
+}
+
+type combatGridCell struct{ x, y int }
+
+func combatAreaCells(targetType string, targetX, targetY int) map[combatGridCell]struct{} {
+	cells := make(map[combatGridCell]struct{}, 9)
+	add := func(x, y int) {
+		if x >= 1 && x <= 5 && y >= 1 && y <= 5 {
+			cells[combatGridCell{x: x, y: y}] = struct{}{}
+		}
+	}
+	lineStart := func(center int) int {
+		return min(3, max(1, center-1))
+	}
+	switch strings.ToUpper(strings.TrimSpace(targetType)) {
+	case "ROW":
+		start := lineStart(targetY)
+		for y := start; y < start+3; y++ {
+			add(targetX, y)
+		}
+	case "COL", "COLUMN":
+		start := lineStart(targetX)
+		for x := start; x < start+3; x++ {
+			add(x, targetY)
+		}
+	case "CROSS":
+		for _, dy := range []int{-1, 1} {
+			preferredStart := lineStart(targetX)
+			for distance := 0; distance < 3; distance++ {
+				for _, startX := range []int{preferredStart - distance, preferredStart + distance} {
+					if startX < 1 || startX > 3 || startX > targetX || startX+2 < targetX {
+						continue
+					}
+					startY := targetY - (targetX-startX)*dy
+					if startY < 1 || startY > 5 || startY+2*dy < 1 || startY+2*dy > 5 {
+						continue
+					}
+					for offset := 0; offset < 3; offset++ {
+						add(startX+offset, startY+offset*dy)
+					}
+					return cells
+				}
+			}
+		}
+	case "ALL", "ALL_ENEMIES":
+		startX, startY := lineStart(targetX), lineStart(targetY)
+		for x := startX; x < startX+3; x++ {
+			for y := startY; y < startY+3; y++ {
+				add(x, y)
+			}
+		}
+	default:
+		add(targetX, targetY)
+	}
+	return cells
 }
 
 func getTarget(enemies []*CombatantAuto) *CombatantAuto {
@@ -972,27 +1027,11 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 	targetY := action.TargetY
 
 	switch targetType {
-	case "ROW":
+	case "ROW", "COL", "COLUMN", "CROSS", "ALL", "ALL_ENEMIES":
 		hits := make([]*CombatantAuto, 0, len(alive))
+		area := combatAreaCells(targetType, targetX, targetY)
 		for _, e := range alive {
-			if e.GridX == targetX {
-				hits = append(hits, e)
-			}
-		}
-		if len(hits) > 0 {
-			return hits
-		}
-		// fallback: first alive row
-		if fallback := getFirstAliveDeterministic(alive); fallback != nil {
-			alive[0] = fallback
-			return alive[:1]
-		}
-		return alive[:1]
-
-	case "COL", "COLUMN":
-		hits := make([]*CombatantAuto, 0, len(alive))
-		for _, e := range alive {
-			if e.GridY == targetY {
+			if _, ok := area[combatGridCell{x: e.GridX, y: e.GridY}]; ok {
 				hits = append(hits, e)
 			}
 		}
@@ -1004,33 +1043,6 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 			return alive[:1]
 		}
 		return alive[:1]
-
-	case "CROSS":
-		hits := make([]*CombatantAuto, 0, len(alive))
-		for _, e := range alive {
-			dx := e.GridX - targetX
-			dy := e.GridY - targetY
-			if dx < 0 {
-				dx = -dx
-			}
-			if dy < 0 {
-				dy = -dy
-			}
-			if (e.GridX == targetX && e.GridY == targetY) || (dx == 1 && dy == 1) {
-				hits = append(hits, e)
-			}
-		}
-		if len(hits) > 0 {
-			return hits
-		}
-		if fallback := getFirstAliveDeterministic(alive); fallback != nil {
-			alive[0] = fallback
-			return alive[:1]
-		}
-		return alive[:1]
-
-	case "ALL", "ALL_ENEMIES":
-		return alive
 
 	default: // "SINGLE"
 		var best *CombatantAuto
@@ -1042,9 +1054,9 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 					break
 				}
 			}
-			// 2. Match targetX, prioritize GridY 1 -> 3
+			// 2. Match targetX, prioritizing the topmost lane.
 			if best == nil {
-				for _, yVal := range []int{1, 2, 3} {
+				for yVal := 1; yVal <= 5; yVal++ {
 					for _, e := range alive {
 						if e.GridX == targetX && e.GridY == yVal {
 							best = e
@@ -1057,10 +1069,10 @@ func resolveTargets(enemies []*CombatantAuto, action *SimAction) []*CombatantAut
 				}
 			}
 		}
-		// 3. Fallback to columns 1, 2, 3, prioritizing GridY 1 -> 3 (standard non-bypass targeting)
+		// 3. Fallback to front-to-back columns and top-to-bottom lanes.
 		if best == nil {
-			for _, col := range []int{1, 2, 3} {
-				for _, yVal := range []int{1, 2, 3} {
+			for col := 1; col <= 5; col++ {
+				for yVal := 1; yVal <= 5; yVal++ {
 					for _, e := range alive {
 						if e.GridX == col && e.GridY == yVal {
 							best = e

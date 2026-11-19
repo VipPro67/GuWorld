@@ -936,9 +936,9 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   const renderCombatantList = (title: string, combatants: Combatant[], icon: React.ReactNode, isEnemy: boolean) => {
     if (!combatants || combatants.length === 0) return null;
-    const frontRow = combatants.filter(c => c.grid_x === 1);
-    const midRow = combatants.filter(c => c.grid_x === 2);
-    const backRow = combatants.filter(c => c.grid_x === 3);
+    const frontRow = combatants.filter(c => (c.grid_x || 0) <= 2);
+    const midRow = combatants.filter(c => c.grid_x === 3);
+    const backRow = combatants.filter(c => (c.grid_x || 0) >= 4);
     const borderColor = isEnemy ? "border-rose-800" : "border-emerald-800";
     const headerBg = isEnemy ? "bg-rose-950/20" : "bg-emerald-950/20";
 
@@ -1684,8 +1684,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         max_mana: player.max_mana || 100,
         mana: player.current_mana ?? 100,
         rank: player.rank || 1,
-        grid_x: 0,
-        grid_y: 0,
+        grid_x: 5,
+        grid_y: 3,
         avatar_url: pObj.avatar_url,
       });
 
@@ -1696,15 +1696,15 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
         simulationCombatants.forEach((c) => {
           const isPlayer = c.name === player.username || c.id === player.id;
           if (isPlayer) {
-            list[0] = { ...list[0], ...c, kind: "ally", grid_x: 0, grid_y: 0 };
+            list[0] = { ...list[0], ...c, kind: "ally", grid_x: c.grid_x ?? 5, grid_y: c.grid_y ?? 3 };
           } else {
             const isAlly = c.kind === "ally";
             const idx = isAlly ? allyIdx++ : enemyIdx++;
             list.push({
               ...c,
               kind: isAlly ? "ally" : "enemy",
-              grid_x: (c.grid_x as number | undefined) ?? ((idx % 3) + 1),
-              grid_y: (c.grid_y as number | undefined) ?? (Math.floor(idx / 3) + 1),
+              grid_x: (c.grid_x as number | undefined) ?? ((idx % 5) + 1),
+              grid_y: (c.grid_y as number | undefined) ?? (Math.floor(idx / 5) + 1),
             });
           }
         });
@@ -1733,8 +1733,8 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             max_mana: e.max_mana || 100,
             mana: e.current_mana ?? 100,
             rank: e.rank || 1,
-            grid_x: 4,
-            grid_y: idx,
+            grid_x: Number(e.grid_x) || [3, 3, 2, 4, 3, 2, 4, 2, 4][idx] || 3,
+            grid_y: Number(e.grid_y) || [5, 1, 1, 1, 3, 3, 3, 5, 5][idx] || ((idx % 5) + 1),
             kind_detail: e.kind || enemy.enemy_type || "",
           });
         });

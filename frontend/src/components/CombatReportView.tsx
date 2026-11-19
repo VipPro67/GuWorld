@@ -74,8 +74,8 @@ export function extractCombatantsFromLogs(
             max_mana: Number(a.max_mana || a.maxMana || 100),
             mana: Number(a.mana ?? a.current_mana ?? 100),
             rank: Number(a.rank || 1),
-            grid_x: Number(a.grid_x && Number(a.grid_x) >= 1 && Number(a.grid_x) <= 3 ? a.grid_x : (idx % 3) + 1),
-            grid_y: Number(a.grid_y && Number(a.grid_y) >= 1 && Number(a.grid_y) <= 3 ? a.grid_y : Math.floor(idx / 3) + 1),
+            grid_x: Number(a.grid_x && Number(a.grid_x) >= 1 && Number(a.grid_x) <= 5 ? a.grid_x : (idx % 5) + 1),
+            grid_y: Number(a.grid_y && Number(a.grid_y) >= 1 && Number(a.grid_y) <= 5 ? a.grid_y : Math.floor(idx / 5) + 1),
             avatar_url: (a.avatar_url as string) || undefined,
           });
         });
@@ -91,8 +91,8 @@ export function extractCombatantsFromLogs(
             max_mana: Number(e.max_mana || e.maxMana || 100),
             mana: Number(e.mana ?? e.current_mana ?? 100),
             rank: Number(e.rank || 1),
-            grid_x: Number(e.grid_x && Number(e.grid_x) >= 1 && Number(e.grid_x) <= 3 ? e.grid_x : (idx % 3) + 1),
-            grid_y: Number(e.grid_y && Number(e.grid_y) >= 1 && Number(e.grid_y) <= 3 ? e.grid_y : Math.floor(idx / 3) + 1),
+            grid_x: Number(e.grid_x && Number(e.grid_x) >= 1 && Number(e.grid_x) <= 5 ? e.grid_x : (idx % 5) + 1),
+            grid_y: Number(e.grid_y && Number(e.grid_y) >= 1 && Number(e.grid_y) <= 5 ? e.grid_y : Math.floor(idx / 5) + 1),
             avatar_url: (e.avatar_url as string) || undefined,
           });
         });
@@ -118,8 +118,8 @@ export function extractCombatantsFromLogs(
         max_mana: 100,
         mana: 100,
         rank: 1,
-        grid_x: isAlly ? ((allyIdx % 3) + 1) : ((enemyIdx % 3) + 1),
-        grid_y: isAlly ? (Math.floor(allyIdx++ / 3) + 1) : (Math.floor(enemyIdx++ / 3) + 1),
+        grid_x: isAlly ? ((allyIdx % 5) + 1) : ((enemyIdx % 5) + 1),
+        grid_y: isAlly ? (Math.floor(allyIdx++ / 5) + 1) : (Math.floor(enemyIdx++ / 5) + 1),
       };
     }
     if (log.target_id && !map[log.target_id]) {
@@ -133,8 +133,8 @@ export function extractCombatantsFromLogs(
         max_mana: 100,
         mana: 100,
         rank: 1,
-        grid_x: isAlly ? ((allyIdx % 3) + 1) : ((enemyIdx % 3) + 1),
-        grid_y: isAlly ? (Math.floor(allyIdx++ / 3) + 1) : (Math.floor(enemyIdx++ / 3) + 1),
+        grid_x: isAlly ? ((allyIdx % 5) + 1) : ((enemyIdx % 5) + 1),
+        grid_y: isAlly ? (Math.floor(allyIdx++ / 5) + 1) : (Math.floor(enemyIdx++ / 5) + 1),
       };
     }
   });

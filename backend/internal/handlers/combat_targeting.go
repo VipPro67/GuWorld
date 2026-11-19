@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"math"
 	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -24,9 +23,9 @@ func ResolveSingleTarget(team []models.Combatant, prefX, prefY int, hasBypass bo
 				return prefX, prefY, true
 			}
 		}
-		// Fallback prioritizing GridX (1,2,3) then GridY (1,2,3)
-		for _, col := range []int{1, 2, 3} {
-			for _, targetY := range []int{1, 2, 3} {
+		// Fallback prioritizing front-to-back, then top-to-bottom.
+		for col := 1; col <= 5; col++ {
+			for targetY := 1; targetY <= 5; targetY++ {
 				for _, c := range alive {
 					if c.GridX == col && c.GridY == targetY {
 						return c.GridX, c.GridY, true
@@ -37,7 +36,7 @@ func ResolveSingleTarget(team []models.Combatant, prefX, prefY int, hasBypass bo
 		return alive[0].GridX, alive[0].GridY, true
 	}
 
-	for col := 1; col <= 3; col++ {
+	for col := 1; col <= 5; col++ {
 		var colAlive []models.Combatant
 		for _, c := range alive {
 			if c.GridX == col {
@@ -45,8 +44,8 @@ func ResolveSingleTarget(team []models.Combatant, prefX, prefY int, hasBypass bo
 			}
 		}
 		if len(colAlive) > 0 {
-			// Fallback: prioritize GridY = 1, then 2, then 3
-			for _, targetY := range []int{1, 2, 3} {
+			// Fallback: prioritize the topmost lane.
+			for targetY := 1; targetY <= 5; targetY++ {
 				for _, c := range colAlive {
 					if c.GridY == targetY {
 						return c.GridX, c.GridY, true
@@ -57,9 +56,9 @@ func ResolveSingleTarget(team []models.Combatant, prefX, prefY int, hasBypass bo
 		}
 	}
 
-	// Final fallback: prioritize GridX (1,2,3) then GridY (1,2,3)
-	for _, col := range []int{1, 2, 3} {
-		for _, targetY := range []int{1, 2, 3} {
+	// Final fallback: prioritize front-to-back, then top-to-bottom.
+	for col := 1; col <= 5; col++ {
+		for targetY := 1; targetY <= 5; targetY++ {
 			for _, c := range alive {
 				if c.GridX == col && c.GridY == targetY {
 					return c.GridX, c.GridY, true
@@ -74,32 +73,10 @@ func ResolveTargets(team []models.Combatant, targetType string, targetX, targetY
 	var targets []int
 
 	switch strings.ToUpper(strings.TrimSpace(targetType)) {
-	case "ROW":
+	case "ROW", "COL", "COLUMN", "CROSS", "ALL", "ALL_ENEMIES":
+		area := targetAreaCells(targetType, targetX, targetY)
 		for idx, c := range team {
-			if c.HP > 0 && c.GridX == targetX {
-				targets = append(targets, idx)
-			}
-		}
-	case "COL", "COLUMN":
-		for idx, c := range team {
-			if c.HP > 0 && c.GridY == targetY {
-				targets = append(targets, idx)
-			}
-		}
-	case "CROSS":
-		for idx, c := range team {
-			if c.HP <= 0 {
-				continue
-			}
-			dx := int(math.Abs(float64(c.GridX - targetX)))
-			dy := int(math.Abs(float64(c.GridY - targetY)))
-			if (c.GridX == targetX && c.GridY == targetY) || (dx == 1 && dy == 1) {
-				targets = append(targets, idx)
-			}
-		}
-	case "ALL", "ALL_ENEMIES":
-		for idx, c := range team {
-			if c.HP > 0 {
+			if _, ok := area[[2]int{c.GridX, c.GridY}]; ok && c.HP > 0 {
 				targets = append(targets, idx)
 			}
 		}
@@ -117,8 +94,8 @@ func ResolveTargets(team []models.Combatant, targetType string, targetX, targetY
 
 	if len(targets) == 0 {
 		found := false
-		for _, col := range []int{1, 2, 3} {
-			for _, targetY := range []int{1, 2, 3} {
+		for col := 1; col <= 5; col++ {
+			for targetY := 1; targetY <= 5; targetY++ {
 				for idx, c := range team {
 					if c.HP > 0 && c.GridX == col && c.GridY == targetY {
 						targets = append(targets, idx)
@@ -145,6 +122,54 @@ func ResolveTargets(team []models.Combatant, targetType string, targetX, targetY
 	}
 
 	return targets
+}
+
+func targetAreaCells(targetType string, targetX, targetY int) map[[2]int]struct{} {
+	cells := make(map[[2]int]struct{}, 9)
+	add := func(x, y int) {
+		if x >= 1 && x <= 5 && y >= 1 && y <= 5 {
+			cells[[2]int{x, y}] = struct{}{}
+		}
+	}
+	start := func(center int) int { return min(3, max(1, center-1)) }
+	switch strings.ToUpper(strings.TrimSpace(targetType)) {
+	case "ROW":
+		for y := start(targetY); y < start(targetY)+3; y++ {
+			add(targetX, y)
+		}
+	case "COL", "COLUMN":
+		for x := start(targetX); x < start(targetX)+3; x++ {
+			add(x, targetY)
+		}
+	case "CROSS":
+		for _, dy := range []int{-1, 1} {
+			preferredStart := start(targetX)
+			for distance := 0; distance < 3; distance++ {
+				for _, startX := range []int{preferredStart - distance, preferredStart + distance} {
+					if startX < 1 || startX > 3 || startX > targetX || startX+2 < targetX {
+						continue
+					}
+					startY := targetY - (targetX-startX)*dy
+					if startY < 1 || startY > 5 || startY+2*dy < 1 || startY+2*dy > 5 {
+						continue
+					}
+					for offset := 0; offset < 3; offset++ {
+						add(startX+offset, startY+offset*dy)
+					}
+					return cells
+				}
+			}
+		}
+	case "ALL", "ALL_ENEMIES":
+		for x := start(targetX); x < start(targetX)+3; x++ {
+			for y := start(targetY); y < start(targetY)+3; y++ {
+				add(x, y)
+			}
+		}
+	default:
+		add(targetX, targetY)
+	}
+	return cells
 }
 
 func findCombatant(combatState *models.CombatState, id string) (*models.Combatant, bool, int) {

@@ -6,7 +6,7 @@ import { useUIStore } from "@/store/useUIStore";
 import { AUTHENTICATED_SESSION } from "@/store/useGameStore";
 import type { Player } from "@/store/useGameStore";
 import { shouldApplyReconciliation, shouldRefreshCollections } from "@/lib/player-reconciliation";
-import { getUiPreferences } from "@/lib/ui-preferences";
+import { APERTURE_NOTICE_VERSION, getUiPreferences } from "@/lib/ui-preferences";
 
 const lastStatusFetchTimes = new Map<string, number>();
 const pendingStatusFetches = new Map<string, Promise<void>>();
@@ -97,7 +97,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
       }
       const today = new Date().toISOString().split('T')[0];
       const hiddenUntil = getUiPreferences().changelogHideUntil;
-      if (hiddenUntil !== today) {
+      if (hiddenUntil !== today || getUiPreferences().apertureNoticeVersion !== APERTURE_NOTICE_VERSION) {
         useUIStore.getState().setShowChangelog(true);
       }
     } catch (caught: unknown) {

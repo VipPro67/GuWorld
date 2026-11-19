@@ -486,8 +486,8 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           maxMp: c.max_mana || 0,
           mp: c.mana || 0,
           shield: c.shield || 0,
-          gridX: c.grid_x || 2,
-          gridY: c.grid_y || 2,
+          gridX: c.grid_x || 3,
+          gridY: c.grid_y || 3,
           damage: c.damage || 0,
           defense: c.defense || 0,
           speed: c.speed || 0,
@@ -523,8 +523,8 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               maxMp: Number(a.max_mana || a.maxMana || 0),
               mp: Number(a.mana ?? a.current_mana ?? 0),
               shield: Number(a.shield || 0),
-              gridX: Number(a.grid_x && Number(a.grid_x) >= 1 && Number(a.grid_x) <= 3 ? a.grid_x : (idx % 3) + 1),
-              gridY: Number(a.grid_y && Number(a.grid_y) >= 1 && Number(a.grid_y) <= 3 ? a.grid_y : Math.floor(idx / 3) + 1),
+              gridX: Number(a.grid_x && Number(a.grid_x) >= 1 && Number(a.grid_x) <= 5 ? a.grid_x : (idx % 5) + 1),
+              gridY: Number(a.grid_y && Number(a.grid_y) >= 1 && Number(a.grid_y) <= 5 ? a.grid_y : Math.floor(idx / 5) + 1),
               damage: Number(a.damage || 0),
               defense: Number(a.defense || 0),
               speed: Number(a.speed || 0),
@@ -548,8 +548,8 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               maxMp: Number(e.max_mana || e.maxMana || 0),
               mp: Number(e.mana ?? e.current_mana ?? 0),
               shield: Number(e.shield || 0),
-              gridX: Number(e.grid_x && Number(e.grid_x) >= 1 && Number(e.grid_x) <= 3 ? e.grid_x : (idx % 3) + 1),
-              gridY: Number(e.grid_y && Number(e.grid_y) >= 1 && Number(e.grid_y) <= 3 ? e.grid_y : Math.floor(idx / 3) + 1),
+              gridX: Number(e.grid_x && Number(e.grid_x) >= 1 && Number(e.grid_x) <= 5 ? e.grid_x : (idx % 5) + 1),
+              gridY: Number(e.grid_y && Number(e.grid_y) >= 1 && Number(e.grid_y) <= 5 ? e.grid_y : Math.floor(idx / 5) + 1),
               damage: Number(e.damage || 0),
               defense: Number(e.defense || 0),
               speed: Number(e.speed || 0),
@@ -585,8 +585,8 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           maxMp: 0,
           mp: 0,
           shield: 0,
-          gridX: (idx % 3) + 1,
-          gridY: Math.floor(idx / 3) + 1,
+          gridX: (idx % 5) + 1,
+          gridY: Math.floor(idx / 5) + 1,
           damage: 0,
           defense: 0,
           speed: 0,
@@ -608,8 +608,8 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
           maxMp: 0,
           mp: 0,
           shield: 0,
-          gridX: (idx % 3) + 1,
-          gridY: Math.floor(idx / 3) + 1,
+          gridX: (idx % 5) + 1,
+          gridY: Math.floor(idx / 5) + 1,
           damage: 0,
           defense: 0,
           speed: 0,
@@ -1298,15 +1298,15 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             Phe Ta
             <span className="text-[10px] text-zinc-600 ml-auto">{allies.length} chiến binh</span>
           </h3>
-          <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
-            {[1, 2, 3].map((gridX) =>
-              [3, 2, 1].map((gridY) => {
+          <div className="grid grid-cols-5 gap-1 sm:gap-1.5">
+            {[1, 2, 3, 4, 5].map((gridX) =>
+              [5, 4, 3, 2, 1].map((gridY) => {
                 const list = Object.values(state.combatantStates).filter((c) => c.kind === "ally");
                 const cellCombatant =
                   list.find((c) => c.gridX === gridX && c.gridY === gridY) ||
                   list.find((c, idx) => {
-                    const gx = c.gridX >= 1 && c.gridX <= 3 ? c.gridX : (idx % 3) + 1;
-                    const gy = c.gridY >= 1 && c.gridY <= 3 ? c.gridY : Math.floor(idx / 3) + 1;
+                    const gx = c.gridX >= 1 && c.gridX <= 5 ? c.gridX : (idx % 5) + 1;
+                    const gy = c.gridY >= 1 && c.gridY <= 5 ? c.gridY : Math.floor(idx / 5) + 1;
                     return gx === gridX && gy === gridY;
                   });
                 return renderGridCell(cellCombatant, gridX, gridY);
@@ -1322,15 +1322,15 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             Kẻ Địch
             <span className="text-[10px] text-zinc-600 ml-auto">{enemies.length} mục tiêu</span>
           </h3>
-          <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
-            {[1, 2, 3].map((gridX) =>
-              [1, 2, 3].map((gridY) => {
+          <div className="grid grid-cols-5 gap-1 sm:gap-1.5">
+            {[1, 2, 3, 4, 5].map((gridX) =>
+              [1, 2, 3, 4, 5].map((gridY) => {
                 const list = Object.values(state.combatantStates).filter((c) => c.kind === "enemy");
                 const cellCombatant =
                   list.find((c) => c.gridX === gridX && c.gridY === gridY) ||
                   list.find((c, idx) => {
-                    const gx = c.gridX >= 1 && c.gridX <= 3 ? c.gridX : (idx % 3) + 1;
-                    const gy = c.gridY >= 1 && c.gridY <= 3 ? c.gridY : Math.floor(idx / 3) + 1;
+                    const gx = c.gridX >= 1 && c.gridX <= 5 ? c.gridX : (idx % 5) + 1;
+                    const gy = c.gridY >= 1 && c.gridY <= 5 ? c.gridY : Math.floor(idx / 5) + 1;
                     return gx === gridX && gy === gridY;
                   });
                 return renderGridCell(cellCombatant, gridX, gridY);

@@ -185,8 +185,8 @@ type SimAction struct {
 
 	// Targeting (AOE support)
 	TargetType string // "SINGLE" | "ROW" | "COL" | "CROSS" | "ALL" | "ALL_ENEMIES"
-	TargetX    int    // preferred grid X (1=Front, 2=Mid, 3=Back)
-	TargetY    int    // preferred grid Y (1=Top, 2=Mid, 3=Bottom)
+	TargetX    int    // preferred combat grid depth, 1 (front) through 5 (back)
+	TargetY    int    // preferred combat grid lane, 1 (top) through 5 (bottom)
 	Bypass     bool   // true if action bypasses frontline protection (e.g. CurveAttack)
 
 	// Priority (lower = higher priority, 0 = highest). Used by engine for action ordering.
@@ -316,8 +316,8 @@ type CombatantAuto struct {
 	Race              string
 	Rank              int
 	SubRank           int
-	GridX             int // 1=Front, 2=Mid, 3=Back
-	GridY             int // 1=Top, 2=Mid, 3=Bottom
+	GridX             int // 1..5, front to back
+	GridY             int // 1..5, top to bottom
 	MaxHP             float64
 	HP                float64
 	MaxMana           float64

@@ -23,7 +23,7 @@ import { TradeRoomModal } from "@/components/TradeRoomModal";
 import { GameLoadingScreen } from "@/components/GameLoadingScreen";
 import { ClearCacheButton } from "@/components/ClearCacheModal";
 import { installPlayerLifecycleReconciliation } from "@/lib/player-reconciliation";
-import { updateUiPreferences } from "@/lib/ui-preferences";
+import { APERTURE_NOTICE_VERSION, updateUiPreferences } from "@/lib/ui-preferences";
 import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 import { installHttpFallbackPolling } from "@/lib/http-fallback";
 
@@ -292,6 +292,7 @@ export default function Home() {
   const [dontShowToday, setDontShowToday] = useState(false);
 
   const handleCloseChangelog = useCallback(() => {
+    updateUiPreferences({ apertureNoticeVersion: APERTURE_NOTICE_VERSION });
     if (dontShowToday) {
       const today = new Date().toISOString().split('T')[0];
       updateUiPreferences({ changelogHideUntil: today });
@@ -955,10 +956,10 @@ export default function Home() {
                 <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-zinc-950/10 via-zinc-950/30 to-zinc-950/75" />
                 <div className="relative z-[1] max-w-[78%]">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-1 text-[9px] font-mono uppercase tracking-[.18em] text-amber-200"><Sparkles className="h-3 w-3" /> Bản cập nhật mới</span>
-                  <h4 className="mt-2 font-serif text-xl font-bold text-amber-100">Ngũ Vực dậy sóng</h4>
-                  <p className="mt-1 text-[11px] leading-relaxed text-stone-300/80">PvP, hồi sinh và chiến lợi phẩm được tinh chỉnh.</p>
+                  <h4 className="mt-2 font-serif text-xl font-bold text-amber-100">Môn Hộ Tiên Khiếu xuất thế</h4>
+                  <p className="mt-1 text-[11px] leading-relaxed text-stone-300/80">Dấu tích của những phúc địa và động thiên cổ vừa hiện trên bản đồ Ngũ Vực.</p>
                 </div>
-                <span className="absolute bottom-3 right-4 font-mono text-[10px] text-amber-100/50">v0.8.4</span>
+                <span className="absolute bottom-3 right-4 font-mono text-[10px] text-amber-100/50">Tân cơ duyên</span>
               </section>
               <div className="grid gap-2 sm:grid-cols-2">
                 <article className="rounded-xl border border-sky-400/20 bg-sky-950/30 p-3">
@@ -976,6 +977,10 @@ export default function Home() {
                 <article className="rounded-xl border border-emerald-400/20 bg-emerald-950/30 p-3">
                   <span className="text-lg">🛡️</span><h4 className="mt-1 text-xs font-bold text-emerald-200">Hồi sinh & miễn chiến</h4>
                   <p className="mt-1 text-[10px] leading-relaxed text-slate-300/75">Hồi sinh gần khu an toàn; nạn nhân PvP được miễn chiến 10 phút.</p>
+                </article>
+                <article className="rounded-xl border border-violet-400/20 bg-violet-950/30 p-3 sm:col-span-2">
+                  <span className="text-lg">🌀</span><h4 className="mt-1 text-xs font-bold text-violet-200">Phúc địa và động thiên vô chủ</h4>
+                  <p className="mt-1 text-[10px] leading-relaxed text-slate-300/75">Hãy thám sát bản đồ để tìm Môn Hộ các Động Thiên & Phúc Địa công cộng rải rác khắp Ngũ Vực (Hồ Tiên, Hắc Phàm, Lạc Thiên, Khí Hải, Thất Tinh, Vương Đình, Bồng Lai, Huyết Hải...). Khi đã dò ra, đạo hữu có thể bước vào khám phá, tranh đoạt và thu hoạch tài nguyên chung. Người đủ cảnh giới lưu phái mới có thể hấp thụ một khiếu; khi chủ nhân thọ tận, Tiên Khiếu của họ cũng có thể hóa thành cơ duyên vô chủ.</p>
                 </article>
               </div>
             </div>

@@ -12,6 +12,8 @@ Encounter thường bắt đầu từ world trigger, arena hoặc route combat t
 
 Vào encounter, chọn đội hình rồi bắt đầu điều khiển theo lượt hoặc mô phỏng tự động. PvP thật yêu cầu mỗi bên khóa đội hình; khi cả hai khóa, session tự khởi chạy. Sau 45 giây nếu session chưa mở, server tự mô phỏng trận để encounter không bị treo. Hiệu ứng kết thúc trận ngay lúc bắt đầu sẽ settle encounter và mở báo cáo kết quả mà không yêu cầu command. Nếu replay đã kết thúc nhưng session cũ còn trạng thái active, lần đọc session sẽ settle kết quả và mở báo cáo thay vì chờ lượt vô thời hạn. Trước khi bắt đầu session, PvP ảo có thể hủy ngay; PvP thật cần một bên đề nghị và bên còn lại đồng ý, sau đó trạng thái chuẩn bị của cả hai người được gỡ. Encounter PvE do quái chủ động tấn công không thể rút lui ở bước chuẩn bị. Khi session hoạt động, đọc actor đang chờ và deadline, gửi command với UUID cùng expected revision. Chọn action hoặc plan; PvP dùng PLAN/AUTO và lượt chỉ giải quyết khi hai phía đã sẵn sàng. Sau mỗi response cập nhật session revision.
 
+Trận có điều khiển hiển thị hai đội trên lưới 5×5; mỗi chiến binh chiếm vị trí `grid_x` (tiền→hậu) và `grid_y` (trên→dưới). Chọn mục tiêu trên lưới rồi chọn chiêu. `ROW` đánh 3 ô liên tiếp theo trục ngang, `COL` đánh 3 ô theo chiều sâu, `CROSS` đánh 3 ô chéo qua mục tiêu; `ALL` đánh vùng 3×3 (9 ô) quanh mục tiêu. Vùng diện tích được dịch vào trong khi mục tiêu ở rìa để vẫn giữ đủ số ô. Chỉ combatant còn sống trong vùng chịu hiệu ứng.
+
 Encounter quái phát sinh khi di chuyển có thể bật **Tự động xử lý chiến đấu khi farm** trong **Lobby → Cài Đặt → Chiến thuật turn-based**. Tùy chọn này tự settle trận và không mở màn điều khiển hoặc báo cáo; nó không đổi luồng của encounter bắt đầu trực tiếp từ màn chiến đấu.
 
 ## Luật, chi phí và giới hạn
@@ -68,7 +70,7 @@ Combat profiles, Gu effects, monsters, arena rules và rank scaling ảnh hưở
 - Engine: `backend/internal/simulator/`.
 - Handlers: `backend/internal/handlers/combat_*.go`.
 - Backend: session lifecycle `backend/internal/handlers/combat_session.go`, `combat_lifecycle.go`, Gu scaling `combat_effects.go`, simulation adapter `combat_sim_build.go`, settlement `combat_finalize.go`.
-- Frontend: `frontend/src/components/CombatScreen.tsx`, `frontend/src/store/slices/combatSlice.ts`.
+- Frontend: `frontend/src/components/CombatScreen.tsx`, `frontend/src/components/InteractiveCombatPanel.tsx`, `frontend/src/components/CombatReplayView.tsx`, `frontend/src/components/CombatReportView.tsx`, `frontend/src/store/slices/combatSlice.ts`.
 
 ## API liên quan
 

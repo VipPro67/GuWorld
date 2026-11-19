@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Heart, LogOut, Shield, Sparkles, Swords, Zap } from "lucide-react";
+import { LogOut, Shield, Sparkles, Swords, Zap } from "lucide-react";
 import { Num } from "@/components/Num";
+import { MonsterSprite } from "@/components/MonsterSprite";
 
 type GuHouseView = {
   id?: string;
@@ -44,6 +45,11 @@ type CombatantView = Record<string, unknown> & {
   max_hp?: number;
   mana?: number;
   max_mana?: number;
+  grid_x?: number;
+  grid_y?: number;
+  rank?: number;
+  shield?: number;
+  avatar_url?: string;
   dead?: boolean;
   gu_house?: GuHouseView;
   actions?: CombatActionView[];
@@ -80,12 +86,14 @@ const value = (input: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-function TeamCombatant({
+function GridCombatant({
   combatant,
   active,
   target,
   selectable,
   side,
+  gridX,
+  gridY,
   onClick,
 }: {
   combatant: CombatantView;
@@ -93,32 +101,22 @@ function TeamCombatant({
   target: boolean;
   selectable: boolean;
   side: "ally" | "enemy";
+  gridX: number;
+  gridY: number;
   onClick: () => void;
 }) {
   const hp = Math.max(0, value(combatant.hp));
   const maxHP = Math.max(1, value(combatant.max_hp));
   const hpPercent = Math.max(0, Math.min(100, (hp / maxHP) * 100));
-  const mana = Math.max(0, value(combatant.mana));
-  const maxMana = Math.max(1, value(combatant.max_mana));
-  const manaPercent = Math.max(0, Math.min(100, (mana / maxMana) * 100));
+  const shield = Math.max(0, value(combatant.shield));
   const dead = Boolean(combatant.dead) || hp <= 0;
-
   const guHouse = combatant.gu_house;
   const inGuHouse = Boolean(guHouse && guHouse.active && !guHouse.is_destroyed);
-  const houseDestroyed = Boolean(guHouse && guHouse.is_destroyed);
-  const formHp = Math.max(0, value(guHouse?.hp));
-  const maxFormHp = Math.max(1, value(guHouse?.max_hp));
-  const formHpPercent = Math.max(0, Math.min(100, (formHp / maxFormHp) * 100));
-
-  const borderColor = target
-    ? "border-amber-300 bg-amber-950/40 ring-2 ring-amber-300/50"
-    : inGuHouse
-      ? "border-amber-500/80 bg-gradient-to-b from-amber-950/40 via-zinc-900/90 to-zinc-950 ring-2 ring-amber-400/40 shadow-lg shadow-amber-500/20"
-      : active
-        ? side === "ally"
-          ? "border-emerald-400 bg-emerald-950/40 ring-1 ring-emerald-400/40"
-          : "border-rose-400 bg-rose-950/40 ring-1 ring-rose-400/40"
-        : "border-zinc-800 bg-zinc-900/70";
+  const kind = String(combatant.kind || "");
+  const icon = inGuHouse ? "🏛" : /pet|beast/i.test(kind) ? "🐾" : /boss|enemy|monster/i.test(kind) ? "👹" : String(combatant.name || "?").slice(0, 1).toUpperCase();
+  const borderColor = target ? "border-amber-300 bg-amber-950/50 ring-2 ring-amber-300/60" :
+    active ? side === "ally" ? "border-emerald-400 bg-emerald-950/40 ring-1 ring-emerald-400/50" : "border-rose-400 bg-rose-950/40 ring-1 ring-rose-400/50" :
+    inGuHouse ? "border-amber-500/70 bg-amber-950/40" : side === "ally" ? "border-emerald-900/60 bg-zinc-900/80" : "border-rose-900/60 bg-zinc-900/80";
 
   return (
     <button
@@ -126,78 +124,33 @@ function TeamCombatant({
       onClick={onClick}
       disabled={!selectable || dead}
       aria-pressed={target}
-      className={`w-full rounded-2xl border p-3 text-left shadow-lg shadow-black/20 transition ${borderColor} ${
-        dead ? "opacity-45" : selectable ? "hover:-translate-y-0.5 hover:border-amber-300/70" : ""
-      } disabled:cursor-default`}
+      aria-label={`${combatant.name || "Chiến binh"}, ô ${gridX}, ${gridY}, HP ${Math.round(hp)} trên ${Math.round(maxHP)}${dead ? ", đã gục" : ""}`}
+      title={`${combatant.name || "Chiến binh"} · ô ${gridX},${gridY} · HP ${Math.round(hp)}/${Math.round(maxHP)}${inGuHouse ? ` · ${guHouse?.name || "Tiên Cổ Phòng"}` : ""}`}
+      className={`relative flex h-full w-full max-w-full min-w-0 flex-col items-center gap-1 overflow-hidden rounded-xl border p-1.5 text-left transition sm:p-1.5 ${borderColor} ${dead ? "opacity-45" : selectable ? "cursor-pointer hover:border-amber-300/80" : ""} disabled:cursor-default`}
     >
-      <div className="mb-3 flex items-center gap-3">
-        <div className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full border bg-gradient-to-br ${
-          inGuHouse
-            ? "border-amber-400 from-amber-800 to-zinc-950 text-amber-200 shadow-md shadow-amber-500/30"
-            : side === "ally"
-              ? "border-emerald-400/40 from-emerald-900 to-zinc-950 text-emerald-200"
-              : "border-rose-400/40 from-rose-900 to-zinc-950 text-rose-200"
-        }`}>
-          {inGuHouse ? (
-            <span className="text-lg">🏛️</span>
-          ) : (
-            <span className="text-lg font-black">{String(combatant.name || "?").slice(0, 1).toUpperCase()}</span>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 truncate font-bold text-zinc-100">
-            <span className="truncate">{String(combatant.name || "Chiến binh")}</span>
-            {inGuHouse && (
-              <span className="shrink-0 rounded-full border border-amber-400/40 bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">
-                🏛️ Tiên Cổ Ốc · Bậc {guHouse?.rank || 6}
-              </span>
-            )}
-            {houseDestroyed && (
-              <span className="shrink-0 rounded-full border border-rose-500/40 bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-300">
-                💥 Vỡ Phòng
-              </span>
-            )}
-          </div>
-          <div className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-            {dead ? "Đã gục" : active ? "Đang hành động" : inGuHouse ? `${guHouse?.name || "Cổ Phòng"} (Giảm ${Math.round((guHouse?.damage_reduction || 0) * 100)}% ST)` : String(combatant.kind || "Chiến binh")}
-          </div>
-        </div>
-        {target && <span className="rounded-full border border-amber-300/40 bg-amber-300/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-amber-200">Mục tiêu</span>}
-      </div>
-
-      {inGuHouse && (
-        <div className="mb-2.5 rounded-xl border border-amber-500/40 bg-amber-950/30 p-2">
-          <div className="mb-1 flex items-center justify-between text-[11px] text-amber-300">
-            <span className="flex items-center gap-1.5 font-semibold">
-              <Shield className="h-3.5 w-3.5 text-amber-400" /> Form HP Cổ Phòng
-            </span>
-            <span className="font-mono text-amber-200">
-              <Num value={Math.round(formHp)} /><span className="text-amber-500/60"> / </span><Num value={Math.round(maxFormHp)} />
-            </span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-black/70">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-amber-600 via-amber-400 to-yellow-300 transition-[width] duration-500"
-              style={{ width: `${formHpPercent}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="mb-1.5 flex items-center justify-between text-[11px] text-zinc-400">
-        <span className="flex items-center gap-1.5"><Heart className="h-3.5 w-3.5 text-rose-400" /> Sinh lực nhục thân</span>
-        <span className="font-mono text-zinc-200"><Num value={Math.round(hp)} /><span className="text-zinc-600"> / </span><Num value={Math.round(maxHP)} /></span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-black/70">
-        <div className="h-full rounded-full bg-gradient-to-r from-rose-700 via-rose-500 to-rose-300 transition-[width] duration-500" style={{ width: `${hpPercent}%` }} />
-      </div>
-      <div className="mb-1.5 mt-3 flex items-center justify-between text-[11px] text-zinc-500">
-        <span className="flex items-center gap-1.5"><Zap className="h-3.5 w-3.5 text-sky-400" /> Chân nguyên</span>
-        <span className="font-mono text-zinc-300"><Num value={Math.round(mana)} /><span className="text-zinc-700"> / </span><Num value={Math.round(maxMana)} /></span>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-black/70">
-        <div className="h-full rounded-full bg-gradient-to-r from-sky-700 to-cyan-300 transition-[width] duration-500" style={{ width: `${manaPercent}%` }} />
-      </div>
+      <span className="flex w-full min-w-0 items-center justify-between gap-1">
+        <span className={`block min-w-0 flex-1 truncate text-[8px] font-bold sm:text-[10px] ${dead ? "text-zinc-500 line-through" : side === "ally" ? "text-emerald-300" : "text-rose-300"}`}>{String(combatant.name || "?")}</span>
+        {dead ? <span aria-hidden="true" className="shrink-0 text-[9px] text-rose-500">†</span> : combatant.rank ? <span className="shrink-0 rounded bg-zinc-800/90 px-1 text-[7px] font-mono text-amber-300 sm:text-[8px]">{combatant.rank >= 6 ? `C${combatant.rank}` : `H${combatant.rank}`}</span> : active ? <span aria-hidden="true" className="shrink-0 text-[8px] text-amber-300">◆</span> : null}
+      </span>
+      <span className="flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden">
+        {side === "enemy" ? (
+          <MonsterSprite templateId={String(combatant.id || "")} alt={String(combatant.name || "Kẻ địch")} className="h-[90%] w-[90%] object-contain drop-shadow-[0_0_10px_rgba(251,113,133,0.25)]" />
+        ) : combatant.avatar_url ? (
+          <img src={combatant.avatar_url} alt="" className="h-[62%] aspect-square rounded-full border-2 border-emerald-500/60 object-cover" />
+        ) : (
+          <span aria-hidden="true" className="flex h-[62%] aspect-square items-center justify-center overflow-hidden rounded-full border-2 border-emerald-500/60 bg-emerald-950 text-[10px] font-black text-emerald-200 sm:text-sm">{icon}</span>
+        )}
+      </span>
+      <span className="w-full min-w-0">
+        <span className="mb-0.5 flex items-center justify-between gap-1 text-[7px] font-mono leading-tight sm:text-[8px]">
+          <span className="shrink-0 text-zinc-400">HP</span>
+          <span className="min-w-0 truncate text-right font-bold text-zinc-200"><Num value={Math.round(hp)} /> / <Num value={Math.round(maxHP)} /></span>
+        </span>
+        <span className="block h-1.5 w-full overflow-hidden rounded-full border border-zinc-800 bg-zinc-900">
+          <span className={`block h-full rounded-full transition-[width] ${dead ? "bg-zinc-700" : side === "ally" ? "bg-gradient-to-r from-emerald-600 to-emerald-400" : "bg-gradient-to-r from-rose-600 to-rose-400"}`} style={{ width: `${hpPercent}%` }} />
+        </span>
+        {shield > 0 && <span className="mt-0.5 block truncate text-center text-[7px] font-mono text-cyan-300">🛡 {Math.round(shield)}</span>}
+      </span>
     </button>
   );
 }
@@ -212,6 +165,7 @@ export function InteractiveCombatPanel({
 }: InteractiveCombatPanelProps) {
   const [submitting, setSubmitting] = useState(false);
   const [queuedPlan, setQueuedPlan] = useState<CombatActionView[]>([]);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const logContainerRef = useRef<HTMLDivElement>(null);
   const allies = asCombatants(session.allies);
   const enemies = asCombatants(session.enemies);
@@ -236,6 +190,46 @@ export function InteractiveCombatPanel({
   const maxGuActions = Math.max(1, Number(session.max_gu_actions || 3));
   const queuedGuActions = queuedPlan.filter((action) => action.action_type !== "BASIC_ATTACK" && action.action_type !== "EXIT_GU_HOUSE" && action.action_type !== "ENTER_GU_HOUSE").length;
   const lastTurn = logs.length > 0 ? value(logs[logs.length - 1].turn) : 0;
+  const deadlineAt = typeof session.deadline_at === "string" ? Date.parse(session.deadline_at) : NaN;
+  const remainingSeconds = Number.isFinite(deadlineAt) ? Math.max(0, Math.ceil((deadlineAt - currentTime) / 1000)) : null;
+
+  useEffect(() => {
+    if (!Number.isFinite(deadlineAt)) return;
+    setCurrentTime(Date.now());
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [deadlineAt]);
+
+  const renderTeamGrid = (members: CombatantView[], side: "ally" | "enemy") => (
+    <div className={`grid grid-cols-5 gap-1 rounded-xl border p-1.5 sm:gap-1.5 sm:p-2 ${side === "ally" ? "border-emerald-900/40 bg-emerald-950/10" : "border-rose-900/40 bg-rose-950/10"}`}>
+      {Array.from({ length: 25 }, (_, index) => {
+        const gridX = Math.floor(index / 5) + 1;
+        const gridY = (index % 5) + 1;
+        const occupants = members.filter((combatant, memberIndex) => {
+          const x = Number(combatant.grid_x) || (memberIndex % 5) + 1;
+          const y = Number(combatant.grid_y) || Math.floor(memberIndex / 5) + 1;
+          return x === gridX && y === gridY;
+        });
+        return (
+          <div key={`${gridX}-${gridY}`} className={`aspect-square min-w-0 overflow-hidden rounded-lg ${occupants.length ? "" : "border border-dashed border-zinc-800/70 bg-black/15"}`}>
+            {occupants.length ? occupants.map((combatant) => (
+              <GridCombatant
+                key={combatant.id}
+                combatant={combatant}
+                active={combatant.id === pendingActorId}
+                target={combatant.id === targetId}
+                selectable={canChooseTargets && (side === "ally" ? !actorIsAlly : actorIsAlly) && !Boolean(combatant.dead)}
+                side={side}
+                gridX={gridX}
+                gridY={gridY}
+                onClick={() => onTarget(String(combatant.id || ""))}
+              />
+            )) : <div className="flex h-full min-h-0 items-center justify-center text-[9px] font-mono text-zinc-800">{gridX},{gridY}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   const inGuHouse = Boolean(actor?.gu_house && actor.gu_house.active && !actor.gu_house.is_destroyed);
   const strikeActions = actions.filter((action) => action.is_from_gu_house || action.action_type === "EXIT_GU_HOUSE");
@@ -325,41 +319,23 @@ export function InteractiveCombatPanel({
               <span className="rounded-full border border-zinc-700 bg-black/50 px-3 py-1 text-[10px] font-black tracking-[0.2em] text-amber-300">HIỆN TRƯỜNG</span>
               <span className="h-px flex-1 bg-gradient-to-l from-transparent to-rose-700/60" />
             </div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_1fr] md:items-center">
-              <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:items-center">
+              <div className="min-w-0 space-y-2">
                 <h3 className="flex items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Phe ta
+                  <span className="ml-auto text-zinc-600">5×5</span>
                 </h3>
-                {allies.map((combatant) => (
-                  <TeamCombatant
-                    key={combatant.id}
-                    combatant={combatant}
-                    active={combatant.id === pendingActorId}
-                    target={combatant.id === targetId}
-                    selectable={canChooseTargets && !actorIsAlly && !Boolean(combatant.dead)}
-                    side="ally"
-                    onClick={() => onTarget(String(combatant.id || ""))}
-                  />
-                ))}
+                {renderTeamGrid(allies, "ally")}
               </div>
-              <div className="hidden items-center justify-center md:flex">
+              <div className="hidden items-center justify-center xl:flex">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full border border-amber-400/20 bg-zinc-950 text-[10px] font-black tracking-widest text-amber-300 shadow-lg shadow-amber-950/30">VS</span>
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <h3 className="flex items-center gap-2 px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-rose-300">
                   <span className="h-1.5 w-1.5 rounded-full bg-rose-400" /> Phe địch
+                  <span className="ml-auto text-zinc-600">5×5</span>
                 </h3>
-                {enemies.map((combatant) => (
-                  <TeamCombatant
-                    key={combatant.id}
-                    combatant={combatant}
-                    active={combatant.id === pendingActorId}
-                    target={combatant.id === targetId}
-                    selectable={canChooseTargets && actorIsAlly && !Boolean(combatant.dead)}
-                    side="enemy"
-                    onClick={() => onTarget(String(combatant.id || ""))}
-                  />
-                ))}
+                {renderTeamGrid(enemies, "enemy")}
               </div>
             </div>
           </div>
@@ -375,6 +351,30 @@ export function InteractiveCombatPanel({
                       : "Chọn hành động"
                     : `Đang chờ ${actor?.name || "đối thủ"}`}
                 </h3>
+                {remainingSeconds !== null && (
+                  <div className="mt-2 max-w-xs rounded-lg border border-zinc-800 bg-black/30 px-2.5 py-2">
+                    <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                      <span className="font-semibold text-zinc-300">{ownsTurn ? "Còn thời gian chọn chiêu" : "Thời gian chờ lượt"}</span>
+                      <span className={`font-mono font-bold tabular-nums ${remainingSeconds <= 8 ? "text-rose-300" : remainingSeconds <= 18 ? "text-amber-300" : "text-emerald-300"}`}>
+                        {remainingSeconds === 0 ? "Hết giờ" : `0:${String(remainingSeconds).padStart(2, "0")}`}
+                      </span>
+                    </div>
+                    <div
+                      role="progressbar"
+                      aria-label="Thời gian còn lại của lượt"
+                      aria-valuemin={0}
+                      aria-valuemax={45}
+                      aria-valuenow={remainingSeconds}
+                      className="h-1.5 overflow-hidden rounded-full bg-zinc-800"
+                    >
+                      <div
+                        className={`h-full rounded-full transition-[width] duration-1000 ${remainingSeconds <= 8 ? "bg-rose-500" : remainingSeconds <= 18 ? "bg-amber-400" : "bg-emerald-500"}`}
+                        style={{ width: `${Math.min(100, (remainingSeconds / 45) * 100)}%` }}
+                      />
+                    </div>
+                    <p className="mt-1 text-[10px] text-zinc-600">Hết giờ, server sẽ tự xử lý lượt.</p>
+                  </div>
+                )}
                 <p className="mt-1 text-xs text-zinc-400">
                   {planLocked
                     ? "Đã khóa kế hoạch; đang chờ đối thủ."

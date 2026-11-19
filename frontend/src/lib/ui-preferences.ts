@@ -53,10 +53,13 @@ export type UiPreferences = {
   playerViewMode: HudViewMode | "";
   targetViewMode: HudViewMode | "";
   changelogHideUntil: string;
+  apertureNoticeVersion: string;
   soundEnabled: boolean;
   showOtherPlayerNames: boolean;
   menuColor: MenuColorConfig;
 };
+
+export const APERTURE_NOTICE_VERSION = "public-apertures-v1";
 
 export const UI_PREFERENCES_KEY = "gu_ui_prefs_v1";
 export const UI_PREFERENCES_EVENT = "gu_ui_prefs_updated";
@@ -134,6 +137,7 @@ export function normalizeUiPreferences(value: unknown): UiPreferences {
     playerViewMode: isViewMode(stored.playerViewMode) ? stored.playerViewMode : "",
     targetViewMode: isViewMode(stored.targetViewMode) ? stored.targetViewMode : "",
     changelogHideUntil: typeof stored.changelogHideUntil === "string" ? stored.changelogHideUntil : "",
+    apertureNoticeVersion: typeof stored.apertureNoticeVersion === "string" ? stored.apertureNoticeVersion : "",
     soundEnabled: typeof stored.soundEnabled === "boolean" ? stored.soundEnabled : true,
     showOtherPlayerNames: typeof stored.showOtherPlayerNames === "boolean" ? stored.showOtherPlayerNames : true,
     menuColor: normalizeMenuColor(stored.menuColor),

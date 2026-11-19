@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -98,11 +99,18 @@ func materializePublicApertureSite(ctx context.Context, siteKey string) error {
 	if err := GenerateApertureResourcePoints(tx, apertureID, "", siteDaoMarks, grade, seedPointCountForGrade(grade)); err != nil {
 		return fmt.Errorf("seeding configured public aperture resource points: %w", err)
 	}
+	portalTitle := "Môn Hộ Phúc Địa " + name
+	if rank >= 8 {
+		portalTitle = "Môn Hộ Động Thiên " + name
+	}
+	if strings.Contains(name, "Phúc Địa") || strings.Contains(name, "Động Thiên") {
+		portalTitle = "Môn Hộ " + name
+	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO aperture_portals
 			(aperture_id, owner_id, region_id, x, y, name, access_policy, concealment_power, is_active, updated_at)
 		VALUES ($1, NULL, $2, $3, $4, $5, 'OPEN', 0, TRUE, NOW())
-	`, apertureID, regionID, x, y, "Môn Hộ Phúc Địa "+name); err != nil {
+	`, apertureID, regionID, x, y, portalTitle); err != nil {
 		return fmt.Errorf("creating public aperture portal: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `

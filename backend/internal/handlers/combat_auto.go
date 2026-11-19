@@ -1265,7 +1265,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 		Race:                    player.Race,
 		Rank:                    player.Rank,
 		SubRank:                 player.SubRank,
-		GridX:                   2,
+		GridX:                   3,
 		GridY:                   3,
 		MaxHP:                   simMaxHP,
 		CustomState:             map[string]int{"sat_khi_level": satKhiLevel},

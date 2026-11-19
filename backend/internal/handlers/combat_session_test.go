@@ -10,8 +10,12 @@ import (
 
 func TestCombatSessionSideProjectsUniqueActionsAndGuDetails(t *testing.T) {
 	side := combatSessionSide([]*simulator.CombatantAuto{{
-		ID:   "player",
-		Name: "Player",
+		ID:            "player",
+		Name:          "Player",
+		GridX:         5,
+		GridY:         3,
+		Rank:          6,
+		VirtualShield: 12,
 		Actions: []simulator.SimAction{
 			{ActionType: "BASIC_ATTACK", Name: "Đánh thường"},
 			{ActionType: "GU_SKILL", SourceID: "gu-fire", InstanceID: "instance-fire", Name: "Hỏa Cổ", Rank: 3, ManaCost: 12, Damage: 40, Path: []string{"Hỏa Đạo"}},
@@ -34,6 +38,12 @@ func TestCombatSessionSideProjectsUniqueActionsAndGuDetails(t *testing.T) {
 	}
 	if basicAttacks != 1 {
 		t.Fatalf("got %d basic attacks, want 1", basicAttacks)
+	}
+	if side[0]["grid_x"] != 5 || side[0]["grid_y"] != 3 {
+		t.Fatalf("combatant position = (%v,%v), want (5,3)", side[0]["grid_x"], side[0]["grid_y"])
+	}
+	if side[0]["rank"] != 6 || side[0]["shield"] != float64(12) {
+		t.Fatalf("combatant rank/shield = (%v,%v), want (6,12)", side[0]["rank"], side[0]["shield"])
 	}
 	if guAction == nil || guAction["source_id"] != "gu-fire" || guAction["instance_id"] != "instance-fire" ||
 		guAction["rank"] != 3 || guAction["mana_cost"] != float64(12) || guAction["damage"] != float64(40) {
