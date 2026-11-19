@@ -11,6 +11,8 @@ func schemaActors() error {
 		owner_player_id UUID REFERENCES players(id) ON DELETE CASCADE,
 		faction_id UUID,
 		aperture_id UUID REFERENCES immortal_apertures(id) ON DELETE SET NULL,
+		world_x INTEGER,
+		world_y INTEGER,
 
 		template_source VARCHAR(32) NOT NULL,
 		template_id VARCHAR(100) NOT NULL,
@@ -73,7 +75,11 @@ func schemaActors() error {
 			jsonb_typeof(capabilities) = 'object' AND jsonb_typeof(traits) = 'object' AND
 			jsonb_typeof(progression) = 'object'),
 		CONSTRAINT non_player_actors_owned_kind_check CHECK (
-			actor_kind NOT IN ('COMPANION_BEAST','VARIANT_NPC','CONSTRUCT') OR owner_player_id IS NOT NULL),
+			(actor_kind NOT IN ('COMPANION_BEAST','VARIANT_NPC','CONSTRUCT') OR owner_player_id IS NOT NULL) OR
+			(actor_kind = 'VARIANT_NPC' AND owner_player_id IS NULL AND aperture_id IS NOT NULL)),
+		CONSTRAINT non_player_actors_world_position_pair_check CHECK ((world_x IS NULL) = (world_y IS NULL)),
+		CONSTRAINT non_player_actors_aperture_position_check CHECK (
+			aperture_id IS NULL OR world_x IS NULL OR (world_x BETWEEN 0 AND 19 AND world_y BETWEEN 0 AND 19)),
 		CONSTRAINT non_player_actors_version_check CHECK (version >= 1),
 		CONSTRAINT non_player_actors_legacy_pair_check CHECK (
 			(legacy_source IS NULL) = (legacy_id IS NULL)),
@@ -99,6 +105,23 @@ func schemaActors() error {
 		if err := execSchema(index.name, index.ddl); err != nil {
 			return err
 		}
+	}
+	if err := execSchema("non_player_actors_aperture_position_compat", `
+	ALTER TABLE non_player_actors ADD COLUMN IF NOT EXISTS world_x INTEGER;
+	ALTER TABLE non_player_actors ADD COLUMN IF NOT EXISTS world_y INTEGER;
+	ALTER TABLE non_player_actors DROP CONSTRAINT IF EXISTS non_player_actors_owned_kind_check;
+	ALTER TABLE non_player_actors ADD CONSTRAINT non_player_actors_owned_kind_check CHECK (
+		(actor_kind NOT IN ('COMPANION_BEAST','VARIANT_NPC','CONSTRUCT') OR owner_player_id IS NOT NULL) OR
+		(actor_kind = 'VARIANT_NPC' AND owner_player_id IS NULL AND aperture_id IS NOT NULL));
+	ALTER TABLE non_player_actors DROP CONSTRAINT IF EXISTS non_player_actors_world_position_pair_check;
+	ALTER TABLE non_player_actors ADD CONSTRAINT non_player_actors_world_position_pair_check CHECK ((world_x IS NULL) = (world_y IS NULL));
+	ALTER TABLE non_player_actors DROP CONSTRAINT IF EXISTS non_player_actors_aperture_position_check;
+	ALTER TABLE non_player_actors ADD CONSTRAINT non_player_actors_aperture_position_check CHECK (
+		aperture_id IS NULL OR world_x IS NULL OR (world_x BETWEEN 0 AND 19 AND world_y BETWEEN 0 AND 19));`); err != nil {
+		return err
+	}
+	if err := execSchema("non_player_actors_aperture_world_position_idx", `CREATE INDEX IF NOT EXISTS idx_non_player_actors_aperture_world_position ON non_player_actors (aperture_id, world_y, world_x) WHERE owner_player_id IS NULL AND lifecycle_state = 'ACTIVE' AND world_x IS NOT NULL;`); err != nil {
+		return err
 	}
 
 	if err := execSchema("actor_gu_equipment", `

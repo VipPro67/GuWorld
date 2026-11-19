@@ -12,7 +12,7 @@ func apertureInstanceForPlayer(tx *sql.Tx, playerID uuid.UUID) (string, bool, er
 	var apertureID string
 	var isOwner bool
 	err := tx.QueryRow(`
-		SELECT a.id::text, a.player_id = p.id
+		SELECT a.id::text, COALESCE(a.player_id = p.id, false)
 		FROM players p
 		JOIN immortal_apertures a ON a.id = p.map_instance_id
 		WHERE p.id = $1 AND p.current_region = 'aperture_interior'

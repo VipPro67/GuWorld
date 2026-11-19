@@ -71,6 +71,7 @@ Nguồn đầy đủ là `backend/.env.example`; các biến dưới đây là n
 | Realtime | `TLS_ENABLED`, `WT_ENABLED`, `WS_FALLBACK_ENABLED`, `TLS_ADDR`, `WT_ADDR`, `TLS_CERT_FILE`, `TLS_KEY_FILE` | WebTransport cần HTTPS; đọc runbook production trước khi public |
 | Thanh toán | `PAYOS_*` | PayOS webhook/order yêu cầu cấu hình provider |
 | Gameplay | `COMBAT_MAX_GU_ACTIONS_PER_TURN`, `MONSTER_RANK_SCALING_ENABLED`, `MONSTER_STAT_MULTIPLIER` | Thay đổi rule áp dụng theo code runtime |
+| Tiên Khiếu công cộng | `APERTURE_ABSORPTION_DURATION`, `APERTURE_ABSORPTION_COST_IMMORTAL_STONES`, `PUBLIC_APERTURE_RUIN_DURATION`, `PUBLIC_APERTURE_TRIBULATION_HP_DAMAGE_FRACTION` | Bắt buộc cấu hình thời lượng/phí hấp thụ, thời hạn tàn tích và tỷ lệ HP vách mất mỗi tai kiếp môi trường; giá trị tỷ lệ nằm trong `(0, 1]` |
 
 Các biến client `NEXT_PUBLIC_*` được nhúng vào frontend lúc build. Cần build lại frontend sau khi đổi URL public. `INTERNAL_BACKEND_URL` dành cho server-side frontend.
 

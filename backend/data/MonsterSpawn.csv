@@ -1,4 +1,10 @@
 region_id,monster_id,x,y,spawn_mode,chance,respawn_seconds,min_rank,max_rank,is_boss_spawn,is_active
+aperture_interior,monster_strength_tier3_normal,,,Roaming,0.55,900,6,6,False,True
+aperture_interior,monster_wood_tier3_normal,,,Roaming,0.55,900,6,6,False,True
+aperture_interior,monster_water_tier3_normal,,,Roaming,0.55,900,6,6,False,True
+aperture_interior,monster_earth_tier3_normal,,,Roaming,0.55,900,6,6,False,True
+aperture_interior,monster_strength_tier4_normal,,,Roaming,0.35,900,8,8,False,True
+aperture_interior,monster_water_tier4_normal,,,Roaming,0.35,900,8,8,False,True
 dai_vuc_nam_cuong,monster_wild_boar,,,Roaming,0.55,60,1,1,False,True
 dai_vuc_nam_cuong,monster_silvermane_wolf,,,Roaming,0.55,60,2,2,False,True
 dai_vuc_nam_cuong,monster_night_wolf,,,Roaming,0.55,60,2,2,False,True

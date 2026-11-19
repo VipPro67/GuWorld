@@ -18,6 +18,12 @@ Khi Hạ Khiếu, chủ được chuyển tới tab Bản đồ & Phòng thủ v
 
 Thay đổi ô map và Môn Hộ được cập nhật qua `world:change` chỉ trong đúng `map_instance_id`. Snapshot ô map, điểm tài nguyên và actor quái có revision theo scope; client resync sau reconnect hoặc khi phát hiện thiếu delta. Combat Tai Kiếp vẫn theo lượt.
 
+## Tiên Khiếu vô chủ và site cấu hình
+
+Site tạo sẵn lấy tọa độ, rank, grade, diện tích và Đạo Ngân từ `PublicApertureSite.csv`, import qua Admin → Dữ liệu. Worker tạo state và Môn Hộ một lần theo `site_key`; file hiện chỉ có header nên chưa có vị trí mẫu trong world. Khi lifespan cạn, worker xử lý cả player offline. Nếu player không ở combat, transaction xóa player, giữ aperture, bỏ liên kết chủ và chuyển Môn Hộ thành công cộng; nếu đang combat thì đánh dấu pending, chặn hành động mới và chờ combat settle. Khách hiện có được giữ lại; khách mới vào theo portal/scouting và không phát notification cho chủ cũ.
+
+Trong instance công cộng, UI chỉ mở tab bản đồ và điểm tài nguyên. Môn Hộ chỉ hiện sau khi scouting thành công; người dò thấy có thể vào mà không cần rank, party, sect hay chủ cấp quyền. Các ô sinh thái dùng spawn pool `aperture_interior` trong `MonsterSpawn.csv`; thời gian hồi lấy từ `respawn_seconds`, còn trạng thái ô được scope theo `map_instance_id`, nên hai khiếu có bố cục và chu kỳ hồi độc lập. NPC dị nhân còn sống trong khiếu được giữ lại khi chủ thọ tận, chuyển thành hộ vệ vô chủ có vị trí trong map; bước vào ô hộ vệ sẽ mở combat theo lượt, hộ vệ chỉ có thể bị đánh một trận tại một thời điểm và bị loại khỏi map sau khi bị hạ. Khách có thể di chuyển, giao tranh với người chơi thấy được, thu hoạch stock chung trong phạm vi; stock tích lũy theo template sản lượng và mức Thiên/Địa Khí hiện có. Mỏ không hồi sản lượng/sinh khí khi tàn tích. Người chơi đủ rank và cảnh giới lưu phái chủ đạo có thể bắt đầu hấp thụ khi đang ở đúng instance; một reservation hoạt động trên mỗi mục tiêu/người hấp thụ. Combat PvP làm gián đoạn, hai khiếu vẫn tồn tại và phí/thời lượng do cấu hình server quyết định. Thành công xóa khiếu mục tiêu, cộng dồn diện tích, Đạo Ngân và số lần tai kiếp; mỏ chuyển sang ô trống gần nhất, mỏ không còn ô sẽ bị loại bỏ. Tai kiếp môi trường tự settlement theo lịch tai kiếp hiện có và giảm HP vách theo tỷ lệ cấu hình. Khi HP tường về 0, khiếu chuyển thành tàn tích theo thời hạn cấu hình; hết hạn, hệ thống chờ combat kết thúc, đưa khách online/offline về Môn Hộ rồi xóa state. Cấu hình cần có `APERTURE_ABSORPTION_DURATION`, `APERTURE_ABSORPTION_COST_IMMORTAL_STONES`, `PUBLIC_APERTURE_RUIN_DURATION`, `PUBLIC_APERTURE_TRIBULATION_HP_DAMAGE_FRACTION`.
+
 ## Luật, chi phí và giới hạn
 
 - Rank 6+ mới dùng aperture.
@@ -27,6 +33,7 @@ Thay đổi ô map và Môn Hộ được cập nhật qua `world:change` chỉ 
 - Lưới và phạm vi di chuyển của Tiên Khiếu dùng tọa độ 0–19 trên mỗi trục.
 - Thu hoạch mỏ Tiên Khiếu ghi tài nguyên vào túi của người thao tác; khách cần ở trong phạm vi 6 ô. Khách có thể tự rời Tiên Khiếu bất cứ lúc nào qua `POST /api/immortal-aperture/leave`; chủ không cần phê duyệt.
 - Mỏ ngoài map có nghi thức di dời vào Tiên Khiếu của người chơi qua `POST /api/immortal-aperture/world-points/:id/transplant`; nghi thức tiêu hao mana/tiên nguyên theo cấp mỏ và cần đứng tại mỏ đến khi hoàn tất. Đây là di chuyển mỏ, không phải xóa mỏ. Hiện chưa có combat để tấn công phá mỏ; tai kiếp có thể làm giảm sinh khí mỏ trong Tiên Khiếu.
+- Hấp thụ khiếu công cộng: `GET /api/immortal-aperture/absorption/:apertureId` xem reservation; `POST /api/immortal-aperture/absorption/:apertureId/start` bắt đầu. Rank mục tiêu 6–9 yêu cầu lần lượt Master, Grandmaster, Great Grandmaster, Supreme Grandmaster ở mọi lưu phái đồng hạng Đạo Ngân chủ đạo; khi không có Đạo Ngân dương thì không thể hấp thụ.
 - Resource production, worker upkeep, capacity và tribulation dùng state/config server-side.
 
 ## Kết quả và trường hợp thất bại

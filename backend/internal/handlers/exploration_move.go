@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -278,8 +278,29 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 	}
 
 	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
-	isCleared := isCellClearedRecently(player.CurrentRegion, player.X, player.Y, clearedCellCooldown)
+	mapInstance := ""
+	if instanceID.Valid {
+		mapInstance = instanceID.String
+	}
+	isPublicAperture := false
+	if player.CurrentRegion == "aperture_interior" && mapInstance != "" {
+		if err := tx.QueryRow(`SELECT player_id IS NULL FROM immortal_apertures WHERE id = $1`, mapInstance).Scan(&isPublicAperture); err != nil {
+			return "", false, fmt.Errorf("load aperture ecology state: %w", err)
+		}
+	}
+	isCleared := isCellClearedInInstance(player.CurrentRegion, mapInstance, player.X, player.Y, clearedCellCooldown)
 	cell := ResolveCellInRegion(player.CurrentRegion, player.X, player.Y)
+	if isPublicAperture {
+		cell = resolvePublicApertureCell(mapInstance, player.X, player.Y)
+		var npcErr error
+		cell, npcErr = publicApertureNPCCell(tx, mapInstance, cell)
+		if npcErr != nil {
+			return "", false, npcErr
+		}
+		if strings.HasPrefix(cell.Content, publicApertureNPCCellPrefix) {
+			isCleared = false
+		}
+	}
 	if attackTargetID != "" {
 		if err := checkRegionAction(player.CurrentRegion, "pvp"); err != nil {
 			return err.Error(), false, nil
@@ -460,6 +481,12 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 						player.ActiveCombat = nil
 						return "Cổ Sư này vừa vào một trận chiến khác.", false, nil
 					}
+					if err := markApertureAbsorptionInterrupted(tx, player.ID); err != nil {
+						return "", false, err
+					}
+					if err := markApertureAbsorptionInterrupted(tx, targetPlayer.ID); err != nil {
+						return "", false, err
+					}
 					logMsg = fmt.Sprintf("Khai chiến! Đạo hữu tấn công Cổ Sư %s tại khoảng cách %d ô!", targetPlayer.Username, dist)
 				} else {
 					return fmt.Sprintf("Khoảng cách quá xa (%d ô)! Cần tiếp cận đối phương trong vòng %d ô để khai chiến.", dist, maxPvPRange), false, nil
@@ -501,7 +528,7 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 					// Shared resource nodes carry their own respawn window.
 					clearTTL = time.Duration(pc.RespawnSeconds) * time.Second
 				}
-				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearTTL); err != nil {
+				if err := setCellClearedInInstance(player.CurrentRegion, mapInstance, player.X, player.Y, player.ID.String(), clearTTL); err != nil {
 					logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
 					return "", false, err
 				}
@@ -559,7 +586,7 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 				if pc, found := persistentCellForRegion(player.CurrentRegion, player.X, player.Y); found && pc.RespawnSeconds > 0 {
 					clearTTL = time.Duration(pc.RespawnSeconds) * time.Second
 				}
-				if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearTTL); err != nil {
+				if err := setCellClearedInInstance(player.CurrentRegion, mapInstance, player.X, player.Y, player.ID.String(), clearTTL); err != nil {
 					logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
 					return "", false, err
 				}
@@ -593,6 +620,25 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 			}
 			if err := checkRegionEquippedGus(player.CurrentRegion, player.GuInventory); err != nil {
 				return err.Error(), false, nil
+			}
+			if isPublicAperture && strings.HasPrefix(cell.Content, publicApertureNPCCellPrefix) {
+				actorID := strings.TrimPrefix(cell.Content, publicApertureNPCCellPrefix)
+				combatState, err := startPublicApertureNPCCombat(tx, mapInstance, actorID)
+				if errors.Is(err, errPublicApertureNPCBusy) {
+					logMsg = "NPC hộ vệ này đang giao chiến với một người chơi khác."
+					break
+				}
+				if errors.Is(err, sql.ErrNoRows) {
+					logMsg = "Vị trí hộ vệ đã trống."
+					break
+				}
+				if err != nil {
+					return "", false, err
+				}
+				combatTriggered = true
+				player.ActiveCombat = &combatState
+				logMsg = fmt.Sprintf("NPC hộ vệ %s ngăn cản đạo hữu tại (%d, %d)!", combatState.EnemyName, player.X, player.Y)
+				break
 			}
 			combatTriggered = true
 
@@ -680,6 +726,9 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 					TargetPlayerID:      targetPlayer.ID.String(),
 				}
 				gamefx.ApplyEnemyEffects(player.ActiveCombat, &targetPlayer)
+				if err := markApertureAbsorptionInterrupted(tx, player.ID); err != nil {
+					return "", false, err
+				}
 				logMsg = fmt.Sprintf("Đạo hữu bắt gặp một Cổ Sư khác đang du ngoạn: %s! Lập tức giao đấu!", targetPlayer.Username)
 			}
 		}
@@ -695,11 +744,18 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 				adjY := player.Y + ay
 
 				// check if already cleared
-				if isCellClearedRecently(player.CurrentRegion, adjX, adjY, clearedCellCooldown) {
+				if isCellClearedInInstance(player.CurrentRegion, mapInstance, adjX, adjY, clearedCellCooldown) {
 					continue
 				}
 
 				adj := ResolveCellInRegion(player.CurrentRegion, adjX, adjY)
+				if isPublicAperture {
+					adj = resolvePublicApertureCell(mapInstance, adjX, adjY)
+					adj, _ = publicApertureNPCCell(tx, mapInstance, adj)
+					if strings.HasPrefix(adj.Content, publicApertureNPCCellPrefix) {
+						continue
+					}
+				}
 
 				rank := 1
 				if adj.Rank > 0 {
@@ -739,7 +795,7 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 						logMsg = fmt.Sprintf("Phục kích! Quái thú %s lân cận (%d, %d) chủ động lao ra tấn công đạo hữu!", mon.Name, adjX, adjY)
 					}
 					// Mark the original monster cell as cleared
-					if err := cache.SetCellCleared(player.CurrentRegion, adjX, adjY, player.ID.String(), clearedCellCooldown); err != nil {
+					if err := setMonsterCellClearedInInstance(player.CurrentRegion, mapInstance, adjX, adjY, player.ID.String(), adj.Content); err != nil {
 						logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, adjX, adjY, err)
 					}
 					instanceID := ""

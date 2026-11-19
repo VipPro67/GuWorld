@@ -326,8 +326,41 @@ func AuthRequired() gin.HandlerFunc {
 			}
 		}
 
+		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead && c.Request.Method != http.MethodOptions && !isCombatContinuation(c.Request.URL.Path) {
+			var expiryPending, apertureClosing bool
+			if err := db.DB.QueryRowContext(c.Request.Context(), `
+				SELECT p.aperture_expiry_pending,
+				       EXISTS (
+				           SELECT 1 FROM immortal_apertures a
+				           WHERE a.id = p.map_instance_id AND a.public_state = 'CLOSING'
+				       )
+				FROM players p WHERE p.id = $1
+			`, identity.PlayerID).Scan(&expiryPending, &apertureClosing); err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Không thể kiểm tra trạng thái thọ nguyên."})
+				c.Abort()
+				return
+			}
+			if expiryPending {
+				c.JSON(http.StatusConflict, gin.H{"error": "Thọ nguyên đã cạn. Chỉ có thể tiếp tục hoặc kết thúc giao tranh hiện tại."})
+				c.Abort()
+				return
+			}
+			if apertureClosing {
+				c.JSON(http.StatusConflict, gin.H{"error": "Tàn tích Tiên Khiếu đang đóng. Chỉ có thể hoàn tất giao tranh hiện tại."})
+				c.Abort()
+				return
+			}
+		}
+
 		c.Next()
 	}
+}
+
+func isCombatContinuation(path string) bool {
+	return path == "/api/combat/capture" ||
+		strings.HasPrefix(path, "/api/combat/retreat/") ||
+		strings.HasPrefix(path, "/api/combat/flee/") ||
+		strings.HasPrefix(path, "/api/combat/session/") && strings.HasSuffix(path, "/command")
 }
 
 // GetPlayerID retrieves the authenticated player ID from context

@@ -3,6 +3,7 @@ package handlers
 import (
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
@@ -87,6 +88,71 @@ func TestProceduralMonsterCampsAreStableAndDenseNearCenter(t *testing.T) {
 	}
 	if monsterCampSpawnChance(0) <= monsterCampSpawnChance(monsterCampRadius) {
 		t.Fatal("monster spawn chance should taper toward the camp edge")
+	}
+}
+
+func TestPublicApertureEcologyIsStableAndInstanceScoped(t *testing.T) {
+	zoneReg.mu.Lock()
+	previousPools := zoneReg.spawnPools
+	zoneReg.spawnPools = map[string][]models.MonsterSpawn{
+		"aperture_interior": {{RegionID: "aperture_interior", MonsterID: "monster_public_test", Chance: 1, MinRank: 6, MaxRank: 6}},
+	}
+	zoneReg.mu.Unlock()
+	t.Cleanup(func() {
+		zoneReg.mu.Lock()
+		zoneReg.spawnPools = previousPools
+		zoneReg.mu.Unlock()
+	})
+
+	firstCount := 0
+	instancesDiffer := false
+	for y := 0; y < 20; y++ {
+		for x := 0; x < 20; x++ {
+			first := resolvePublicApertureCell("public-aperture-one", x, y)
+			repeated := resolvePublicApertureCell("public-aperture-one", x, y)
+			second := resolvePublicApertureCell("public-aperture-two", x, y)
+			if first != repeated {
+				t.Fatalf("same aperture cell changed across resolutions at (%d,%d): first=%+v repeat=%+v", x, y, first, repeated)
+			}
+			if first.Type == "Monster" {
+				firstCount++
+			}
+			if first.Type != second.Type || first.Content != second.Content || first.SubRank != second.SubRank {
+				instancesDiffer = true
+			}
+		}
+	}
+	if firstCount < 5 {
+		t.Fatalf("expected a natural monster population across 20x20 map, got %d", firstCount)
+	}
+	if !instancesDiffer {
+		t.Fatal("separate public apertures should derive distinct stable ecology")
+	}
+}
+
+func TestPublicApertureMonsterRespawnUsesConfiguredSpawnPool(t *testing.T) {
+	zoneReg.mu.Lock()
+	previousPools := zoneReg.spawnPools
+	zoneReg.spawnPools = map[string][]models.MonsterSpawn{
+		"aperture_interior": {
+			{RegionID: "aperture_interior", MonsterID: "monster_public_test", RespawnSeconds: 73},
+		},
+	}
+	zoneReg.mu.Unlock()
+	t.Cleanup(func() {
+		zoneReg.mu.Lock()
+		zoneReg.spawnPools = previousPools
+		zoneReg.mu.Unlock()
+	})
+
+	if got := monsterCellRespawnTTL("aperture_interior", "monster_public_test"); got != 73*time.Second {
+		t.Fatalf("monsterCellRespawnTTL() = %s, want %s", got, 73*time.Second)
+	}
+	if got := monsterCellRespawnTTL("aperture_interior", "missing_monster"); got != clearedCellCooldown {
+		t.Fatalf("unknown spawn respawn = %s, want fallback %s", got, clearedCellCooldown)
+	}
+	if got := monsterCellRespawnTTL("Southern_Border", "monster_public_test"); got != clearedCellCooldown {
+		t.Fatalf("non-aperture respawn = %s, want unchanged fallback %s", got, clearedCellCooldown)
 	}
 }
 

@@ -28,6 +28,50 @@ func TestAperturePortalPolicyVisibility(t *testing.T) {
 	}
 }
 
+func TestAperturePortalRequiresScoutingWhenOwnerlessAndPublic(t *testing.T) {
+	tests := []struct {
+		name        string
+		ownerID     string
+		publicState string
+		want        bool
+	}{
+		{name: "public ownerless portal", publicState: "PUBLIC", want: true},
+		{name: "ruin ownerless portal", publicState: "RUIN", want: true},
+		{name: "closing ownerless portal", publicState: "CLOSING"},
+		{name: "private ownerless portal", publicState: "PRIVATE"},
+		{name: "owned public aperture", ownerID: "owner-id", publicState: "PUBLIC"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := aperturePortalRequiresScouting(tt.ownerID, tt.publicState); got != tt.want {
+				t.Fatalf("aperturePortalRequiresScouting(%q, %q) = %v, want %v", tt.ownerID, tt.publicState, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAperturePortalVisibilityRequiresScoutingForPublicSites(t *testing.T) {
+	tests := []struct {
+		name             string
+		policyVisible    bool
+		canDiscover      bool
+		requiresScouting bool
+		want             bool
+	}{
+		{name: "public OPEN portal remains hidden until scouted", policyVisible: false, requiresScouting: true, want: false},
+		{name: "scouting reveals public portal", canDiscover: true, requiresScouting: true, want: true},
+		{name: "owned OPEN portal keeps policy visibility", policyVisible: true, want: true},
+		{name: "private hidden portal can be found by scouting", canDiscover: true, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := aperturePortalVisibleToViewer(tt.policyVisible, tt.canDiscover, tt.requiresScouting); got != tt.want {
+				t.Fatalf("aperturePortalVisibleToViewer(%v, %v, %v) = %v, want %v", tt.policyVisible, tt.canDiscover, tt.requiresScouting, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestScoutedAperturePortalMarkerOnlyRevealsLocation(t *testing.T) {
 	detail := AperturePortalMarker{AccessPolicy: "HIDDEN", ConcealmentPower: 12}
 	marker := aperturePortalMarker("portal-id", "Southern_Border", 21, 34, "Hidden Garden", detail, "owner-id", "aperture-id", false)

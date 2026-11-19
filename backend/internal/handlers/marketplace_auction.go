@@ -322,22 +322,17 @@ func bindResourcePointToBuyer(tx *sql.Tx, buyer *models.Player, sellerID uuid.UU
 
 	// 2. The buyer must have an aperture with room for one more point.
 	var buyerApertureID string
-	var buyerPoints int
 	err = tx.QueryRow(`
-		SELECT a.id::text, (SELECT COUNT(1) FROM aperture_resource_points WHERE aperture_id = a.id)
+		SELECT a.id::text
 		FROM immortal_apertures a
 		WHERE a.player_id = $1
 		FOR UPDATE OF a
-	`, buyer.ID).Scan(&buyerApertureID, &buyerPoints)
+	`, buyer.ID).Scan(&buyerApertureID)
 	if err == sql.ErrNoRows {
 		return &resourcePointTransferError{"Đạo hữu chưa khai mở Tiên Khiếu — không thể nhận điểm tài nguyên"}
 	} else if err != nil {
 		return fmt.Errorf("lỗi kiểm tra Tiên Khiếu: %w", err)
 	}
-	if buyerPoints >= aperturePointPointGenCap {
-		return &resourcePointTransferError{fmt.Sprintf("Tiên Khiếu đã có tối đa %d điểm tài nguyên.", aperturePointPointGenCap)}
-	}
-
 	// 3. Rebind under the listed guard: 0 rows = a concurrent trade won the row.
 	res, err := tx.Exec(`
 		UPDATE aperture_resource_points

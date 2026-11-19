@@ -72,6 +72,7 @@ func GetGrid(c *gin.Context) {
 	}
 	isApertureInstance := false
 	isApertureOwner := false
+	isPublicAperture := false
 	apertureOwnerName := ""
 	instanceID := mapInstanceIDForPlayer(player.ID.String())
 	snapshotScope := worldfeed.Scope{RegionID: player.CurrentRegion, WorldMapID: worldMapIDForRegion(player.CurrentRegion), InstanceID: instanceID}
@@ -95,15 +96,21 @@ func GetGrid(c *gin.Context) {
 		isApertureOwner = apertureOwner
 		isApertureInstance = true
 		if err := db.DB.QueryRowContext(c.Request.Context(), `
-			SELECT owner.username
+			SELECT player_id IS NULL FROM immortal_apertures WHERE id = $1
+		`, authorizedInstanceID).Scan(&isPublicAperture); err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi tải trạng thái Tiên Khiếu", err))
+			return
+		}
+		if err := db.DB.QueryRowContext(c.Request.Context(), `
+			SELECT COALESCE(owner.username, 'Tiên Khiếu vô chủ')
 			FROM immortal_apertures a
-			JOIN players owner ON owner.id = a.player_id
+			LEFT JOIN players owner ON owner.id = a.player_id
 			WHERE a.id = $1
 		`, authorizedInstanceID).Scan(&apertureOwnerName); err != nil {
 			httperr.Respond(c, httperr.Internal("Lỗi tải tên chủ Tiên Khiếu", err))
 			return
 		}
-		if isApertureOwner {
+		if isApertureOwner || isPublicAperture {
 			maxVisionRadius = 10
 		}
 	}
@@ -116,7 +123,7 @@ func GetGrid(c *gin.Context) {
 			visualVisionRadius = rVal
 		}
 	}
-	if isApertureInstance && isApertureOwner {
+	if isApertureInstance && (isApertureOwner || isPublicAperture) {
 		visualVisionRadius = 10
 	} else if visualVisionRadius > maxVisionRadius {
 		visualVisionRadius = maxVisionRadius
@@ -142,7 +149,7 @@ func GetGrid(c *gin.Context) {
 	mapInstanceID := instanceID
 
 	cellCoords := make([]cache.CellCoordKey, 0, (2*visualVisionRadius+1)*(2*visualVisionRadius+1))
-	if isApertureInstance && isApertureOwner {
+	if isApertureInstance && (isApertureOwner || isPublicAperture) {
 		for y := 0; y < 20; y++ {
 			for x := 0; x < 20; x++ {
 				cellCoords = append(cellCoords, cache.CellCoordKey{RegionID: player.CurrentRegion, X: x, Y: y})
@@ -165,7 +172,9 @@ func GetGrid(c *gin.Context) {
 	}
 	clearedCells := make(map[cache.CellCoordKey]cache.MapCellState)
 	var errCleared error
-	if !isApertureInstance {
+	if isApertureInstance {
+		clearedCells, errCleared = cache.GetInstanceClearedCells(player.CurrentRegion, instanceID, cellCoords)
+	} else {
 		clearedCells, errCleared = cache.GetClearedCells(cellCoords)
 	}
 	if errCleared != nil {
@@ -173,7 +182,14 @@ func GetGrid(c *gin.Context) {
 		// Preserve the old per-cell fallback behavior if Redis cannot serve MGET.
 		clearedCells = make(map[cache.CellCoordKey]cache.MapCellState)
 		for _, coord := range cellCoords {
-			cleared, clearedBy, err := cache.IsCellCleared(coord.RegionID, coord.X, coord.Y)
+			var cleared bool
+			var clearedBy string
+			var err error
+			if isApertureInstance {
+				cleared, clearedBy, err = cache.IsInstanceCellCleared(coord.RegionID, instanceID, coord.X, coord.Y)
+			} else {
+				cleared, clearedBy, err = cache.IsCellCleared(coord.RegionID, coord.X, coord.Y)
+			}
 			if err != nil {
 				logger.S.Errorf("Failed to check Redis cell state for (%d,%d) in region %s: %v", coord.X, coord.Y, coord.RegionID, err)
 				continue
@@ -185,12 +201,58 @@ func GetGrid(c *gin.Context) {
 	}
 
 	cells := make([]models.Cell, 0, len(cellCoords))
+	publicApertureNPCs := make([]gin.H, 0)
 	for _, coord := range cellCoords {
 		cell := ResolveCellInRegion(coord.RegionID, coord.X, coord.Y)
+		if isPublicAperture {
+			cell = resolvePublicApertureCell(instanceID, coord.X, coord.Y)
+		}
 		if _, isCleared := clearedCells[coord]; isCleared {
 			cell = models.Cell{X: coord.X, Y: coord.Y, Type: "Empty", Content: ""}
 		}
 		cells = append(cells, cell)
+	}
+	if isPublicAperture {
+		npcRows, npcErr := db.DB.QueryContext(c.Request.Context(), `
+			SELECT id::text, name, world_x, world_y, rank, sub_rank, hp, max_hp, execution_state
+			FROM non_player_actors
+			WHERE aperture_id = $1 AND owner_player_id IS NULL
+			  AND actor_kind = 'VARIANT_NPC' AND lifecycle_state = 'ACTIVE'
+			  AND execution_state IN ('GUARDING','COMBAT')
+			  AND world_x BETWEEN 0 AND 19 AND world_y BETWEEN 0 AND 19
+			ORDER BY world_y, world_x, id
+		`, instanceID)
+		if npcErr != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi tải NPC hộ vệ Tiên Khiếu", npcErr))
+			return
+		}
+		cellIndexes := make(map[[2]int]int, len(cells))
+		for i, cell := range cells {
+			cellIndexes[[2]int{cell.X, cell.Y}] = i
+		}
+		for npcRows.Next() {
+			var id, name, state string
+			var x, y, rank, subRank int
+			var hp, maxHP float64
+			if err := npcRows.Scan(&id, &name, &x, &y, &rank, &subRank, &hp, &maxHP, &state); err != nil {
+				npcRows.Close()
+				httperr.Respond(c, httperr.Internal("Lỗi đọc NPC hộ vệ Tiên Khiếu", err))
+				return
+			}
+			publicApertureNPCs = append(publicApertureNPCs, gin.H{
+				"id": id, "name": name, "x": x, "y": y,
+				"rank": rank, "sub_rank": subRank, "hp": hp, "max_hp": maxHP, "state": state,
+			})
+			if i, ok := cellIndexes[[2]int{x, y}]; ok {
+				cells[i] = models.Cell{X: x, Y: y, Type: "Monster", Content: publicApertureNPCCellPrefix + id, Rank: rank, SubRank: subRank}
+			}
+		}
+		if err := npcRows.Err(); err != nil {
+			npcRows.Close()
+			httperr.Respond(c, httperr.Internal("Lỗi đọc danh sách NPC hộ vệ", err))
+			return
+		}
+		npcRows.Close()
 	}
 	if !isApertureInstance && worldMapIDForRegion(player.CurrentRegion) == "world_map" {
 		cellIndex := make(map[[2]int]int, len(cells))
@@ -218,7 +280,7 @@ func GetGrid(c *gin.Context) {
 	nearbyPlayers := []NearbyPlayer{}
 	seenIDs := map[string]bool{}
 	nearbyRadius := visualVisionRadius
-	if isApertureInstance && isApertureOwner {
+	if isApertureInstance && (isApertureOwner || isPublicAperture) {
 		nearbyRadius = 20
 	}
 
@@ -281,7 +343,7 @@ func GetGrid(c *gin.Context) {
 	maxX := player.X + nearbyRadius
 	minY := player.Y - nearbyRadius
 	maxY := player.Y + nearbyRadius
-	if isApertureInstance && isApertureOwner {
+	if isApertureInstance && (isApertureOwner || isPublicAperture) {
 		minX, minY, maxX, maxY = 0, 0, 19, 19
 	}
 
@@ -336,19 +398,20 @@ func GetGrid(c *gin.Context) {
 
 	setWorldSnapshotRevision(c, snapshotScope)
 	c.JSON(http.StatusOK, gin.H{
-		"x":                   player.X,
-		"y":                   player.Y,
-		"world_map_id":        mapID,
-		"map_instance_id":     mapInstanceID,
-		"vision_radius":       visualVisionRadius,
-		"max_vision_radius":   maxVisionRadius,
-		"cells":               cells,
-		"stats":               gridStats,
-		"players_on_map":      nearbyPlayers,
-		"ground_drops":        groundDrops,
-		"world_width":         mapWidthForInstance(isApertureInstance),
-		"world_height":        mapWidthForInstance(isApertureInstance),
-		"aperture_owner_name": apertureOwnerName,
+		"x":                    player.X,
+		"y":                    player.Y,
+		"world_map_id":         mapID,
+		"map_instance_id":      mapInstanceID,
+		"vision_radius":        visualVisionRadius,
+		"max_vision_radius":    maxVisionRadius,
+		"cells":                cells,
+		"public_aperture_npcs": publicApertureNPCs,
+		"stats":                gridStats,
+		"players_on_map":       nearbyPlayers,
+		"ground_drops":         groundDrops,
+		"world_width":          mapWidthForInstance(isApertureInstance),
+		"world_height":         mapWidthForInstance(isApertureInstance),
+		"aperture_owner_name":  apertureOwnerName,
 	})
 }
 

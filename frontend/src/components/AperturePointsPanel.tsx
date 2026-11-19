@@ -210,16 +210,17 @@ interface PointCardProps {
   itemDictionary: Record<string, { name?: string }>;
   immortalStones: number;
   actionLoading: boolean;
+  publicAperture: boolean;
 }
 
-function PointCard({ point, itemDictionary, immortalStones, actionLoading }: PointCardProps) {
+function PointCard({ point, itemDictionary, immortalStones, actionLoading, publicAperture }: PointCardProps) {
   const collectAperturePoint = useGameStore((s) => s.collectAperturePoint);
   const revitalizeAperturePoint = useGameStore((s) => s.revitalizeAperturePoint);
   const upgradeAperturePoint = useGameStore((s) => s.upgradeAperturePoint);
   const [showWorkers, setShowWorkers] = useState(false);
 
   const totalStock = pointStockTotal(point);
-  const ready = pointIsReady(point);
+  const ready = publicAperture ? totalStock > 0 : pointIsReady(point);
   const stockPercent = point.stock_cap > 0 ? Math.min(100, (totalStock / point.stock_cap) * 100) : 0;
   const upgradeCost = pointUpgradeCost(point.level);
   const canUpgrade = point.level < 5 && immortalStones >= upgradeCost;
@@ -291,7 +292,9 @@ function PointCard({ point, itemDictionary, immortalStones, actionLoading }: Poi
         )}
       </div>
 
-      {preview && (
+      {publicAperture ? (
+        <div className="mt-2 text-[10px] text-amber-300">Tiên Khiếu vô chủ · sản xuất đã dừng; chỉ còn tồn kho hiện tại.</div>
+      ) : preview && (
         <details className="mt-2 rounded border border-zinc-800 bg-zinc-900/40 px-2 py-1">
           <summary className="cursor-pointer list-none text-[10px] font-semibold text-zinc-400">
             <TrendingUp className="mr-1 inline h-3 w-3 text-emerald-400" />
@@ -317,7 +320,7 @@ function PointCard({ point, itemDictionary, immortalStones, actionLoading }: Poi
         </details>
       )}
 
-      <div className="mt-2 grid grid-cols-2 gap-1.5">
+      <div className={`mt-2 grid ${publicAperture ? "grid-cols-1" : "grid-cols-2"} gap-1.5`}>
         <GameButton
           size="xs"
           variant="success"
@@ -327,30 +330,32 @@ function PointCard({ point, itemDictionary, immortalStones, actionLoading }: Poi
         >
           Thu hoạch
         </GameButton>
-        <GameButton
-          size="xs"
-          variant="secondary"
-          loading={actionLoading}
-          disabled={point.vitality >= 100}
-          onClick={() => void revitalizeAperturePoint(point.id)}
-        >
-          Bồi dưỡng
-        </GameButton>
-        <GameButton
-          size="xs"
-          variant="secondary"
-          loading={actionLoading}
-          disabled={!canUpgrade}
-          onClick={() => void upgradeAperturePoint(point.id)}
-        >
-          Nâng cấp · {formatNumber(upgradeCost, 0)} đá
-        </GameButton>
-        <GameButton size="xs" variant="ghost" onClick={() => setShowWorkers((open) => !open)}>
+        {!publicAperture && <>
+          <GameButton
+            size="xs"
+            variant="secondary"
+            loading={actionLoading}
+            disabled={point.vitality >= 100}
+            onClick={() => void revitalizeAperturePoint(point.id)}
+          >
+            Bồi dưỡng
+          </GameButton>
+          <GameButton
+            size="xs"
+            variant="secondary"
+            loading={actionLoading}
+            disabled={!canUpgrade}
+            onClick={() => void upgradeAperturePoint(point.id)}
+          >
+            Nâng cấp · {formatNumber(upgradeCost, 0)} đá
+          </GameButton>
+        </>}
+        {!publicAperture && <GameButton size="xs" variant="ghost" onClick={() => setShowWorkers((open) => !open)}>
           <Users className="mr-1 h-3 w-3" /> Lao động
-        </GameButton>
+        </GameButton>}
       </div>
 
-      {showWorkers && <PointWorkerEditor point={point} />}
+      {showWorkers && !publicAperture && <PointWorkerEditor point={point} />}
     </div>
   );
 }
@@ -359,10 +364,12 @@ export function AperturePointsPanel() {
   const aperturePoints = useGameStore((s) => s.aperturePoints);
   const itemDictionary = useGameStore((s) => s.itemDictionary);
   const player = useGameStore((s) => s.player);
+  const aperture = useGameStore((s) => s.aperture);
   const actionLoading = useGameStore((s) => s.actionLoading);
   const fetchAperturePoints = useGameStore((s) => s.fetchAperturePoints);
   const fetchVariantHumans = useGameStore((s) => s.fetchVariantHumans);
   const collectAllAperturePoints = useGameStore((s) => s.collectAllAperturePoints);
+  const publicAperture = Boolean(aperture && !aperture.player_id && player?.current_region === "aperture_interior" && player.map_instance_id === aperture.id);
 
   useEffect(() => {
     void fetchAperturePoints();
@@ -371,14 +378,14 @@ export function AperturePointsPanel() {
 
   const sortedPoints = useMemo(() => {
     const rank = (point: ApertureResourcePoint) => {
-      if (pointIsReady(point)) return 0;
+      if (publicAperture ? pointStockTotal(point) > 0 : pointIsReady(point)) return 0;
       if (point.state === "EXHAUSTED") return 2;
       return 1;
     };
     return [...aperturePoints].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
-  }, [aperturePoints]);
+  }, [aperturePoints, publicAperture]);
 
-  const readyCount = sortedPoints.filter(pointIsReady).length;
+  const readyCount = sortedPoints.filter((point) => publicAperture ? pointStockTotal(point) > 0 : pointIsReady(point)).length;
   const totalStock = sortedPoints.reduce((sum, point) => sum + pointStockTotal(point), 0);
 
   return (
@@ -396,7 +403,7 @@ export function AperturePointsPanel() {
           <GameButton size="xs" variant="ghost" onClick={() => void fetchAperturePoints(true)}>
             <RefreshCw className="h-3 w-3" />
           </GameButton>
-          <GameButton
+          {!publicAperture && <GameButton
             size="xs"
             variant="primary"
             loading={actionLoading}
@@ -404,7 +411,7 @@ export function AperturePointsPanel() {
             onClick={() => void collectAllAperturePoints()}
           >
             <Gem className="mr-1 h-3 w-3" /> Thu hoạch tất cả ({readyCount})
-          </GameButton>
+          </GameButton>}
         </div>
       </div>
 
@@ -421,6 +428,7 @@ export function AperturePointsPanel() {
               itemDictionary={itemDictionary}
               immortalStones={player?.immortal_stones ?? 0}
               actionLoading={actionLoading}
+              publicAperture={publicAperture}
             />
           ))}
         </div>

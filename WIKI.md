@@ -124,6 +124,8 @@ Tiên Khiếu mở ở Rank 6. Từ màn hình này, người chơi quản lý:
 - **Cổng và khách:** neo/mở portal, vào/ra, quản lý quyền khách hoặc liên minh theo trạng thái aperture. Chủ nhận thông báo khi có khách vào; trục xuất trong realtime combat bị từ chối và không tự chạy lại sau trận. Trục xuất hủy nghi thức di dời mỏ đang do khách thực hiện, mỏ ở lại Tiên Khiếu.
 - **Đạo ngân và tai kiếp:** theo dõi thuộc tính aperture, xử lý dấu ấn/cleanse và các phiên tribulation có combat.
 
+Tiên Khiếu vô chủ có thể được tạo từ site cấu hình trong `PublicApertureSite.csv` hoặc được giữ lại khi chủ nhân thọ tận và tài khoản bị xóa. Môn Hộ của khiếu vô chủ mở cho người chơi qua luồng portal hiện có; khách dùng map instance riêng, có thể giao tranh và thu hoạch stock chung. Mỏ công cộng tích lũy stock theo template khi còn Thiên/Địa Khí; thiếu khí làm vitality giảm và có thể khiến mỏ sụp, còn tàn tích giữ stock nhưng dừng sản xuất. Tai kiếp môi trường tự settlement theo lịch cấu hình và có thể phá vách. Site tạo sẵn chỉ xuất hiện sau khi tọa độ world được cấu hình và import qua Admin → Dữ liệu.
+
 Các thao tác có thể tiêu tốn tài nguyên, yêu cầu vị trí/quyền hoặc bị khóa bởi trạng thái aperture. Worker xử lý một số chu kỳ sản xuất và mô phỏng; dữ liệu UI có thể cập nhật theo tick.
 
 ## Mộng Cảnh, Bí Cảnh và truyền thừa
@@ -158,7 +160,7 @@ Ví hiển thị số dư và giao dịch. Top-up tạo order và chờ kết qu
 
 ## Hoạt động phụ và tương tác xã hội
 
-- **Khám phá và chiến đấu:** bản đồ mở trong popup từ Lobby, có nền địa hình theo Đại Vực; đổi khu vực sẽ tải lại grid tương ứng. Khi Hạ Khiếu, chủ được chuyển sang tab Bản đồ & Phòng thủ với toàn cảnh lưới 20×20; khách vào Môn Hộ dùng map khám phá theo tầm nhìn thường và có thể tự rời Tiên Khiếu không cần chủ phê duyệt. Người chơi, tác nhân quái, mỏ và chiến lợi phẩm được giới hạn theo instance và phạm vi nhìn thấy; khách có thể thu hoạch mỏ khi ở gần. Di chuyển bị giới hạn trong ranh giới instance 20×20. Di chuyển có thể gặp quái và mở combat theo lượt. Auto farm ưu tiên tìm quái trong 2 ô, nếu chưa có thì tuần tra quanh vị trí hiện tại; cần bật tự xử lý encounter tại Lobby → Cài Đặt → Chiến thuật turn-based. Đóng popup sẽ dừng gửi request mới.
+- **Khám phá và chiến đấu:** bản đồ mở trong popup từ Lobby, có nền địa hình theo Đại Vực; đổi khu vực sẽ tải lại grid tương ứng. Khi Hạ Khiếu, chủ được chuyển sang tab Bản đồ & Phòng thủ với toàn cảnh lưới 20×20; khách vào Môn Hộ dùng map khám phá theo tầm nhìn thường và có thể tự rời Tiên Khiếu không cần chủ phê duyệt. Người chơi, tác nhân quái, mỏ và chiến lợi phẩm được giới hạn theo instance và phạm vi nhìn thấy; khách có thể thu hoạch mỏ khi ở gần. Mỗi Tiên Khiếu công cộng tạo hệ sinh thái quái ổn định riêng; hạ quái làm trống ô theo cooldown riêng của instance. Dị nhân còn sống khi chủ thọ tận sẽ ở lại làm hộ vệ vô chủ; bước vào ô đó sẽ mở combat theo lượt và chỉ một người có thể giao chiến với hộ vệ cùng lúc. Di chuyển bị giới hạn trong ranh giới instance 20×20. Di chuyển có thể gặp quái và mở combat theo lượt. Auto farm ưu tiên tìm quái trong 2 ô, nếu chưa có thì tuần tra quanh vị trí hiện tại; cần bật tự xử lý encounter tại Lobby → Cài Đặt → Chiến thuật turn-based. Đóng popup sẽ dừng gửi request mới.
 
 - **Võ Đài:** challenge, leaderboard và shop phần thưởng.
 - **Tháp Chiến Thuật:** leo tower theo encounter theo lượt; xem trạng thái và leaderboard. Hạn mức/ghi nhận thất bại theo chu kỳ do server quản lý.

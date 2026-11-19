@@ -23,6 +23,7 @@ Import có bước chuẩn bị và bước commit. Trước commit, xem lỗi k
 | `shop_item` | `ShopItem.csv` | Cửa hàng |
 | `arena_shop_item` | `ArenaShopItem.csv` | Cửa hàng đấu trường |
 | `region` | `Region.csv` | Vùng và hub |
+| `public_aperture_site` | `PublicApertureSite.csv` | Tọa độ và cấu hình các Tiên Khiếu công cộng tạo sẵn |
 | `loot_table` | `LootTable.csv` | Bảng loot |
 | `region_loot` | `RegionLootTables.csv` | Quy tắc loot theo vùng |
 | `monster` | `Monster.csv` | Quái vật |
@@ -32,7 +33,11 @@ Import có bước chuẩn bị và bước commit. Trước commit, xem lỗi k
 | `quest` | `Quest.csv` | Nhiệm vụ |
 | `dream_realm` | `DreamRealm.csv` | Kịch bản Mộng Cảnh |
 
+`MonsterSpawn.csv` có các spawn pool của vùng `aperture_interior`, dùng làm quái sinh thái trong map Tiên Khiếu. Import bảng `monster_spawn` sau khi sửa CSV. Mỗi khiếu có bố cục sinh thái ổn định riêng theo `map_instance_id`; thời gian hồi sau khi hạ quái lấy từ `respawn_seconds` của spawn tương ứng. Trạng thái ô bị dọn ở map Tiên Khiếu được Redis scope theo `map_instance_id`; cùng tọa độ trong hai khiếu có chu kỳ hồi độc lập.
+
 Dataset có thể có điều kiện import/export/preflight khác nhau; danh sách runtime ở `/api/admin/data/tables` là nguồn chính xác hơn bảng tóm tắt này.
+
+`PublicApertureSite.csv` dùng `site_key,region_id,x,y,aperture_rank,grade,area_size,dao_marks,is_active`. Mỗi dòng cấu hình một vị trí cố định trong world; `dao_marks` là JSON object. Import tạo cấu hình; worker materialize site, Môn Hộ và số mỏ khởi điểm theo grade (LOW/MID tạo 2, HIGH/EXTREME tạo 3), dùng trọng số Đạo Ngân như khi mở Tiên Khiếu thường. Khi site hết hạn và bị dọn, config được đánh dấu `CONSUMED` để không spawn lại; import lại cùng `site_key` giữ lifecycle state. File hiện chỉ có header, nên chưa có site tạo sẵn nào tự spawn cho đến khi dữ liệu world được cấu hình và import.
 
 ## Registry và reload
 

@@ -160,20 +160,23 @@ func teleportMarkersInRegion(regionID string, authID uuid.UUID, mySectID *string
 func aperturePortalMarkersInRegion(regionID, viewerRegion string, authID uuid.UUID, mySectID, myPartyID *string, viewer *models.Player) []MapMarkerView {
 	rows, err := db.DB.Query(`
 		SELECT p.id, p.name, p.owner_id, p.aperture_id, p.x, p.y, p.access_policy, p.concealment_power,
-		       host.rank, host.path_masteries, COALESCE(host.race, ''), COALESCE(host.constitution, ''),
-		       COALESCE(host.statuses, '{}'::jsonb), host.hp, host.base_hp, host.current_mana, host.max_mana,
+		       COALESCE(host.rank, 0), COALESCE(host.path_masteries, '{}'::jsonb), COALESCE(host.race, ''), COALESCE(host.constitution, ''),
+		       COALESCE(host.statuses, '{}'::jsonb), COALESCE(host.hp, 0), COALESCE(host.base_hp, 0), COALESCE(host.current_mana, 0), COALESCE(host.max_mana, 0),
 		       COALESCE(owner_aperture.dao_marks, '{}'::jsonb), `+db.GuInventoryAggregateEquipped("host.id")+`,
-		       (p.owner_id = $1) AS is_mine,
+		       COALESCE(p.owner_id = $1, false) AS is_mine,
 		       COALESCE(p.access_policy = 'SECT' AND EXISTS (
 		           SELECT 1 FROM sect_members sm WHERE sm.player_id = p.owner_id AND sm.sect_id = $3
 		       ), false) AS same_sect,
 		       COALESCE(p.access_policy = 'PARTY' AND EXISTS (
 		           SELECT 1 FROM players host WHERE host.id = p.owner_id AND host.party_id = $4 AND host.party_id IS NOT NULL
-		       ), false) AS same_party
+		       ), false) AS same_party,
+		       COALESCE(target_aperture.player_id IS NULL AND target_aperture.public_state IN ('PUBLIC', 'RUIN'), false) AS public_access
 		FROM aperture_portals p
-		JOIN players host ON host.id = p.owner_id
+		JOIN immortal_apertures target_aperture ON target_aperture.id = p.aperture_id
+		LEFT JOIN players host ON host.id = p.owner_id
 		LEFT JOIN immortal_apertures owner_aperture ON owner_aperture.player_id = host.id
-		WHERE p.is_active = TRUE AND p.region_id = $2`, authID, regionID, nullableString(mySectID), nullableString(myPartyID))
+		WHERE p.is_active = TRUE AND p.region_id = $2
+		  AND (target_aperture.player_id IS NOT NULL OR target_aperture.public_state IN ('PUBLIC', 'RUIN'))`, authID, regionID, nullableString(mySectID), nullableString(myPartyID))
 	if err != nil {
 		logger.S.Warnf("Failed to load aperture portal markers for region %s: %v", regionID, err)
 		return nil
@@ -183,26 +186,29 @@ func aperturePortalMarkersInRegion(regionID, viewerRegion string, authID uuid.UU
 	out := make([]MapMarkerView, 0)
 	for rows.Next() {
 		var (
-			id, name, ownerID, apertureID string
-			x, y                          float64
-			owner                         models.Player
-			detail                        AperturePortalMarker
-			isSameSect, isSameParty       bool
+			id, name, apertureID    string
+			ownerID                 sql.NullString
+			x, y                    float64
+			owner                   models.Player
+			detail                  AperturePortalMarker
+			isSameSect, isSameParty bool
+			publicAccess            bool
 		)
 		if err := rows.Scan(&id, &name, &ownerID, &apertureID, &x, &y, &detail.AccessPolicy, &detail.ConcealmentPower,
 			&owner.Rank, &owner.PathMasteries, &owner.Race, &owner.Constitution, &owner.Statuses, &owner.HP, &owner.BaseHP, &owner.CurrentMana, &owner.MaxMana, &owner.DaoMarks, &owner.GuInventory,
-			&detail.IsMine, &isSameSect, &isSameParty); err != nil {
+			&detail.IsMine, &isSameSect, &isSameParty, &publicAccess); err != nil {
 			continue
 		}
-		detail.IsMine = (ownerID == authID.String())
+		detail.IsMine = ownerID.Valid && ownerID.String == authID.String()
 		owner.CurrentRegion = regionID
 		scoutingPower := gamefx.AperturePortalDiscoveryPower(viewer, models.FilterEquippedActive(viewer.GuInventory), viewer.DaoMarks, &owner)
 		portalDefense := gamefx.AperturePortalConcealmentPower(&owner, models.FilterEquippedActive(owner.GuInventory), owner.DaoMarks, viewer, regionID, viewerRegion, detail.ConcealmentPower)
-		policyVisible := aperturePortalPolicyVisible(detail.AccessPolicy, detail.IsMine, isSameSect, isSameParty)
-		if !policyVisible && !gamefx.CanDiscoverAperturePortal(scoutingPower, portalDefense) {
+		canDiscover := gamefx.CanDiscoverAperturePortal(scoutingPower, portalDefense)
+		policyVisible := !publicAccess && aperturePortalPolicyVisible(detail.AccessPolicy, detail.IsMine, isSameSect, isSameParty)
+		if !aperturePortalVisibleToViewer(policyVisible, canDiscover, publicAccess) {
 			continue
 		}
-		marker := aperturePortalMarker(id, regionID, int(x), int(y), name, detail, ownerID, apertureID, policyVisible)
+		marker := aperturePortalMarker(id, regionID, int(x), int(y), name, detail, ownerID.String, apertureID, policyVisible || publicAccess && canDiscover)
 
 		out = append(out, marker)
 	}
@@ -218,6 +224,17 @@ func nullableString(value *string) interface{} {
 
 func aperturePortalPolicyVisible(policy string, isMine, sameSect, sameParty bool) bool {
 	return isMine || policy == "OPEN" || policy == "KEY" || policy == "APPROVAL" || policy == "SECT" && sameSect || policy == "PARTY" && sameParty
+}
+
+func aperturePortalRequiresScouting(ownerID, publicState string) bool {
+	return ownerID == "" && (publicState == "PUBLIC" || publicState == "RUIN")
+}
+
+func aperturePortalVisibleToViewer(policyVisible, canDiscover, requiresScouting bool) bool {
+	if requiresScouting {
+		return canDiscover
+	}
+	return policyVisible || canDiscover
 }
 
 func aperturePortalMarker(id, regionID string, x, y int, name string, detail AperturePortalMarker, ownerID, apertureID string, policyVisible bool) MapMarkerView {

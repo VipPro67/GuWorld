@@ -12,7 +12,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
@@ -174,15 +173,15 @@ func AutoCombatStart(c *gin.Context) {
 
 // Publish only after the transaction containing cleared_cells has committed.
 func publishCombatClearedCell(region string, x, y int, playerID, enemyName, enemyTemplateID string) {
-	if err := cache.SetCellCleared(region, x, y, playerID, clearedCellCooldown); err != nil {
-		logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", playerID, x, y, err)
-	}
 	instanceID := ""
-	if db.DB != nil {
+	if region == "aperture_interior" && db.DB != nil {
 		var dbInstanceID sql.NullString
 		if err := db.DB.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, playerID).Scan(&dbInstanceID); err == nil && dbInstanceID.Valid {
 			instanceID = dbInstanceID.String
 		}
+	}
+	if err := setMonsterCellClearedInInstance(region, instanceID, x, y, playerID, enemyTemplateID); err != nil {
+		logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", playerID, x, y, err)
 	}
 	publishWorldChange("map_cell", "cleared", region, instanceID, x, y, map[string]any{
 		"cell_type":    "Monster",

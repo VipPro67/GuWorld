@@ -39,6 +39,48 @@ func GetImmortalAperture(c *gin.Context) {
 		return
 	}
 
+	var currentRegion string
+	var mapInstanceID sql.NullString
+	if err := db.DB.QueryRowContext(c.Request.Context(), `
+		SELECT COALESCE(current_region, ''), map_instance_id::text
+		FROM players WHERE id = $1
+	`, playerID).Scan(&currentRegion, &mapInstanceID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Cổ sư không tồn tại"})
+		return
+	}
+	if currentRegion == "aperture_interior" && mapInstanceID.Valid {
+		var ap models.ImmortalAperture
+		var createdAt, updatedAt time.Time
+		var publicRuinExpiresAt sql.NullTime
+		err := db.DB.QueryRowContext(c.Request.Context(), `
+			SELECT a.id, COALESCE(a.player_id::text, ''), a.aperture_rank, a.public_state, a.public_ruin_expires_at, a.grade, a.time_rate, a.aperture_hp, a.max_aperture_hp,
+			       a.area_size, a.immortal_essence, a.essence_production_per_year, a.internal_years_passed, a.next_tribulation_year,
+			       a.rank_start_year, a.earth_calamity_count, a.heavenly_tribulation_count, a.grand_tribulation_count,
+			       a.myriad_tribulation_count, a.chaos_calamity_count, a.state, a.dao_marks,
+			       COALESCE(a.heaven_qi, 100000), COALESCE(a.earth_qi, 100000), COALESCE(a.max_heaven_qi, 100000), COALESCE(a.max_earth_qi, 100000),
+			       COALESCE(a.is_placed, false), a.placed_region, a.placed_x, a.placed_y, a.placed_at, a.created_at, a.updated_at
+			FROM immortal_apertures a
+			JOIN aperture_guest_roster g ON g.aperture_id = a.id AND g.player_id = $1
+			WHERE a.id = $2 AND a.player_id IS NULL
+	`, playerID, mapInstanceID.String).Scan(
+			&ap.ID, &ap.PlayerID, &ap.ApertureRank, &ap.PublicState, &publicRuinExpiresAt, &ap.Grade, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP,
+			&ap.AreaSize, &ap.ImmortalEssence, &ap.EssenceProductionPerYear, &ap.InternalYearsPassed, &ap.NextTribulationYear,
+			&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount,
+			&ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.State, &ap.DaoMarks,
+			&ap.HeavenQi, &ap.EarthQi, &ap.MaxHeavenQi, &ap.MaxEarthQi, &ap.IsPlaced, &ap.PlacedRegion, &ap.PlacedX,
+			&ap.PlacedY, &ap.PlacedAt, &createdAt, &updatedAt)
+		if err == nil {
+			if publicRuinExpiresAt.Valid {
+				ap.PublicRuinExpiresAt = &publicRuinExpiresAt.Time
+			}
+			ap.CreatedAt = createdAt
+			ap.UpdatedAt = updatedAt
+			ap.TribulationCount = ap.TotalTribulationCount()
+			c.JSON(http.StatusOK, ap)
+			return
+		}
+	}
+
 	if player.Rank < 6 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa thăng tiên (Rank 6), chưa có Tiên Khiếu."})
 		return
@@ -47,10 +89,11 @@ func GetImmortalAperture(c *gin.Context) {
 	// 2. Fetch aperture (read-only query)
 	var ap models.ImmortalAperture
 	var createdAt, updatedAt time.Time
+	var publicRuinExpiresAt sql.NullTime
 	err = db.DB.QueryRow(`
-		SELECT id, player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, state, dao_marks, COALESCE(heaven_qi, 100000), COALESCE(earth_qi, 100000), COALESCE(max_heaven_qi, 100000), COALESCE(max_earth_qi, 100000), COALESCE(is_placed, false), placed_region, placed_x, placed_y, placed_at, created_at, updated_at
+		SELECT id, player_id, aperture_rank, public_state, public_ruin_expires_at, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, state, dao_marks, COALESCE(heaven_qi, 100000), COALESCE(earth_qi, 100000), COALESCE(max_heaven_qi, 100000), COALESCE(max_earth_qi, 100000), COALESCE(is_placed, false), placed_region, placed_x, placed_y, placed_at, created_at, updated_at
 		FROM immortal_apertures WHERE player_id = $1
-	`, playerID).Scan(&ap.ID, &ap.PlayerID, &ap.Grade, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.AreaSize, &ap.ImmortalEssence, &ap.EssenceProductionPerYear, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.State, &ap.DaoMarks, &ap.HeavenQi, &ap.EarthQi, &ap.MaxHeavenQi, &ap.MaxEarthQi, &ap.IsPlaced, &ap.PlacedRegion, &ap.PlacedX, &ap.PlacedY, &ap.PlacedAt, &createdAt, &updatedAt)
+	`, playerID).Scan(&ap.ID, &ap.PlayerID, &ap.ApertureRank, &ap.PublicState, &publicRuinExpiresAt, &ap.Grade, &ap.TimeRate, &ap.ApertureHP, &ap.MaxApertureHP, &ap.AreaSize, &ap.ImmortalEssence, &ap.EssenceProductionPerYear, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.State, &ap.DaoMarks, &ap.HeavenQi, &ap.EarthQi, &ap.MaxHeavenQi, &ap.MaxEarthQi, &ap.IsPlaced, &ap.PlacedRegion, &ap.PlacedX, &ap.PlacedY, &ap.PlacedAt, &createdAt, &updatedAt)
 
 	if err == sql.ErrNoRows {
 		// Auto-create aperture (fallback for legacy players) — grade rolled from current Nhân Khí
@@ -61,7 +104,7 @@ func GetImmortalAperture(c *gin.Context) {
 		}
 		defer tx.Rollback()
 
-		ap, err = createAperture(tx, playerID.String(), player.HumanQi, player.CurrentMana)
+		ap, err = createAperture(tx, playerID.String(), player.Rank, player.HumanQi, player.CurrentMana)
 		if err != nil {
 			httperr.Respond(c, httperr.Internal("Không thể khai mở Tiên Khiếu: "+err.Error(), err))
 			return
@@ -76,6 +119,9 @@ func GetImmortalAperture(c *gin.Context) {
 		logger.S.Errorf("Error fetching aperture for player %s: %v", playerID, err)
 		httperr.Respond(c, httperr.Internal("Lỗi truy vấn Tiên Khiếu", err))
 		return
+	}
+	if publicRuinExpiresAt.Valid {
+		ap.PublicRuinExpiresAt = &publicRuinExpiresAt.Time
 	}
 
 	ap.TribulationCount = ap.TotalTribulationCount()
@@ -207,7 +253,7 @@ func rollApertureGrade(q float64) string {
 
 // createAperture inserts a brand new Tiên Khiếu for a newly ascended player,
 // rolls its grade from the Nhân Khí they had at ascension, and seeds starter nodes.
-func createAperture(tx *sql.Tx, playerID string, humanQi, currentMana float64) (models.ImmortalAperture, error) {
+func createAperture(tx *sql.Tx, playerID string, apertureRank int, humanQi, currentMana float64) (models.ImmortalAperture, error) {
 	q := math.Min(1.0, humanQi/100000.0)
 	ap := buildApertureByGrade(playerID, rollApertureGrade(q))
 	ap.ImmortalEssence = int(currentMana)
@@ -220,11 +266,18 @@ func createAperture(tx *sql.Tx, playerID string, humanQi, currentMana float64) (
 	ap.EarthQi = initialQi
 
 	err := tx.QueryRow(`
-		INSERT INTO immortal_apertures (player_id, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, state, heaven_qi, earth_qi, max_heaven_qi, max_earth_qi)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		INSERT INTO immortal_apertures (player_id, aperture_rank, grade, time_rate, aperture_hp, max_aperture_hp, area_size, immortal_essence, essence_production_per_year, internal_years_passed, next_tribulation_year, state, heaven_qi, earth_qi, max_heaven_qi, max_earth_qi)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		RETURNING id, created_at, updated_at
-	`, ap.PlayerID, ap.Grade, ap.TimeRate, ap.ApertureHP, ap.MaxApertureHP, ap.AreaSize, ap.ImmortalEssence, ap.EssenceProductionPerYear, ap.InternalYearsPassed, ap.NextTribulationYear, ap.State, ap.HeavenQi, ap.EarthQi, ap.MaxHeavenQi, ap.MaxEarthQi).Scan(&ap.ID, &ap.CreatedAt, &ap.UpdatedAt)
+	`, ap.PlayerID, apertureRank, ap.Grade, ap.TimeRate, ap.ApertureHP, ap.MaxApertureHP, ap.AreaSize, ap.ImmortalEssence, ap.EssenceProductionPerYear, ap.InternalYearsPassed, ap.NextTribulationYear, ap.State, ap.HeavenQi, ap.EarthQi, ap.MaxHeavenQi, ap.MaxEarthQi).Scan(&ap.ID, &ap.CreatedAt, &ap.UpdatedAt)
 	if err != nil {
+		return models.ImmortalAperture{}, err
+	}
+	ap.ApertureRank = apertureRank
+	if _, err := tx.Exec(`
+		INSERT INTO aperture_ownership (aperture_id, player_id)
+		VALUES ($1, $2)
+	`, ap.ID, playerID); err != nil {
 		return models.ImmortalAperture{}, err
 	}
 	// Seed a few random initial resource points for the new aperture
@@ -359,7 +412,9 @@ func GetApertureNodes(c *gin.Context) {
 			COALESCE(n.required_gu_id, ''), COALESCE(n.required_gu_rank, 0)
 		FROM aperture_resource_nodes n
 		JOIN immortal_apertures a ON n.aperture_id = a.id
-		WHERE a.player_id = $1 AND n.is_destroyed = false
+		WHERE (a.player_id = $1 OR (a.player_id IS NULL AND a.id = (SELECT map_instance_id FROM players WHERE id = $1)
+		  AND EXISTS (SELECT 1 FROM aperture_guest_roster g WHERE g.aperture_id = a.id AND g.player_id = $1)))
+		  AND n.is_destroyed = false
 		  AND COALESCE(n.node_category, 'DEFENSE') = 'DEFENSE'
 	`, playerID)
 	if err != nil {

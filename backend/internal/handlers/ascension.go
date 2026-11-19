@@ -1052,7 +1052,7 @@ func AscensionRelease(c *gin.Context) {
 	player.NextTribulationTime = &nextTrib
 	player.ImmortalStones += 10
 
-	ap, apErr := createAperture(tx, player.ID.String(), session.AscensionQi, player.CurrentMana)
+	ap, apErr := createAperture(tx, player.ID.String(), player.Rank, session.AscensionQi, player.CurrentMana)
 	if apErr != nil {
 		httperr.Respond(c, httperr.Internal("Thăng tiên thành công nhưng không thể khai mở Tiên Khiếu: "+apErr.Error(), apErr))
 		return

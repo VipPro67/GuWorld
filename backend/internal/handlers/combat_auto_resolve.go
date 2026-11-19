@@ -77,6 +77,7 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 	if player.ActiveCombat == nil {
 		return nil, fmt.Errorf("no active combat")
 	}
+	publicApertureNPCID := player.ActiveCombat.PublicApertureNPCID
 	if player.ActiveCombat.CombatOwnerID != "" && player.ActiveCombat.CombatOwnerID != player.ID.String() {
 		return nil, fmt.Errorf("party combat is controlled by its initiating player")
 	}
@@ -236,6 +237,7 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 	historyRegion := player.CurrentRegion
 
 	if alliesAlive {
+		var lootDetailLogs []string
 		if isVirtual {
 			isPractice := player.ActiveCombat.EnemyType == "PRACTICE"
 			isTower := player.ActiveCombat.EnemyType == "TOWER"
@@ -293,21 +295,25 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 				}
 			}
 
-			lootDetailLogs, lootNotifications, lootAnnouncements := applyCombatVictoryLoot(tx, player, player.ActiveCombat, partyMembers, isVirtual)
-			pendingNotifications = append(pendingNotifications, lootNotifications...)
-			immortalAnnouncements = append(immortalAnnouncements, lootAnnouncements...)
-			if len(lootAnnouncements) > 0 {
-				immortalGuDropped = true
-			}
+			if publicApertureNPCID == "" {
+				var lootNotifications []notify.Notification
+				var lootAnnouncements []immortalGuLootAnnouncement
+				lootDetailLogs, lootNotifications, lootAnnouncements = applyCombatVictoryLoot(tx, player, player.ActiveCombat, partyMembers, isVirtual)
+				pendingNotifications = append(pendingNotifications, lootNotifications...)
+				immortalAnnouncements = append(immortalAnnouncements, lootAnnouncements...)
+				if len(lootAnnouncements) > 0 {
+					immortalGuDropped = true
+				}
 
-			markBossCleared(tx, player)
+				markBossCleared(tx, player)
 
-			for _, lMsg := range lootDetailLogs {
-				logs = append(logs, simulator.CombatLog{
-					Turn:   simState.Turn,
-					Action: "LOOT",
-					Detail: lMsg,
-				})
+				for _, lMsg := range lootDetailLogs {
+					logs = append(logs, simulator.CombatLog{
+						Turn:   simState.Turn,
+						Action: "LOOT",
+						Detail: lMsg,
+					})
+				}
 			}
 
 			// Sect War victory. This branch only runs when alliesAlive (outer
@@ -335,7 +341,7 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 				summary["sect_war_won"] = true
 			}
 
-			if outcome.ShouldClearCell {
+			if outcome.ShouldClearCell && publicApertureNPCID == "" {
 				if player.ClearedCells == nil {
 					player.ClearedCells = make(models.ClearedCellsMap)
 				}
@@ -346,8 +352,8 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 			// into the jsonb column without a manual marshal.
 
 			player.HP = float64(finalPlayerHP)
-
 			summary["loot"] = lootDetailLogs
+
 		}
 	} else {
 		if simState.FledBy == player.ID.String() {
@@ -426,6 +432,12 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 	if fakeWallLog := maybeGrantFakeRegionalWallStatus(tx, player); fakeWallLog != nil {
 		fakeWallLog.Turn = simState.Turn
 		logs = append(logs, *fakeWallLog)
+	}
+	if publicApertureNPCID != "" {
+		npcDefeated := alliesAlive && !outcome.EnemiesAlive && simState.FledBy == ""
+		if err := settlePublicApertureNPC(tx, publicApertureNPCID, npcDefeated); err != nil {
+			return nil, fmt.Errorf("settling public aperture NPC: %w", err)
+		}
 	}
 
 	winner := outcome.Winner

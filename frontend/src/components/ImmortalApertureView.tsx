@@ -264,7 +264,11 @@ export const ImmortalApertureView: React.FC = () => {
     activeTribulation,
     itemDictionary,
     actionLoading,
+    movePlayer,
     fetchAperture,
+    apertureAbsorption,
+    fetchApertureAbsorptionStatus,
+    startApertureAbsorption,
     fetchDaoMarks,
     fetchDaoNgan,
     cleanseDaoMarks,
@@ -318,6 +322,7 @@ export const ImmortalApertureView: React.FC = () => {
     managePortal,
     anchorAperture,
     unanchorAperture,
+    leaveAperture,
     fetchGuests,
     setGuestRole,
     evictGuest,
@@ -338,10 +343,26 @@ export const ImmortalApertureView: React.FC = () => {
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedNode, setSelectedNode] = useState<ApertureResourceNode | null>(null);
   const [showHealMenu, setShowHealMenu] = useState(false);
-  const ownerInsideAperture = Boolean(aperture?.is_placed && player?.current_region === "aperture_interior" && player.map_instance_id === aperture.id);
+  const insideApertureInstance = Boolean(
+    player?.current_region === "aperture_interior" && aperture?.id && player.map_instance_id === aperture.id
+  );
+  const isApertureOwner = Boolean(aperture?.player_id && aperture.player_id === player?.id);
+  const ownerInsideAperture = Boolean(insideApertureInstance && isApertureOwner);
+  const publicAperture = Boolean(insideApertureInstance && !aperture?.player_id && aperture?.public_state === "PUBLIC");
+  const ownerlessApertureInstance = Boolean(insideApertureInstance && !aperture?.player_id);
+
+  useEffect(() => {
+    if (publicAperture && aperture?.id) void fetchApertureAbsorptionStatus(aperture.id);
+  }, [aperture?.id, fetchApertureAbsorptionStatus, publicAperture]);
+  usePolling(
+    () => publicAperture && aperture?.id ? fetchApertureAbsorptionStatus(aperture.id) : Promise.resolve(),
+    10000,
+    publicAperture,
+  );
+  usePolling(() => ownerlessApertureInstance ? fetchAperture(true) : Promise.resolve(), 15000, ownerlessApertureInstance);
 
   const refreshApertureMap = useCallback(async () => {
-    if (!ownerInsideAperture) return;
+    if (!insideApertureInstance) return;
     let snapshot = await fetchGrid(10) as ApertureMapSnapshot | null;
     if (snapshot) {
       const now = Date.now();
@@ -356,18 +377,18 @@ export const ImmortalApertureView: React.FC = () => {
     if (useGameStore.getState().player?.map_instance_id === aperture?.id && snapshot) {
       setApertureMapSnapshot(snapshot);
     }
-  }, [aperture?.id, fetchGrid, ownerInsideAperture, player?.id]);
+  }, [aperture?.id, fetchGrid, insideApertureInstance, player?.id]);
 
   useEffect(() => {
-    if (activeTab === "map" && ownerInsideAperture) void refreshApertureMap();
-  }, [activeTab, ownerInsideAperture, mapRevision, refreshApertureMap]);
-  usePolling(refreshApertureMap, 10000, activeTab === "map" && ownerInsideAperture);
+    if (activeTab === "map" && insideApertureInstance) void refreshApertureMap();
+  }, [activeTab, insideApertureInstance, mapRevision, refreshApertureMap]);
+  usePolling(refreshApertureMap, 10000, activeTab === "map" && insideApertureInstance);
   useEffect(() => {
-    if (activeTab === "map" && ownerInsideAperture) void fetchWorldMonsters();
-  }, [activeTab, ownerInsideAperture, fetchWorldMonsters]);
-  usePolling(() => checkWorldRevisions().then(() => undefined), 5000, activeTab === "map" && ownerInsideAperture);
+    if (activeTab === "map" && insideApertureInstance) void fetchWorldMonsters();
+  }, [activeTab, insideApertureInstance, fetchWorldMonsters]);
+  usePolling(() => checkWorldRevisions().then(() => undefined), 5000, activeTab === "map" && insideApertureInstance);
   useEffect(() => {
-    if (!ownerInsideAperture || !player?.id) return;
+    if (!insideApertureInstance || !player?.id) return;
     return uiRealtimeManager.subscribe<WorldPositionEvent>("world:pos", (event) => {
       if (!event || typeof event.id !== "string" || typeof event.ts !== "number") return;
       const previous = recentWorldPositions.current.get(event.id);
@@ -377,7 +398,7 @@ export const ImmortalApertureView: React.FC = () => {
         ? applyWorldPosition(snapshot, event, player.id)
         : snapshot);
     });
-  }, [ownerInsideAperture, player?.id]);
+  }, [insideApertureInstance, player?.id]);
 
   // Aperture Anchoring & Portal / Guest State
   const [showAnchorModal, setShowAnchorModal] = useState<boolean>(false);
@@ -460,7 +481,7 @@ export const ImmortalApertureView: React.FC = () => {
   }, [aperture]);
 
   useEffect(() => {
-    if (aperture?.is_placed && player?.current_region === "aperture_interior" && player.map_instance_id === aperture.id) {
+    if (player?.current_region === "aperture_interior" && player.map_instance_id === aperture?.id) {
       setActiveTab("map");
     }
   }, [aperture?.id, aperture?.is_placed, player?.current_region, player?.map_instance_id]);
@@ -590,7 +611,7 @@ export const ImmortalApertureView: React.FC = () => {
     );
   }
 
-  if (player.rank < 6) {
+  if (player.rank < 6 && !insideApertureInstance) {
     return (
       <div className="flex flex-col items-center justify-center p-8 bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-700/50 max-w-lg mx-auto text-center">
         <LockIcon className="w-16 h-16 text-amber-500 mb-4 animate-pulse" />
@@ -868,10 +889,18 @@ return (
               <RefreshCw className={`w-4 h-4 ${isReloading ? "animate-spin" : ""}`} />
             </button>
             <button
-              onClick={() => setView("dashboard")}
+              onClick={() => {
+                if (!isApertureOwner) {
+                  void leaveAperture().then((left) => {
+                    if (left) setView("explore");
+                  });
+                  return;
+                }
+                setView("dashboard");
+              }}
               className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-xl border border-slate-700 transition"
             >
-              Về Động Phủ
+              {isApertureOwner ? "Về Động Phủ" : "Rời Tiên Khiếu"}
             </button>
           </div>
         </div>
@@ -909,7 +938,7 @@ return (
 
           {/* Tam Khí Gauges & Controls */}
           <div className="flex flex-wrap items-center gap-4 text-xs">
-            <div className="flex items-center gap-2">
+            {isApertureOwner && <div className="flex items-center gap-2">
               <span className="text-cyan-400 font-semibold flex items-center gap-1">
                 <Sparkles className="w-3.5 h-3.5" /> Thiên Khí:
               </span>
@@ -922,7 +951,7 @@ return (
                   style={{ width: `${Math.min(100, ((aperture?.heaven_qi ?? 1000) / (aperture?.max_heaven_qi ?? 1000)) * 100)}%` }}
                 />
               </div>
-            </div>
+            </div>}
 
             <div className="flex items-center gap-2">
               <span className="text-amber-400 font-semibold flex items-center gap-1">
@@ -940,7 +969,7 @@ return (
             </div>
 
             {/* Quick Action Buttons */}
-            <div className="flex items-center gap-2">
+            {isApertureOwner && <div className="flex items-center gap-2">
               {!aperture?.is_placed ? (
                 <button
                   onClick={() => setShowAnchorModal(true)}
@@ -970,19 +999,22 @@ return (
                   </button>
                 </>
               )}
-            </div>
+            </div>}
           </div>
         </div>
       </div>
 
       {/* Tabs Navigation */}
       <GameTabs
-        items={[
+        items={isApertureOwner ? [
           { id: "overview", label: "Tổng Quan", icon: <Activity className="w-4 h-4 shrink-0" />, disabled: false },
           { id: "map", label: "Bản Đồ & Phòng Thủ", icon: <MapIcon className="w-4 h-4 shrink-0" />, disabled: false, badge: aperture?.state === "TRIBULATION_ACTIVE" ? <span className="absolute top-0 right-0 flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span></span> : undefined },
           { id: "points", label: "Điểm Tài Nguyên", icon: <Gem className="w-4 h-4 shrink-0" />, disabled: false, count: aperturePoints.filter(pointIsReady).length },
           { id: "dao", label: "Bảng Đạo Ngân", icon: <Layers className="w-4 h-4 shrink-0" />, disabled: false },
           { id: "variant_humans", label: "Dị Nhân", icon: <Users className="w-4 h-4 shrink-0" />, disabled: false },
+        ] : [
+          { id: "map", label: "Bản Đồ", icon: <MapIcon className="w-4 h-4 shrink-0" />, disabled: false },
+          { id: "points", label: "Mỏ tài nguyên", icon: <Gem className="w-4 h-4 shrink-0" />, disabled: false },
         ]}
         activeId={activeTab}
         onChange={(id) => setActiveTab(id as ApiResponseData)}
@@ -1501,7 +1533,7 @@ return (
               </h2>
 
               {/* Bulk actions */}
-              <div className="w-full flex flex-col sm:flex-row gap-2 mb-4">
+              {isApertureOwner && <div className="w-full flex flex-col sm:flex-row gap-2 mb-4">
                 <button
                   onClick={() => void collectAllAperturePoints()}
                   disabled={actionLoading || readyPointCount === 0}
@@ -1518,9 +1550,9 @@ return (
                 >
                   {actionLoading ? "Đang xử lý..." : `Sửa Chữa Tất Cả (${bulkRepairCount} công trình, ${bulkRepairCost.toLocaleString()} Đá)`}
                 </button>
-              </div>
+              </div>}
 
-              <div className="w-full mb-4">
+              {isApertureOwner && <div className="w-full mb-4">
                 <button
                   type="button"
                   onClick={() => {
@@ -1557,7 +1589,7 @@ return (
                     </div>
                   </div>
                 )}
-              </div>
+              </div>}
 
               {/* Grid 20x20 container */}
               <div
@@ -1657,16 +1689,25 @@ return (
                         <div
                           key={coordKey}
                           onPointerDown={(event) => {
-                            if (pendingBuildZone && event.button === 0) {
+                            if (isApertureOwner && pendingBuildZone && event.button === 0) {
                               event.preventDefault();
                               handleCellClick(x, y);
                             }
                           }}
                           onPointerEnter={(event) => {
-                            if (pendingBuildZone && event.buttons === 1) handleCellClick(x, y);
+                            if (isApertureOwner && pendingBuildZone && event.buttons === 1) handleCellClick(x, y);
                           }}
                           onClick={() => {
-                            if (!pendingBuildZone) handleCellClick(x, y);
+                            if (isApertureOwner && !pendingBuildZone) handleCellClick(x, y);
+                            else if (!isApertureOwner) {
+                              const target = playersHere.find((nearby) => nearby.id !== player.id);
+                              void movePlayer(x, y, target?.id).then((result) => {
+                                if (result && hasPoint && Math.max(Math.abs(result.player.x - x), Math.abs(result.player.y - y)) <= 6) {
+                                  setActiveTab("points");
+                                  void fetchAperturePoints(true);
+                                }
+                              });
+                            }
                           }}
                           className={`w-full aspect-square flex items-center justify-center text-sm font-bold rounded cursor-pointer border transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${cellColor} ${isOwnerHere ? "ring-2 ring-emerald-300" : ""}`}
                           title={`${node ? `${node.name} · ${node.cells?.length || 1} ô · ` : hasPoint ? `${pointsHere?.[0]?.name} · ` : ""}Tọa độ: (${x}, ${y})${isOwnerHere ? " · Chủ khiếu" : ""}${worldMonsterHere ? ` · Quái: ${worldMonsterHere.monster_template_id}` : ""}${playersHere.length ? ` · ${playersHere.map((p) => p.username).join(", ")}` : ""}${dropsHere.length ? ` · ${dropsHere.length} chiến lợi phẩm` : ""}${hasPoint && !node ? " · bấm để mở Điểm Tài Nguyên" : ""}`}
@@ -1729,6 +1770,7 @@ return (
 
             {/* Chi tiết ô chọn / Xây dựng HOẶC Vượt Kiếp */}
             <div className="bg-slate-900/60 backdrop-blur-md border border-slate-700/40 rounded-2xl p-6 flex flex-col justify-between space-y-6">
+              {isApertureOwner ? <>
               {activeTribulation ? (
                 // COMBAT AND RESOLVE CONTROLS FOR TRIBULATION
                 <div className="space-y-6">
@@ -2279,6 +2321,52 @@ return (
                 >
                   Đóng
                 </button>
+              )}
+              </> : (
+                <div className="flex h-full flex-col justify-center gap-3 text-center">
+                  <MapIcon className="mx-auto h-10 w-10 text-emerald-400" />
+                  <h2 className="text-lg font-bold text-emerald-200">Tiên Khiếu công cộng</h2>
+                  <p className="text-sm leading-6 text-slate-300">
+                    {aperture?.public_state === "RUIN"
+                      ? `Tàn tích đang mở để thăm dò, giao tranh và thu hoạch lượng tồn kho đến ${aperture.public_ruin_expires_at ? new Date(aperture.public_ruin_expires_at).toLocaleString() : "khi bị dọn khỏi thế giới"}.`
+                      : "Khám phá địa hình, giao tranh với người chơi khác và thu hoạch stock mỏ chung."}
+                    {aperture?.public_state === "RUIN"
+                      ? " Mỏ và tài nguyên không còn sản xuất."
+                      : " Tai kiếp tự nhiên có thể làm suy giảm vách Tiên Khiếu."}
+                  </p>
+                  {aperture && (
+                    <div className="mx-auto w-full max-w-sm space-y-1 text-left">
+                      <div className="flex justify-between text-xs text-slate-300">
+                        <span>Độ bền vách</span>
+                        <span>{Math.max(0, aperture.aperture_hp).toLocaleString()} / {aperture.max_aperture_hp.toLocaleString()}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-700">
+                        <div
+                          className={`h-full rounded-full ${aperture.public_state === "RUIN" ? "bg-red-500" : "bg-emerald-400"}`}
+                          style={{ width: `${Math.max(0, Math.min(100, (aperture.aperture_hp / Math.max(1, aperture.max_aperture_hp)) * 100))}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {publicAperture && (
+                    apertureAbsorption?.in_progress ? (
+                      <p className="text-xs text-amber-200">
+                        {apertureAbsorption.is_mine ? "Nghi thức của đạo hữu" : "Có người đang hấp thụ Tiên Khiếu này"}
+                        {apertureAbsorption.finishes_at ? ` · dự kiến ${new Date(apertureAbsorption.finishes_at).toLocaleString()}` : ""}
+                      </p>
+                    ) : (
+                      <button
+                        onClick={() => void startApertureAbsorption(aperture?.id || "").then((started) => {
+                          if (started && aperture?.id) void fetchApertureAbsorptionStatus(aperture.id);
+                        })}
+                        disabled={Boolean(actionLoading)}
+                        className="mx-auto rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/20 disabled:opacity-50"
+                      >
+                        Bắt đầu hấp thụ
+                      </button>
+                    )
+                  )}
+                </div>
               )}
             </div>
           </div>

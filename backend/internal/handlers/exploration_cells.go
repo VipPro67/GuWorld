@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"math"
 	"math/rand"
 	"sort"
@@ -20,6 +21,9 @@ const clearedCellCooldown = 15 * time.Minute
 const (
 	monsterCampSpacing = 32
 	monsterCampRadius  = 8
+
+	publicApertureMonsterCellWeight = 6
+	publicApertureEmptyCellWeight   = 150
 )
 
 type proceduralMonsterCamp struct {
@@ -479,6 +483,49 @@ func ResolveCellInRegion(regionID string, x, y int) models.Cell {
 	return generateCellInRegion(regionID, x, y)
 }
 
+// resolvePublicApertureCell builds a stable but instance-specific ecological
+// encounter. aperture_interior is intentionally inactive in the world-zone
+// registry, so public maps resolve their configured monster pool explicitly.
+func resolvePublicApertureCell(apertureID string, x, y int) models.Cell {
+	cell := models.Cell{X: x, Y: y, Type: "Empty", Content: ""}
+	if apertureID == "" || x < 0 || x >= 20 || y < 0 || y >= 20 {
+		return cell
+	}
+	rng := rand.New(rand.NewSource(GetCellSeed(x, y, "public-aperture:"+apertureID)))
+	// Keep the normal-zone Monster:Empty baseline; aperture resource points
+	// have their own system, so cells only roll ecological monsters or empty.
+	if pickWeightedType(map[string]int{"Monster": publicApertureMonsterCellWeight, "Empty": publicApertureEmptyCellWeight}, rng) != "Monster" {
+		return cell
+	}
+	spawn, ok := pickMonsterFromPool("aperture_interior", rng, false)
+	if !ok {
+		return cell
+	}
+	rank := spawn.MinRank
+	if rank < 1 {
+		rank = 6
+	}
+	return models.Cell{X: x, Y: y, Type: "Monster", Content: spawn.MonsterID, Rank: rank, SubRank: rng.Intn(5) + 1}
+}
+
+func monsterCellRespawnTTL(regionID, monsterID string) time.Duration {
+	if regionID != "aperture_interior" || monsterID == "" {
+		return clearedCellCooldown
+	}
+	zoneReg.mu.RLock()
+	defer zoneReg.mu.RUnlock()
+	for _, spawn := range zoneReg.spawnPools[regionID] {
+		if spawn.MonsterID == monsterID && !spawn.IsBossSpawn && spawn.RespawnSeconds > 0 {
+			return time.Duration(spawn.RespawnSeconds) * time.Second
+		}
+	}
+	return clearedCellCooldown
+}
+
+func setMonsterCellClearedInInstance(regionID, instanceID string, x, y int, playerID, monsterID string) error {
+	return setCellClearedInInstance(regionID, instanceID, x, y, playerID, monsterCellRespawnTTL(regionID, monsterID))
+}
+
 func isCellClearedRecently(regionID string, x, y int, cooldown time.Duration) bool {
 	cleared, _, err := cache.IsCellCleared(regionID, x, y)
 	if err != nil {
@@ -486,6 +533,32 @@ func isCellClearedRecently(regionID string, x, y int, cooldown time.Duration) bo
 		return false
 	}
 	return cleared
+}
+
+func isCellClearedInInstance(regionID, instanceID string, x, y int, cooldown time.Duration) bool {
+	if regionID == "aperture_interior" {
+		if instanceID == "" {
+			logger.S.Errorf("Cannot read aperture cell state without a map instance at (%d,%d)", x, y)
+			return false
+		}
+		cleared, _, err := cache.IsInstanceCellCleared(regionID, instanceID, x, y)
+		if err != nil {
+			logger.S.Errorf("Failed to check Redis cell state for instance %s at (%d,%d): %v", instanceID, x, y, err)
+			return false
+		}
+		return cleared
+	}
+	return isCellClearedRecently(regionID, x, y, cooldown)
+}
+
+func setCellClearedInInstance(regionID, instanceID string, x, y int, playerID string, ttl time.Duration) error {
+	if regionID == "aperture_interior" {
+		if instanceID == "" {
+			return errors.New("cannot update aperture cell state without a map instance")
+		}
+		return cache.SetInstanceCellCleared(regionID, instanceID, x, y, playerID, ttl)
+	}
+	return cache.SetCellCleared(regionID, x, y, playerID, ttl)
 }
 
 // cleanupExpiredClearedCells removes cells from player.ClearedCells that have exceeded the cooldown duration.

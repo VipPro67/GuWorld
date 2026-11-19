@@ -12,7 +12,7 @@ import (
 func RegenerateImmortalApertures() error {
 	// Cheap guard: skip the UPDATE entirely when no aperture needs healing.
 	var needsHealing bool
-	if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM immortal_apertures WHERE state != 'DESTROYED' AND aperture_hp < max_aperture_hp)`).Scan(&needsHealing); err != nil {
+	if err := db.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM immortal_apertures WHERE player_id IS NOT NULL AND state != 'DESTROYED' AND aperture_hp < max_aperture_hp)`).Scan(&needsHealing); err != nil {
 		return err
 	}
 	if !needsHealing {
@@ -36,15 +36,30 @@ func RegenerateImmortalApertures() error {
 					ELSE state
 				END,
 				updated_at = NOW()
-			WHERE state != 'DESTROYED' AND aperture_hp < max_aperture_hp
+			WHERE player_id IS NOT NULL AND state != 'DESTROYED' AND aperture_hp < max_aperture_hp
 		`)
 	return err
 }
 
 func StartTribulationWorker(ctx context.Context) {
 	worker.RunEvery(ctx, 60*time.Second, "Tribulation Worker", func(ctx context.Context) {
-		if err := CheckAndTriggerTribulations(); err != nil {
+		if err := CheckAndTriggerTribulations(ctx); err != nil {
 			logger.S.Errorf("Tribulation background worker error: %v", err)
+		}
+		if errPublic := ProcessPublicApertureTribulations(ctx); errPublic != nil {
+			logger.S.Errorf("Public aperture environmental tribulation worker error: %v", errPublic)
+		}
+		if errCollapse := TransitionCollapsedPublicApertures(ctx); errCollapse != nil {
+			logger.S.Errorf("Public aperture ruin transition worker error: %v", errCollapse)
+		}
+		if errClose := CloseExpiredPublicApertures(ctx); errClose != nil {
+			logger.S.Errorf("Public aperture cleanup worker error: %v", errClose)
+		}
+		if errSites := EnsureConfiguredPublicApertures(ctx); errSites != nil {
+			logger.S.Errorf("Public aperture site worker error: %v", errSites)
+		}
+		if errAbsorption := SettleDueApertureAbsorptions(ctx); errAbsorption != nil {
+			logger.S.Errorf("Aperture absorption worker error: %v", errAbsorption)
 		}
 		if errRegen := RegenerateImmortalApertures(); errRegen != nil {
 			logger.S.Errorf("Aperture HP regeneration background worker error: %v", errRegen)

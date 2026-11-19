@@ -77,6 +77,7 @@ var importDatasets = []importDataset{
 	{"shop_item", "ShopItem.csv", "caravan_shop_items", true, false, []string{"id", "rank"}},
 	{"arena_shop_item", "ArenaShopItem.csv", "arena_shop_items", true, false, []string{"id"}},
 	{"region", "Region.csv", "regions", true, false, []string{"id"}},
+	{"public_aperture_site", "PublicApertureSite.csv", "public_aperture_site_configs", false, false, []string{"site_key"}},
 	{"loot_table", "LootTable.csv", "loot_tables", true, false, []string{"id"}},
 	{"region_loot", "RegionLootTables.csv", "region_loot_tables", true, false, []string{"region_id", "loot_table_id", "monster_type"}},
 	{"monster", "Monster.csv", "monster_templates", true, false, []string{"id"}},

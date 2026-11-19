@@ -74,6 +74,7 @@ type PlayerRealtimeSnapshot struct {
 
 type PlayerRealtimeEvent struct {
 	Type           string                 `json:"type"`
+	Message        string                 `json:"message,omitempty"`
 	Revision       int64                  `json:"revision"`
 	ChangedDomains []PlayerEventDomain    `json:"changed_domains"`
 	Data           PlayerRealtimeSnapshot `json:"data"`

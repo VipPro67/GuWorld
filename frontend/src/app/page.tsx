@@ -182,18 +182,24 @@ export default function Home() {
 
   const requestedView = useUIStore((s) => s.currentView);
   const aperture = useGameStore((s) => s.aperture);
+  const fetchAperture = useGameStore((s) => s.fetchAperture);
   const setView = useUIStore((s) => s.setView);
-  const isApertureOwnerInside = Boolean(
+  useEffect(() => {
+    if (player?.current_region === "aperture_interior" && player.map_instance_id && aperture?.id !== player.map_instance_id) {
+      void fetchAperture(true);
+    }
+  }, [aperture?.id, fetchAperture, player?.current_region, player?.map_instance_id]);
+  const isApertureInstanceInside = Boolean(
     player?.current_region === "aperture_interior" && aperture?.id && player.map_instance_id === aperture.id
   );
-  const isExploreView = !isApertureOwnerInside && ["explore", "mmo-world"].includes(requestedView);
-  const currentView = isApertureOwnerInside && ["explore", "mmo-world"].includes(requestedView)
+  const isExploreView = !isApertureInstanceInside && ["explore", "mmo-world"].includes(requestedView);
+  const currentView = isApertureInstanceInside && ["explore", "mmo-world"].includes(requestedView)
     ? "aperture"
     : requestedView;
 
   useEffect(() => {
-    if (isApertureOwnerInside && ["explore", "mmo-world"].includes(requestedView)) setView("aperture");
-  }, [isApertureOwnerInside, requestedView, setView]);
+    if (isApertureInstanceInside && ["explore", "mmo-world"].includes(requestedView)) setView("aperture");
+  }, [isApertureInstanceInside, requestedView, setView]);
   const showChangelog = useUIStore((s) => s.showChangelog);
   const setShowChangelog = useUIStore((s) => s.setShowChangelog);
   const mainContentRef = useRef<HTMLElement>(null);

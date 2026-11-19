@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -131,14 +132,14 @@ func checkAndTriggerSingleAperture(apertureID string) error {
 	return nil
 }
 
-func CheckAndTriggerTribulations() error {
+func CheckAndTriggerTribulations(ctx context.Context) error {
 	// Query stable apertures
 	rows, err := db.DB.Query(`
 		SELECT id, player_id, time_rate, area_size, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, essence_production_per_year,
 			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, tribulation_pending_at, state,
 			COALESCE(dao_marks, '{}'::jsonb)
 		FROM immortal_apertures
-		WHERE state IN ('STABLE', 'DAMAGED', 'TRIBULATION_PENDING')
+		WHERE player_id IS NOT NULL AND state IN ('STABLE', 'DAMAGED', 'TRIBULATION_PENDING', 'TRIBULATION_ACTIVE')
 	`)
 	if err != nil {
 		return err
@@ -319,6 +320,7 @@ func CheckAndTriggerTribulations() error {
 		type msgIns struct{ receiver, content string }
 
 		var lifeUps []lifespanUp
+		var expiryCandidates []apertureExpiryCandidate
 		var manaUps []manaUp
 		var pointUps []pointUp
 		var vhUps []vhUp
@@ -378,24 +380,27 @@ func CheckAndTriggerTribulations() error {
 				}
 			} else if !vinhSinh {
 				if currentLifespan <= 0.0 {
+					expiryCandidates = append(expiryCandidates, apertureExpiryCandidate{
+						apertureID: ap.ID,
+						playerID:   ap.PlayerID,
+					})
 					continue
 				}
 
 				lifespanDecay := realYearsPassed * timeSpeedMultiplier
 				newLifespan := math.Max(0.0, currentLifespan-lifespanDecay)
-				lifeUps = append(lifeUps, lifespanUp{id: ap.PlayerID, decay: lifespanDecay})
-
 				if newLifespan <= 0.0 {
-					// Freeze aperture (keep per-aperture Exec: different SET clause)
-					_, _ = db.DB.Exec(`
-						UPDATE immortal_apertures
-						SET time_rate = 1.0, aperture_hp = max_aperture_hp / 10, state = 'DAMAGED', updated_at = NOW()
-						WHERE id = $1
-					`, ap.ID)
-					msgs = append(msgs, msgIns{receiver: ap.PlayerID, content: "Đạo hữu đã hết thọ nguyên! Tiên Khiếu suy kiệt, dòng thời gian ngưng trệ. Hãy mau kiếm Thọ Cổ để hồi sinh!"})
-					logger.S.Warnf("Player %s lifespan depleted, aperture %s frozen", ap.PlayerID, ap.ID)
+					expiryCandidates = append(expiryCandidates, apertureExpiryCandidate{
+						apertureID:    ap.ID,
+						playerID:      ap.PlayerID,
+						lifespanDecay: lifespanDecay,
+					})
 					continue
 				}
+				lifeUps = append(lifeUps, lifespanUp{id: ap.PlayerID, decay: lifespanDecay})
+			}
+			if ap.State == "TRIBULATION_ACTIVE" {
+				continue // Keep lifespan checks running; active combat/event progression owns this state.
 			}
 
 			subjectiveYearsPassed := 60.0 * ap.TimeRate * timeSpeedMultiplier / 86400.0
@@ -711,6 +716,11 @@ func CheckAndTriggerTribulations() error {
 			}
 		}
 
+		for _, candidate := range expiryCandidates {
+			if _, err := expireApertureOwner(ctx, candidate); err != nil {
+				logger.S.Errorf("CheckAndTriggerTribulations: expire player %s aperture %s: %v", candidate.playerID, candidate.apertureID, err)
+			}
+		}
 	}
 
 	// 2. Check and auto-resolve pending active tribulations that exceeded 24 hours

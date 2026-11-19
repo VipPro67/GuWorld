@@ -177,20 +177,25 @@ func EnterAperturePortal(c *gin.Context) {
 	// 2. Fetch Portal & Host Aperture
 	var portal models.AperturePortal
 	var portalOwner models.Player
+	var portalOwnerID sql.NullString
+	var aperturePublicState string
 	var hostPartyID sql.NullString
 	var hostSectID sql.NullString
 	err = tx.QueryRowContext(c.Request.Context(), `
 		SELECT p.id, p.aperture_id, p.owner_id, p.region_id, p.x, p.y, p.name, p.access_policy, p.concealment_power, p.is_active,
-		       h.rank, h.party_id, sm.sect_id, h.path_masteries, COALESCE(h.race, ''), COALESCE(h.constitution, ''),
-		       COALESCE(h.statuses, '{}'::jsonb), h.hp, h.base_hp, h.current_mana, h.max_mana,
+		       target_aperture.public_state,
+		       COALESCE(h.rank, 0), h.party_id, sm.sect_id, COALESCE(h.path_masteries, '{}'::jsonb), COALESCE(h.race, ''), COALESCE(h.constitution, ''),
+		       COALESCE(h.statuses, '{}'::jsonb), COALESCE(h.hp, 0), COALESCE(h.base_hp, 0), COALESCE(h.current_mana, 0), COALESCE(h.max_mana, 0),
 		       COALESCE(owner_aperture.dao_marks, '{}'::jsonb), `+db.GuInventoryAggregateEquipped("h.id")+`
 		FROM aperture_portals p
-		JOIN players h ON h.id = p.owner_id
+		JOIN immortal_apertures target_aperture ON target_aperture.id = p.aperture_id
+		LEFT JOIN players h ON h.id = p.owner_id
 		LEFT JOIN sect_members sm ON sm.player_id = h.id
 		LEFT JOIN immortal_apertures owner_aperture ON owner_aperture.player_id = h.id
 		WHERE p.id = $1 AND p.is_active = true
-	`, portalUUID).Scan(&portal.ID, &portal.ApertureID, &portal.OwnerID, &portal.RegionID, &portal.X, &portal.Y,
-		&portal.Name, &portal.AccessPolicy, &portal.ConcealmentPower, &portal.IsActive, &portalOwner.Rank, &hostPartyID, &hostSectID,
+		FOR UPDATE OF target_aperture
+	`, portalUUID).Scan(&portal.ID, &portal.ApertureID, &portalOwnerID, &portal.RegionID, &portal.X, &portal.Y,
+		&portal.Name, &portal.AccessPolicy, &portal.ConcealmentPower, &portal.IsActive, &aperturePublicState, &portalOwner.Rank, &hostPartyID, &hostSectID,
 		&portalOwner.PathMasteries, &portalOwner.Race, &portalOwner.Constitution, &portalOwner.Statuses, &portalOwner.HP, &portalOwner.BaseHP, &portalOwner.CurrentMana, &portalOwner.MaxMana, &portalOwner.DaoMarks, &portalOwner.GuInventory)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Môn Hộ không tồn tại hoặc đã khép lại"})
@@ -199,8 +204,27 @@ func EnterAperturePortal(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Lỗi truy vấn Môn Hộ: "+err.Error(), err))
 		return
 	}
+	portal.OwnerID = portalOwnerID.String
+	if portal.OwnerID == "" && aperturePublicState != "PUBLIC" && aperturePublicState != "RUIN" {
+		c.JSON(http.StatusConflict, gin.H{"error": "Tiên Khiếu này đang đóng và không nhận khách mới."})
+		return
+	}
+	if aperturePublicState == "RUIN" {
+		var ruinExpired bool
+		if err := tx.QueryRowContext(c.Request.Context(), `
+			SELECT public_ruin_expires_at IS NOT NULL AND public_ruin_expires_at <= NOW()
+			FROM immortal_apertures WHERE id = $1
+		`, portal.ApertureID).Scan(&ruinExpired); err != nil {
+			httperr.Respond(c, httperr.Internal("Không thể kiểm tra thời hạn tàn tích", err))
+			return
+		}
+		if ruinExpired {
+			c.JSON(http.StatusConflict, gin.H{"error": "Tàn tích Tiên Khiếu đã hết thời hạn thăm dò."})
+			return
+		}
+	}
 
-	if portal.OwnerID == guest.ID.String() {
+	if portal.OwnerID != "" && portal.OwnerID == guest.ID.String() {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Chủ Khiếu không thể bước vào Môn Hộ dưới tư cách khách."})
 		return
 	}
@@ -226,11 +250,15 @@ func EnterAperturePortal(c *gin.Context) {
 	discoveryPower := gamefx.AperturePortalDiscoveryPower(&scoutingViewer, models.FilterEquippedActive(scoutingViewer.GuInventory), scoutingViewer.DaoMarks, &portalOwner)
 	portalDefense := gamefx.AperturePortalConcealmentPower(&portalOwner, models.FilterEquippedActive(portalOwner.GuInventory), portalOwner.DaoMarks, &scoutingViewer, portal.RegionID, guest.CurrentRegion, portal.ConcealmentPower)
 	canDiscoverPortal := gamefx.CanDiscoverAperturePortal(discoveryPower, portalDefense)
+	if aperturePortalRequiresScouting(portal.OwnerID, aperturePublicState) && !canDiscoverPortal {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu chưa dò thấy Môn Hộ của Tiên Khiếu công cộng."})
+		return
+	}
 	if !canDiscoverPortal && portal.AccessPolicy == "HIDDEN" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu chưa dò thấy Môn Hộ đã được che giấu."})
 		return
 	}
-	if !canDiscoverPortal {
+	if portal.OwnerID != "" && !canDiscoverPortal {
 		switch portal.AccessPolicy {
 		case "PARTY":
 			if !hostPartyID.Valid || hostPartyID.String == "" {
@@ -258,7 +286,7 @@ func EnterAperturePortal(c *gin.Context) {
 	// 5. Add to aperture_guest_roster
 	_, err = tx.ExecContext(c.Request.Context(), `
 		INSERT INTO aperture_guest_roster (aperture_id, player_id, role, granted_by, entered_at)
-		VALUES ($1, $2, 'VISITOR', $3, NOW())
+		VALUES ($1, $2, 'VISITOR', NULLIF($3, '')::uuid, NOW())
 		ON CONFLICT (aperture_id, player_id) DO UPDATE
 		SET role = 'VISITOR', entered_at = NOW()
 	`, portal.ApertureID, guest.ID, portal.OwnerID)
@@ -281,15 +309,18 @@ func EnterAperturePortal(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Lỗi chuyển dịch vào Tiên Khiếu: "+err.Error(), err))
 		return
 	}
-	ownerID, parseErr := uuid.Parse(portal.OwnerID)
-	if parseErr != nil {
-		httperr.Respond(c, httperr.Internal("Mã chủ Tiên Khiếu không hợp lệ", parseErr))
-		return
-	}
-	ownerNotification, err := notify.SendDeferred(tx, ownerID, "aperture_guest_entered", "Có người vào Tiên Khiếu", guest.Username+" đã bước vào Tiên Khiếu của bạn qua Môn Hộ.")
-	if err != nil {
-		httperr.Respond(c, httperr.Internal("Không thể ghi thông báo cho chủ Tiên Khiếu", err))
-		return
+	var ownerNotification notify.Notification
+	if portal.OwnerID != "" {
+		ownerID, parseErr := uuid.Parse(portal.OwnerID)
+		if parseErr != nil {
+			httperr.Respond(c, httperr.Internal("Mã chủ Tiên Khiếu không hợp lệ", parseErr))
+			return
+		}
+		ownerNotification, err = notify.SendDeferred(tx, ownerID, "aperture_guest_entered", "Có người vào Tiên Khiếu", guest.Username+" đã bước vào Tiên Khiếu của bạn qua Môn Hộ.")
+		if err != nil {
+			httperr.Respond(c, httperr.Internal("Không thể ghi thông báo cho chủ Tiên Khiếu", err))
+			return
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

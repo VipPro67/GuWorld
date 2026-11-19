@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/vippro67/GuWorld/backend/internal/cache"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -82,6 +81,10 @@ func CaptureMonster(c *gin.Context) {
 	}
 	if !combatOwnedByPlayer(player.ActiveCombat, player.ID.String()) {
 		c.JSON(http.StatusConflict, gin.H{"error": "Trận chiến tổ đội do trưởng nhóm điều khiển."})
+		return
+	}
+	if player.ActiveCombat.PublicApertureNPCID != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "NPC hộ vệ Tiên Khiếu không thể bị thu phục."})
 		return
 	}
 
@@ -207,7 +210,7 @@ func CaptureMonster(c *gin.Context) {
 		}
 		coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
 		player.ClearedCells[coordKey] = time.Now().Format(time.RFC3339)
-		if err := cache.SetCellCleared(player.CurrentRegion, player.X, player.Y, player.ID.String(), clearedCellCooldown); err != nil {
+		if err := setMonsterCellClearedInInstance(player.CurrentRegion, player.MapInstanceID, player.X, player.Y, player.ID.String(), player.ActiveCombat.EnemyTemplateID); err != nil {
 			logger.S.Errorf("Failed to mark cell cleared in Redis for player %s at (%d,%d): %v", player.ID, player.X, player.Y, err)
 		}
 		if player.ActiveCombat != nil {

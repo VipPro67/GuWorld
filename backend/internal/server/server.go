@@ -1000,6 +1000,8 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 		aperture.Use(middleware.RateLimitByPlayer(60, time.Minute))
 		{
 			aperture.GET("", handlers.GetImmortalAperture)
+			aperture.GET("/absorption/:apertureId", handlers.GetApertureAbsorptionStatus)
+			aperture.POST("/absorption/:apertureId/start", handlers.StartApertureAbsorption)
 			aperture.GET("/nodes", handlers.GetApertureNodes)
 			aperture.POST("/nodes", handlers.PlaceApertureNode)
 			aperture.POST("/nodes/batch", handlers.ManageApertureNodesBatch)

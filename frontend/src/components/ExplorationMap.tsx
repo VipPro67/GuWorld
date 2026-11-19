@@ -468,6 +468,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     if (type === "EXIT_PORTAL" || type === "PORTAL_EXIT") return "Phúc Địa Thoát Ly Trận";
     if (type === "ENTRY_PORTAL") return `Phúc Địa Giới Môn Trận: ${content.replace(/^spatial_realm_/, "").replace(/_/g, " ")}`;
     if (type === "INHERITANCE_ALTAR") return `Đài Truyền Thừa: ${content.replace(/^altar_/, "").replace(/_/g, " ")}`;
+    if (type === "Monster" && content.startsWith("public_aperture_npc:")) return "NPC hộ vệ Tiên Khiếu";
     if (type === "Monster" || type === "Boss") return monsterDictionary[content]?.name || content.split(" ")[0];
     if (type === "Resource") return itemDictionary[content]?.name || content.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
     if (type === "WildGu") return guDictionary[content]?.name || content;
@@ -484,6 +485,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       }
       case "Monster":
       case "Boss":
+        if (content.startsWith("public_aperture_npc:")) {
+          return <span aria-label="NPC hộ vệ" className="text-xl leading-none">🛡️</span>;
+        }
         return (
           <MonsterSprite
             templateId={content}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -74,8 +75,8 @@ func AdminCreateGiftCode(c *gin.Context) {
 		if req.Rewards[i].Type != "resource_point" {
 			continue
 		}
-		if req.Rewards[i].Amount < 1 || req.Rewards[i].Amount > float64(aperturePointPointGenCap) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Phần thưởng Điểm Tài Nguyên phải từ 1-%d điểm", aperturePointPointGenCap)})
+		if req.Rewards[i].Amount < 1 || req.Rewards[i].Amount != math.Trunc(req.Rewards[i].Amount) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Phần thưởng Điểm Tài Nguyên phải là số nguyên dương"})
 			return
 		}
 		if pointType := strings.ToUpper(strings.TrimSpace(req.Rewards[i].ID)); pointType != "" {
@@ -564,11 +565,8 @@ func applyGiftCodeRewardsTx(tx *sql.Tx, player *models.Player, rewards []GiftCod
 			if err != nil {
 				return result, err
 			}
-			switch {
-			case added <= 0:
-				result.Notes = append(result.Notes, fmt.Sprintf("Tiên Khiếu đã đủ %d điểm tài nguyên nên phần thưởng điểm bị bỏ qua.", aperturePointPointGenCap))
-			case added < requested:
-				result.Notes = append(result.Notes, fmt.Sprintf("Tiên Khiếu chỉ còn chỗ cho %d/%d điểm tài nguyên.", added, requested))
+			if added < requested {
+				result.Notes = append(result.Notes, fmt.Sprintf("Chỉ tạo được %d/%d điểm tài nguyên vì không còn ô trống phù hợp.", added, requested))
 			}
 		}
 	}

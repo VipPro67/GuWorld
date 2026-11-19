@@ -11,6 +11,9 @@ import (
 type ImmortalAperture struct {
 	ID                       string      `json:"id"`
 	PlayerID                 string      `json:"player_id"`
+	ApertureRank             int         `json:"aperture_rank"`
+	PublicState              string      `json:"public_state"`
+	PublicRuinExpiresAt      *time.Time  `json:"public_ruin_expires_at,omitempty"`
 	Grade                    string      `json:"grade"` // 'LOW' | 'MID' | 'HIGH' | 'EXTREME'
 	TimeRate                 float64     `json:"time_rate"`
 	ApertureHP               float64     `json:"aperture_hp"`

@@ -488,6 +488,9 @@ export const createManaSnapshotFromPlayer = (player: Player, guDictionary: Recor
 export interface ImmortalAperture {
   id: string;
   player_id: string;
+  aperture_rank: number;
+  public_state?: 'PRIVATE' | 'PUBLIC' | 'RUIN' | 'CLOSING';
+  public_ruin_expires_at?: string | null;
   grade: 'LOW' | 'MID' | 'HIGH' | 'EXTREME';
   time_rate: number;
   aperture_hp: number;
@@ -1398,6 +1401,7 @@ type PlayerEventDomain =
 
 type PlayerRealtimeEvent = {
   type: PlayerEventType;
+  message?: string;
   revision?: number;
   state_revision?: number;
   changed_domains?: PlayerEventDomain[];
@@ -2012,7 +2016,7 @@ export const useGameStore = create<GameState>((set, get) => {
 
           if (eventType === "session.kicked") {
             const state = get();
-            state.addToast("Tài khoản đã đăng nhập từ thiết bị khác. Bạn đã bị đăng xuất.", "error");
+            state.addToast(payload.message || "Tài khoản đã đăng nhập từ thiết bị khác. Bạn đã bị đăng xuất.", "error");
             state.logout();
             return;
           }

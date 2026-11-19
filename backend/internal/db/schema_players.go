@@ -106,12 +106,17 @@ func schemaPlayers() error {
 		banned_by UUID REFERENCES players(id) ON DELETE SET NULL,
 		banned_at TIMESTAMPTZ,
 		is_chat_muted BOOLEAN NOT NULL DEFAULT false,
-		chat_muted_until TIMESTAMPTZ
+		chat_muted_until TIMESTAMPTZ,
+		aperture_expiry_pending BOOLEAN NOT NULL DEFAULT FALSE
 	);`); err != nil {
 		return err
 	}
 	if err := execSchema("players_active_combat_compat", `
 	ALTER TABLE players ADD COLUMN IF NOT EXISTS active_combat JSONB DEFAULT NULL;`); err != nil {
+		return err
+	}
+	if err := execSchema("players_aperture_expiry_pending", `
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS aperture_expiry_pending BOOLEAN NOT NULL DEFAULT FALSE;`); err != nil {
 		return err
 	}
 	if err := execSchema("players_remove_realtime_combat_settings", `

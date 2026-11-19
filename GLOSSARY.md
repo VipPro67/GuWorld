@@ -33,6 +33,18 @@ Lưu phái đại diện cho hành động, dùng khi effect cần kiểm tra af
 
 ## Tiên Khiếu
 
+**Tiên Khiếu vô chủ**:
+Tiên Khiếu không có Cổ Tiên làm chủ, có thể tồn tại như địa điểm công cộng hoặc di sản còn lại sau khi chủ nhân thọ tận.
+
+**Tiên Khiếu công cộng**:
+Tiên Khiếu vô chủ vận hành như một map riêng mở cho mọi người chơi; người chơi có thể khám phá, thu hoạch mỏ và giao chiến PvP, nhưng không thể sửa đổi địa hình. Khi bị hấp thụ, nó chuyển thành Tiên Khiếu riêng của người hấp thụ.
+
+**Hấp thụ Tiên Khiếu**:
+Hợp nhất một Tiên Khiếu vô chủ vào Tiên Khiếu của Cổ Tiên đủ rank và cảnh giới lưu phái. Khi thành công, diện tích, Đạo Ngân, bộ đếm tai kiếp và mỏ tài nguyên được cộng vào khiếu nhận; khiếu bị hấp thụ bị xóa.
+
+**Lưu phái chủ đạo của Tiên Khiếu**:
+Lưu phái có Đạo Ngân cao nhất trong Tiên Khiếu; nếu nhiều lưu phái đồng hạng cao nhất, điều kiện hấp thụ phải đạt ở tất cả các phái đó.
+
 **Môn Hộ**:
 Cửa ra vào nối Tiên Khiếu với thế giới bên ngoài khi chủ nhân Hạ Khiếu.
 

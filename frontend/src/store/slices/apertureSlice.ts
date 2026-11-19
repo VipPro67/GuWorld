@@ -72,6 +72,7 @@ export interface ActiveTribulation {
 
 export interface ApertureSlice {
   aperture: ImmortalAperture | null;
+  apertureAbsorption: { in_progress: boolean; is_mine?: boolean; finishes_at?: string } | null;
   daoMarks: DaoMark[];
   daoNgan: DaoNganResult | null;
   apertureNodes: ApertureResourceNode[];
@@ -80,6 +81,8 @@ export interface ApertureSlice {
   variantHumans: ApertureVariantHuman[];
   activeTribulation: ActiveTribulation | null;
   fetchAperture: (forceRefresh?: boolean) => Promise<void>;
+  fetchApertureAbsorptionStatus: (apertureId: string) => Promise<void>;
+  startApertureAbsorption: (apertureId: string) => Promise<boolean>;
   fetchDaoMarks: (forceRefresh?: boolean) => Promise<void>;
   fetchDaoNgan: (forceRefresh?: boolean) => Promise<void>;
   cleanseDaoMarks: (path: string, marks: number) => Promise<boolean>;
@@ -155,6 +158,7 @@ export interface ApertureSlice {
 
 export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, ApertureSlice> = (set, get) => ({
   aperture: null,
+  apertureAbsorption: null,
   portal: null,
   apertureSwarms: [],
   guests: [],
@@ -213,6 +217,42 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     };
     fetchAperturePromise = executeFetch();
     return fetchAperturePromise;
+  },
+
+  fetchApertureAbsorptionStatus: async (apertureId) => {
+    if (!get().token || !apertureId) return;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/absorption/${apertureId}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Không thể tải trạng thái hấp thụ");
+      set({ apertureAbsorption: data });
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+    }
+  },
+
+  startApertureAbsorption: async (apertureId) => {
+    if (!get().token || !get().beginAction("aperture")) return false;
+    set({ error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/absorption/${apertureId}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Không thể bắt đầu hấp thụ Tiên Khiếu");
+      set({ apertureAbsorption: { in_progress: true, is_mine: true, finishes_at: data.finishes_at } });
+      get().addToast(data.message || "Nghi thức hấp thụ đã bắt đầu", "success");
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message, "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
   },
 
   fetchDaoMarks: async (forceRefresh = false) => {
@@ -1624,7 +1664,8 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   leaveAperture: async () => {
     const { token, aperture, player } = get();
     const isOwnerInside = Boolean(
-      aperture?.is_placed && player?.current_region === "aperture_interior" && player.map_instance_id === aperture.id
+      aperture?.player_id === player?.id && aperture?.is_placed &&
+      player?.current_region === "aperture_interior" && player.map_instance_id === aperture.id
     );
     if (isOwnerInside) {
       return get().unanchorAperture();

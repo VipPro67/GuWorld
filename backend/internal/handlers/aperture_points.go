@@ -36,8 +36,7 @@ import (
 )
 
 const (
-	MaxPointLevel            = 5
-	aperturePointPointGenCap = 16
+	MaxPointLevel = 5
 )
 
 // ResourcePointTemplate mirrors one row of data/ResourcePointTemplate.csv.
@@ -278,15 +277,6 @@ func GenerateApertureResourcePoints(tx *sql.Tx, apertureID string, ownerPlayerID
 	if count <= 0 {
 		return nil
 	}
-	var existing int
-	if err := tx.QueryRow(`SELECT COUNT(1) FROM aperture_resource_points WHERE aperture_id = $1`, apertureID).Scan(&existing); err != nil {
-		return err
-	}
-	count = min(count, aperturePointPointGenCap-existing)
-	if count <= 0 {
-		return nil
-	}
-
 	// Dao-mark weighted archetype pool.
 	pool := make([]aperturePointTemplateEntry, 0, len(ResourcePointTemplates))
 	for _, t := range ResourcePointTemplates {
@@ -458,9 +448,6 @@ func grantApertureResourcePointsFromReward(tx *sql.Tx, playerID uuid.UUID, point
 		if err := tx.QueryRow(`SELECT COUNT(1) FROM aperture_resource_points WHERE aperture_id = $1`, apertureID).Scan(&before); err != nil {
 			return 0, err
 		}
-		if before >= aperturePointPointGenCap {
-			return 0, nil
-		}
 		if err := GenerateApertureResourcePoints(tx, apertureID, playerID.String(), dao, grade, count); err != nil {
 			return 0, err
 		}
@@ -475,13 +462,6 @@ func grantApertureResourcePointsFromReward(tx *sql.Tx, playerID uuid.UUID, point
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	added := 0
 	for i := 0; i < count; i++ {
-		var existing int
-		if err := tx.QueryRow(`SELECT COUNT(1) FROM aperture_resource_points WHERE aperture_id = $1`, apertureID).Scan(&existing); err != nil {
-			return added, err
-		}
-		if existing >= aperturePointPointGenCap {
-			break
-		}
 		x, y, ok := pickFreeApertureCell(rng, used)
 		if !ok {
 			break
@@ -553,7 +533,7 @@ func weightedPointPick(rng *rand.Rand, pool []aperturePointTemplateEntry, grade 
 // vitality regenerates across elapsed internal time and produced intervals
 // fill the stock up to its cap (overflow is lost — canon anti-idle).
 // It runs inside the caller's transaction and writes back when anything moved.
-func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template ResourcePointTemplate, effectiveTimeRate float64, areaSize int64, ctx *aperturePointRewardContext, workerMult float64) error {
+func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template ResourcePointTemplate, effectiveTimeRate float64, areaSize int64, ctx *aperturePointRewardContext, workerMult float64, publicAperture bool) error {
 	now := time.Now()
 	elapsed := now.Sub(pt.LastProducedAt)
 	if elapsed < 0 {
@@ -562,12 +542,26 @@ func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template 
 	elapsedInternalHours := elapsed.Hours() * effectiveTimeRate
 
 	changed := false
+	qiAvailable := true
+	heavenQi, earthQi := math.Inf(1), math.Inf(1)
+	if pt.ApertureID != nil && *pt.ApertureID != "" {
+		if err := tx.QueryRow(`
+			SELECT COALESCE(heaven_qi, 100000), COALESCE(earth_qi, 100000)
+			FROM immortal_apertures WHERE id = $1 FOR UPDATE
+		`, *pt.ApertureID).Scan(&heavenQi, &earthQi); err != nil {
+			return fmt.Errorf("load aperture qi for resource point %s: %w", pt.ID, err)
+		}
+		qiAvailable = heavenQi > 0 && earthQi > 0
+	}
 
 	// 1. Vitality regen: full refill takes VitalityRegenHours internal hours.
-	if template.VitalityRegenHours > 0 && pt.Vitality < 100 {
+	if qiAvailable && template.VitalityRegenHours > 0 && pt.Vitality < 100 {
 		regen := math.Floor(elapsedInternalHours * 100.0 / float64(template.VitalityRegenHours))
 		if regen > 0 {
 			pt.Vitality = int(math.Min(100, float64(pt.Vitality)+regen))
+			if pt.State == "EXHAUSTED" {
+				pt.State = "ACTIVE"
+			}
 			changed = true
 		}
 	}
@@ -591,17 +585,16 @@ func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template 
 			mult = 0
 		}
 
-		// Tam Khí balance: mỏ trong Tiên Khiếu chỉ sản xuất khi Thiên Khí và Địa Khí còn dồi dào
-		if pt.ApertureID != nil && *pt.ApertureID != "" {
-			var hQi, eQi float64
-			if err := tx.QueryRow(`SELECT COALESCE(heaven_qi, 100000), COALESCE(earth_qi, 100000) FROM immortal_apertures WHERE id = $1`, *pt.ApertureID).Scan(&hQi, &eQi); err == nil {
-				if hQi <= 0 || eQi <= 0 {
-					mult = 0 // Cạn kiệt Thiên/Địa Khí -> đình trệ sản xuất cho đến khi Hạ Khiếu nạp khí
-				}
-			}
+		qiDrainPerInterval := 50.0
+		if template.PointClass == "FAMOUS" {
+			qiDrainPerInterval = 500.0
 		}
-
-		produced := perInterval * mult * intervals
+		producingIntervals := intervals
+		if pt.ApertureID != nil && *pt.ApertureID != "" {
+			payableIntervals := math.Min(math.Floor(heavenQi/qiDrainPerInterval), math.Floor(earthQi/qiDrainPerInterval))
+			producingIntervals = math.Min(intervals, payableIntervals)
+		}
+		produced := perInterval * mult * producingIntervals
 		perItemTemplate := template
 		rareItem := pointProduceItem(perItemTemplate, *pt, false)
 		rareItemNext := pointProduceItem(perItemTemplate, *pt, true)
@@ -634,7 +627,7 @@ func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template 
 				if mainRareBump > 0 {
 					nextFree := float64(pt.StockCap) - float64(pt.Stock[rareItemNext])
 					if nextFree > 0 {
-						rareUnits := mainRareBump * mult * intervals
+						rareUnits := mainRareBump * mult * producingIntervals
 						pt.Stock[rareItemNext] += int64(math.Floor(math.Min(rareUnits, nextFree)))
 					}
 				}
@@ -655,7 +648,7 @@ func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template 
 					if secRareBump > 0 {
 						secNextFree := float64(pt.StockCap) - float64(pt.Stock[secItemNext])
 						if secNextFree > 0 {
-							secRareUnits := secRareBump * mult * intervals
+							secRareUnits := secRareBump * mult * producingIntervals
 							pt.Stock[secItemNext] += int64(math.Floor(math.Min(secRareUnits, secNextFree)))
 						}
 					}
@@ -664,13 +657,9 @@ func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template 
 			}
 		}
 
-		// Khấu trừ Thiên Địa Khí của Tiên Khiếu tương ứng với quy mô mỏ khi sản xuất thành công
-		if mult > 0 && produced > 0 && pt.ApertureID != nil && *pt.ApertureID != "" {
-			qiDrain := 50.0
-			if template.PointClass == "FAMOUS" {
-				qiDrain = 500.0
-			}
-			totalDrain := qiDrain * intervals
+		// Charge only for intervals that could be fully paid by both kinds of Qi.
+		if producingIntervals > 0 && pt.ApertureID != nil && *pt.ApertureID != "" {
+			totalDrain := qiDrainPerInterval * producingIntervals
 			_, _ = tx.Exec(`
 				UPDATE immortal_apertures
 				SET heaven_qi = GREATEST(0, heaven_qi - $1),
@@ -679,6 +668,28 @@ func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template 
 				    updated_at = NOW()
 				WHERE id = $2
 			`, totalDrain, *pt.ApertureID)
+		}
+		unfundedIntervals := intervals - producingIntervals
+		if unfundedIntervals > 0 {
+			// A mine loses one vitality per interval it cannot fund. At zero
+			// vitality, public mines collapse or become exhausted by the agreed odds.
+			vitalityBeforeDrain := pt.Vitality
+			depletion := int(math.Min(float64(pt.Vitality), unfundedIntervals))
+			pt.Vitality -= depletion
+			if vitalityBeforeDrain > 0 && pt.Vitality == 0 {
+				if publicAperture && rand.Float64() < 0.25 {
+					if _, err := tx.Exec(`DELETE FROM aperture_resource_points WHERE id = $1`, pt.ID); err != nil {
+						return fmt.Errorf("removing collapsed public resource point %s: %w", pt.ID, err)
+					}
+					pt.State = "GONE"
+					pt.Stock = models.AperturePointStock{}
+					pt.LastProducedAt = now
+					return nil
+				} else {
+					pt.State = "EXHAUSTED"
+				}
+			}
+			changed = true
 		}
 		pt.LastProducedAt = now
 		changed = true
@@ -689,9 +700,9 @@ func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template 
 	}
 	_, err := tx.Exec(`
 		UPDATE aperture_resource_points
-		SET vitality = $1, stock = $2::jsonb, last_produced_at = $3, updated_at = NOW()
+		SET vitality = $1, stock = $2::jsonb, last_produced_at = $3, state = $5, updated_at = NOW()
 		WHERE id = $4
-	`, pt.Vitality, models.AperturePointStock(pt.Stock), pt.LastProducedAt, pt.ID)
+	`, pt.Vitality, models.AperturePointStock(pt.Stock), pt.LastProducedAt, pt.ID, pt.State)
 	return err
 }
 
@@ -714,7 +725,11 @@ func loadAperturePointRewardContext(q interface {
 	Query(query string, args ...any) (*sql.Rows, error)
 }, playerID uuid.UUID, apertureID string) (*aperturePointRewardContext, error) {
 	ctx := &aperturePointRewardContext{
-		daoMarks:        map[string]int64{},
+		daoMarks: map[string]int64{},
+		variantHumans: map[string]struct {
+			population     int
+			laborIntensity string
+		}{},
 		assignedWorkers: map[string]int{},
 	}
 	var daoJSON []byte
@@ -954,13 +969,28 @@ func GetApertureResourcePoints(c *gin.Context) {
 		return
 	}
 
-	var ownerID uuid.UUID
-	if err := tx.QueryRow(`SELECT player_id FROM immortal_apertures WHERE id = $1`, apertureID).Scan(&ownerID); err != nil {
+	var ownerID sql.NullString
+	var publicState string
+	var areaSize int64
+	var effectiveTimeRate float64
+	if err := tx.QueryRow(`
+		SELECT player_id::text, public_state, COALESCE(area_size, 0), COALESCE(time_rate, 1.0)
+		FROM immortal_apertures WHERE id = $1
+	`, apertureID).Scan(&ownerID, &publicState, &areaSize, &effectiveTimeRate); err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi tải chủ Tiên Khiếu", err))
 		return
 	}
-	areaSize, effectiveTimeRate := effectiveApertureTimeRate(tx, ownerID.String())
-	ctx, err := loadAperturePointRewardContext(tx, ownerID, apertureID)
+	if ownerID.Valid {
+		areaSize, effectiveTimeRate = effectiveApertureTimeRate(tx, ownerID.String)
+	} else if publicState != "PUBLIC" {
+		// Ruins keep their remaining stock but do not produce or recover vitality.
+		effectiveTimeRate = 0
+	}
+	rewardOwnerID := uuid.Nil
+	if ownerID.Valid {
+		rewardOwnerID, _ = uuid.Parse(ownerID.String)
+	}
+	ctx, err := loadAperturePointRewardContext(tx, rewardOwnerID, apertureID)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi tải bối cảnh sản lượng", err))
 		return
@@ -971,6 +1001,7 @@ func GetApertureResourcePoints(c *gin.Context) {
 		FROM aperture_resource_points
 		WHERE aperture_id = $1 AND state <> 'GONE'
 		ORDER BY created_at ASC
+		FOR UPDATE
 	`, apertureID)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi tải điểm tài nguyên", err))
@@ -1004,9 +1035,11 @@ func GetApertureResourcePoints(c *gin.Context) {
 		if pop := ctx.assignedWorkers[p.ID]; pop > 0 {
 			workerMult = 1 + 0.25*math.Min(1.0, float64(pop)/500.0)
 		}
-		if err := accrueAperturePoint(tx, &p.ApertureResourcePoint, p.template, effectiveTimeRate, areaSize, ctx, workerMult); err != nil {
-			httperr.Respond(c, httperr.Internal("Lỗi tích lũy sản lượng", err))
-			return
+		if ownerID.Valid || publicState == "PUBLIC" {
+			if err := accrueAperturePoint(tx, &p.ApertureResourcePoint, p.template, effectiveTimeRate, areaSize, ctx, workerMult, !ownerID.Valid); err != nil {
+				httperr.Respond(c, httperr.Internal("Lỗi tích lũy sản lượng", err))
+				return
+			}
 		}
 		preview := aperturePointYield(ctx, p.ApertureResourcePoint, p.template, areaSize, workerMult)
 		decorateAperturePointView(&p.ApertureResourcePoint, p.template, preview, effectiveTimeRate, ctx.assignedWorkers[p.ID])
@@ -1103,7 +1136,7 @@ func GetWorldResourcePoints(c *gin.Context) {
 			continue
 		}
 		emptyCtx := &aperturePointRewardContext{daoMarks: map[string]int64{}}
-		if err := accrueAperturePoint(tx, p, template, 1.0, 0, emptyCtx, 1.0); err != nil {
+		if err := accrueAperturePoint(tx, p, template, 1.0, 0, emptyCtx, 1.0, false); err != nil {
 			continue
 		}
 		preview := aperturePointYield(emptyCtx, *p, template, 0, 1.0)
@@ -1240,7 +1273,15 @@ func CollectWorldResourcePoint(c *gin.Context) {
 // harvestPointRow drains a fully-loaded point row (shared by aperture/world).
 func harvestPointRow(tx *sql.Tx, playerID uuid.UUID, p *models.ApertureResourcePoint) (string, bool, error) {
 	ctx := &aperturePointRewardContext{daoMarks: map[string]int64{}, assignedWorkers: map[string]int{}}
+	publicAperture := false
+	publicState := ""
+	publicAreaSize := int64(0)
+	publicTimeRate := 1.0
 	if p.Scope != "WORLD" && p.ApertureID != nil {
+		_ = tx.QueryRow(`
+			SELECT player_id IS NULL, public_state, COALESCE(area_size, 0), COALESCE(time_rate, 1.0)
+			FROM immortal_apertures WHERE id = $1
+		`, *p.ApertureID).Scan(&publicAperture, &publicState, &publicAreaSize, &publicTimeRate)
 		full, err := loadAperturePointRewardContext(tx, playerID, *p.ApertureID)
 		if err == nil {
 			ctx = full
@@ -1257,15 +1298,21 @@ func harvestPointRow(tx *sql.Tx, playerID uuid.UUID, p *models.ApertureResourceP
 	areaSize := int64(0)
 	rate := 1.0
 	if p.Scope != "WORLD" {
-		areaSize, rate = effectiveApertureTimeRate(tx, playerID.String())
+		if publicAperture {
+			areaSize, rate = publicAreaSize, publicTimeRate
+		} else {
+			areaSize, rate = effectiveApertureTimeRate(tx, playerID.String())
+		}
 		if areaSize == 0 {
 			areaSize = 1
 		}
 	}
-	if err := accrueAperturePoint(tx, p, template, rate, areaSize, ctx, workerMult); err != nil {
-		return "", false, err
+	if !publicAperture || publicState == "PUBLIC" {
+		if err := accrueAperturePoint(tx, p, template, rate, areaSize, ctx, workerMult, publicAperture); err != nil {
+			return "", false, err
+		}
 	}
-	if p.State == "EXHAUSTED" || p.Vitality <= 0 {
+	if (!publicAperture || publicState == "PUBLIC") && (p.State == "EXHAUSTED" || p.Vitality <= 0) && len(p.Stock) == 0 {
 		return fmt.Sprintf("%s đã cạn kiệt sinh khí, cần Bồi Dưỡng trước khi thu hoạch lại.", p.Name), false, nil
 	}
 	if len(p.Stock) == 0 {
@@ -1301,18 +1348,24 @@ func harvestPointRow(tx *sql.Tx, playerID uuid.UUID, p *models.ApertureResourceP
 		totalAmount += amount
 	}
 
-	drain := template.VitalityDrain
-	p.Vitality -= drain
+	if !publicAperture || publicState == "PUBLIC" {
+		p.Vitality -= template.VitalityDrain
+		if p.Vitality < 0 {
+			p.Vitality = 0
+		}
+	}
 	p.Stock = models.AperturePointStock{}
-	if p.Vitality <= 0 {
+	if (!publicAperture || publicState == "PUBLIC") && p.Vitality <= 0 {
 		p.Vitality = 0
 		p.State = "EXHAUSTED"
 	}
+	preserveProductionClock := publicAperture && publicState != "PUBLIC"
 	if _, err := tx.Exec(`
 		UPDATE aperture_resource_points
-		SET vitality = $1, state = $2, stock = '{}'::jsonb, last_produced_at = $3, updated_at = NOW()
+		SET vitality = $1, state = $2, stock = '{}'::jsonb,
+		    last_produced_at = CASE WHEN $5 THEN last_produced_at ELSE $3 END, updated_at = NOW()
 		WHERE id = $4
-	`, p.Vitality, p.State, time.Now(), p.ID); err != nil {
+	`, p.Vitality, p.State, time.Now(), p.ID, preserveProductionClock); err != nil {
 		return "", false, err
 	}
 
@@ -1751,21 +1804,12 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 			breakRitual("Mỏ đã bị di dời hoặc đạo hữu đã rời khỏi nơi — nghi thức tan và Tiên Nguyên đã mất.", http.StatusConflict)
 			return
 		}
-		apertureID, pointCount, err := loadPlayerAperturePointSlot(tx, playerID)
+		apertureID, _, err := loadPlayerAperturePointSlot(tx, playerID)
 		if err == sql.ErrNoRows {
 			breakRitual("Đạo hữu chưa khai mở Tiên Khiếu — không có đâu để đặt núi!", http.StatusBadRequest)
 			return
 		} else if err != nil {
 			httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Tiên Khiếu", err))
-			return
-		}
-		if pointCount >= aperturePointPointGenCap {
-			// Keep the ritual pending so the player can free a slot and retry;
-			// the abandonment sweeper releases the mine if they never do.
-			c.JSON(http.StatusConflict, gin.H{
-				"error": fmt.Sprintf("Tiên Khiếu đã đủ %d điểm tài nguyên — hãy giải phóng một điểm rồi hoàn tất nghi thức.", aperturePointPointGenCap),
-				"code":  "APERTURE_POINTS_FULL",
-			})
 			return
 		}
 		if err := moveWorldPointIntoAperture(tx, apertureID, pointID.String()); errors.Is(err, errWorldPointNotMovable) {
@@ -1824,16 +1868,12 @@ func TransplantWorldResourcePoint(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Phải đứng cùng vùng và cách mỏ tối đa %d ô mới bắt đầu được nghi thức di dời.", worldHarvestRange)})
 		return
 	}
-	_, pointCount, err := loadPlayerAperturePointSlot(tx, playerID)
+	_, _, err = loadPlayerAperturePointSlot(tx, playerID)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa khai mở Tiên Khiếu — không có đâu để đặt núi!"})
 		return
 	} else if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi kiểm tra Tiên Khiếu", err))
-		return
-	}
-	if pointCount >= aperturePointPointGenCap {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Tiên Khiếu đã có tối đa %d điểm tài nguyên.", aperturePointPointGenCap)})
 		return
 	}
 	// Abandoned rituals on this mine are released first so they cannot block a
@@ -1979,7 +2019,7 @@ func CollectAperturePointStock(c *gin.Context) {
 	var pointX, pointY int
 	var isOwner bool
 	err = tx.QueryRow(`
-		SELECT p.aperture_id::text, p.x, p.y, a.player_id = $2 FROM aperture_resource_points p
+		SELECT p.aperture_id::text, p.x, p.y, COALESCE(a.player_id = $2, false) FROM aperture_resource_points p
 		JOIN immortal_apertures a ON a.id = p.aperture_id
 		WHERE p.id = $1 AND (
 			a.player_id = $2 OR EXISTS (

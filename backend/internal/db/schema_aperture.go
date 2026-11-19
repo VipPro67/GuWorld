@@ -8,7 +8,10 @@ func schemaAperture() error {
 	if err := execSchema("immortal_apertures", `
 	CREATE TABLE IF NOT EXISTS immortal_apertures (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		player_id UUID NOT NULL UNIQUE REFERENCES players(id) ON DELETE CASCADE,
+		player_id UUID UNIQUE REFERENCES players(id) ON DELETE SET NULL,
+		aperture_rank INTEGER NOT NULL DEFAULT 6,
+		public_state VARCHAR(20) NOT NULL DEFAULT 'PRIVATE',
+		public_ruin_expires_at TIMESTAMP WITH TIME ZONE,
 		grade VARCHAR(20) NOT NULL,
 		time_rate DOUBLE PRECISION NOT NULL DEFAULT 10,
 		aperture_hp DOUBLE PRECISION NOT NULL DEFAULT 10000,
@@ -45,6 +48,39 @@ func schemaAperture() error {
 	);`); err != nil {
 		return err
 	}
+	// Ownership is independent from aperture state. Keep player_id as a
+	// nullable compatibility projection while existing handlers migrate to the
+	// ownership relation; deleting a player must never delete the aperture.
+	if err := execSchema("aperture_ownership", `
+	CREATE TABLE IF NOT EXISTS aperture_ownership (
+		aperture_id UUID PRIMARY KEY REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		player_id UUID NOT NULL UNIQUE REFERENCES players(id) ON DELETE CASCADE,
+		created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+	);
+	INSERT INTO aperture_ownership (aperture_id, player_id)
+	SELECT id, player_id FROM immortal_apertures WHERE player_id IS NOT NULL
+	ON CONFLICT (aperture_id) DO NOTHING;
+	DO $$
+	DECLARE fk RECORD;
+	BEGIN
+		FOR fk IN
+			SELECT conname FROM pg_constraint
+			WHERE conrelid = 'immortal_apertures'::regclass
+			  AND contype = 'f'
+			  AND conkey = ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = 'immortal_apertures'::regclass AND attname = 'player_id')]
+			  AND conname <> 'fk_immortal_apertures_player_id'
+		LOOP
+			EXECUTE format('ALTER TABLE immortal_apertures DROP CONSTRAINT %I', fk.conname);
+		END LOOP;
+		ALTER TABLE immortal_apertures ALTER COLUMN player_id DROP NOT NULL;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'immortal_apertures'::regclass AND conname = 'fk_immortal_apertures_player_id') THEN
+			ALTER TABLE immortal_apertures
+				ADD CONSTRAINT fk_immortal_apertures_player_id
+				FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE SET NULL;
+		END IF;
+	END $$;`); err != nil {
+		return err
+	}
 	// Add Tam-Qi (Heaven Qi & Earth Qi) columns to existing deployments.
 	if err := execSchema("immortal_apertures_tam_qi_columns", `
 		ALTER TABLE immortal_apertures
@@ -53,6 +89,66 @@ func schemaAperture() error {
 			ADD COLUMN IF NOT EXISTS max_heaven_qi DOUBLE PRECISION NOT NULL DEFAULT 100000,
 			ADD COLUMN IF NOT EXISTS max_earth_qi DOUBLE PRECISION NOT NULL DEFAULT 100000;
 	`); err != nil {
+		return err
+	}
+	if err := execSchema("immortal_apertures_rank_column", `
+	ALTER TABLE immortal_apertures ADD COLUMN IF NOT EXISTS aperture_rank INTEGER NOT NULL DEFAULT 6;`); err != nil {
+		return err
+	}
+	if err := execSchema("immortal_apertures_public_lifecycle_columns", `
+	ALTER TABLE immortal_apertures
+		ADD COLUMN IF NOT EXISTS public_state VARCHAR(20) NOT NULL DEFAULT 'PRIVATE',
+		ADD COLUMN IF NOT EXISTS public_ruin_expires_at TIMESTAMP WITH TIME ZONE;
+	UPDATE immortal_apertures SET public_state = 'PUBLIC'
+	WHERE player_id IS NULL AND public_state = 'PRIVATE';
+	CREATE INDEX IF NOT EXISTS idx_immortal_apertures_public_ruins
+		ON immortal_apertures (public_ruin_expires_at)
+		WHERE public_state = 'RUIN';`); err != nil {
+		return err
+	}
+	if err := execSchema("public_aperture_site_configs", `
+	CREATE TABLE IF NOT EXISTS public_aperture_site_configs (
+		site_key VARCHAR(80) PRIMARY KEY,
+		region_id VARCHAR(50) NOT NULL REFERENCES regions(id) ON DELETE RESTRICT,
+		x DOUBLE PRECISION NOT NULL,
+		y DOUBLE PRECISION NOT NULL,
+		aperture_rank INTEGER NOT NULL DEFAULT 6,
+		grade VARCHAR(20) NOT NULL DEFAULT 'LOW',
+		area_size BIGINT NOT NULL DEFAULT 3000000,
+		dao_marks JSONB NOT NULL DEFAULT '{}'::jsonb,
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		aperture_id UUID UNIQUE REFERENCES immortal_apertures(id) ON DELETE SET NULL,
+		lifecycle_state VARCHAR(20) NOT NULL DEFAULT 'UNSPAWNED',
+		updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+		CONSTRAINT public_aperture_site_rank_check CHECK (aperture_rank BETWEEN 6 AND 9),
+		CONSTRAINT public_aperture_site_area_check CHECK (area_size > 0),
+		CONSTRAINT public_aperture_site_location_unique UNIQUE (region_id, x, y)
+	);
+	CREATE INDEX IF NOT EXISTS idx_public_aperture_sites_pending
+		ON public_aperture_site_configs (site_key)
+		WHERE is_active = TRUE AND lifecycle_state = 'UNSPAWNED';`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_absorption_reservations", `
+	CREATE TABLE IF NOT EXISTS aperture_absorption_reservations (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		target_aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		source_aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
+		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		status VARCHAR(20) NOT NULL DEFAULT 'IN_PROGRESS',
+		cost_immortal_stones DOUBLE PRECISION NOT NULL,
+		started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+		finishes_at TIMESTAMP WITH TIME ZONE NOT NULL,
+		interrupted_at TIMESTAMP WITH TIME ZONE,
+		updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+		CONSTRAINT aperture_absorption_distinct_apertures CHECK (target_aperture_id <> source_aperture_id)
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_aperture_absorption_target_active
+		ON aperture_absorption_reservations (target_aperture_id) WHERE status = 'IN_PROGRESS';
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_aperture_absorption_player_active
+		ON aperture_absorption_reservations (player_id) WHERE status = 'IN_PROGRESS';
+	CREATE INDEX IF NOT EXISTS idx_aperture_absorption_finish
+		ON aperture_absorption_reservations (finishes_at) WHERE status = 'IN_PROGRESS';`); err != nil {
 		return err
 	}
 
@@ -442,7 +538,7 @@ func schemaAperture() error {
 	CREATE TABLE IF NOT EXISTS tribulation_events (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
-		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		player_id UUID REFERENCES players(id) ON DELETE SET NULL,
 		tribulation_type VARCHAR(30) NOT NULL,
 		path VARCHAR(50) NOT NULL,
 		status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
@@ -465,6 +561,14 @@ func schemaAperture() error {
 	ALTER TABLE tribulation_events ADD COLUMN IF NOT EXISTS preparation_ends_at TIMESTAMP WITH TIME ZONE;
 	ALTER TABLE tribulation_events ADD COLUMN IF NOT EXISTS hazard_metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
 	ALTER TABLE tribulation_events ADD COLUMN IF NOT EXISTS spoils_collected BOOLEAN NOT NULL DEFAULT false;
+	`); err != nil {
+		return err
+	}
+	if err := execSchema("tribulation_events_public_player_optional", `
+		ALTER TABLE tribulation_events ALTER COLUMN player_id DROP NOT NULL;
+		ALTER TABLE tribulation_events DROP CONSTRAINT IF EXISTS tribulation_events_player_id_fkey;
+		ALTER TABLE tribulation_events ADD CONSTRAINT tribulation_events_player_id_fkey
+			FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE SET NULL;
 	`); err != nil {
 		return err
 	}
@@ -606,7 +710,7 @@ func schemaAperture() error {
 	CREATE TABLE IF NOT EXISTS aperture_portals (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
-		owner_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		owner_id UUID REFERENCES players(id) ON DELETE SET NULL,
 		region_id VARCHAR(50) NOT NULL REFERENCES regions(id),
 		x DOUBLE PRECISION NOT NULL,
 		y DOUBLE PRECISION NOT NULL,
@@ -621,6 +725,28 @@ func schemaAperture() error {
 	);`); err != nil {
 		return err
 	}
+	if err := execSchema("aperture_portals_owner_nullable", `
+	DO $$
+	DECLARE fk RECORD;
+	BEGIN
+		FOR fk IN
+			SELECT conname FROM pg_constraint
+			WHERE conrelid = 'aperture_portals'::regclass
+			  AND contype = 'f'
+			  AND conkey = ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = 'aperture_portals'::regclass AND attname = 'owner_id')]
+			  AND conname <> 'fk_aperture_portals_owner_id'
+		LOOP
+			EXECUTE format('ALTER TABLE aperture_portals DROP CONSTRAINT %I', fk.conname);
+		END LOOP;
+		ALTER TABLE aperture_portals ALTER COLUMN owner_id DROP NOT NULL;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'aperture_portals'::regclass AND conname = 'fk_aperture_portals_owner_id') THEN
+			ALTER TABLE aperture_portals
+				ADD CONSTRAINT fk_aperture_portals_owner_id
+				FOREIGN KEY (owner_id) REFERENCES players(id) ON DELETE SET NULL;
+		END IF;
+	END $$;`); err != nil {
+		return err
+	}
 	if err := execSchema("aperture_portals_region_idx", `
 	CREATE INDEX IF NOT EXISTS idx_aperture_portals_region ON aperture_portals (region_id, is_active);`); err != nil {
 		return err
@@ -632,10 +758,32 @@ func schemaAperture() error {
 		aperture_id UUID NOT NULL REFERENCES immortal_apertures(id) ON DELETE CASCADE,
 		player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
 		role VARCHAR(20) NOT NULL DEFAULT 'VISITOR',
-		granted_by UUID NOT NULL REFERENCES players(id),
+		granted_by UUID REFERENCES players(id) ON DELETE SET NULL,
 		entered_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
 		PRIMARY KEY (aperture_id, player_id)
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_guest_roster_granted_by_nullable", `
+	DO $$
+	DECLARE fk RECORD;
+	BEGIN
+		FOR fk IN
+			SELECT conname FROM pg_constraint
+			WHERE conrelid = 'aperture_guest_roster'::regclass
+			  AND contype = 'f'
+			  AND conkey = ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = 'aperture_guest_roster'::regclass AND attname = 'granted_by')]
+			  AND conname <> 'fk_aperture_guest_roster_granted_by'
+		LOOP
+			EXECUTE format('ALTER TABLE aperture_guest_roster DROP CONSTRAINT %I', fk.conname);
+		END LOOP;
+		ALTER TABLE aperture_guest_roster ALTER COLUMN granted_by DROP NOT NULL;
+		IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'aperture_guest_roster'::regclass AND conname = 'fk_aperture_guest_roster_granted_by') THEN
+			ALTER TABLE aperture_guest_roster
+				ADD CONSTRAINT fk_aperture_guest_roster_granted_by
+				FOREIGN KEY (granted_by) REFERENCES players(id) ON DELETE SET NULL;
+		END IF;
+	END $$;`); err != nil {
 		return err
 	}
 	if err := execSchema("aperture_guest_roster_player_idx", `

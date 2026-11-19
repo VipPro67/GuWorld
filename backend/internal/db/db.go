@@ -3639,6 +3639,11 @@ var individualExportDefs = map[string]exportDef{
 		columns:  []string{"id", "name", "description", "width", "height", "min_rank", "max_rank", "is_active", "parent_id", "zone_type", "min_x", "min_y", "max_x", "max_y", "entry_x", "entry_y", "pool_weights", "rules", "world_map_id", "atlas_x", "atlas_y"},
 		query:    `SELECT r.id, r.name, COALESCE(r.description,''), COALESCE(r.width,100), COALESCE(r.height,100), COALESCE(r.min_rank,1), COALESCE(r.max_rank,5), COALESCE(r.is_active,true), COALESCE(r.parent_id,''), COALESCE(r.zone_type,'KHU_VUC'), COALESCE(r.min_x,0), COALESCE(r.min_y,0), COALESCE(r.max_x,0), COALESCE(r.max_y,0), COALESCE(r.entry_x,0), COALESCE(r.entry_y,0), COALESCE(r.pool_weights::text,'{}'), COALESCE(r.rules::text,'{}'), COALESCE(rwm.world_map_id,'world_map'), COALESCE(r.atlas_x,0), COALESCE(r.atlas_y,0) FROM regions r LEFT JOIN region_world_maps rwm ON rwm.region_id=r.id ORDER BY r.id`,
 	},
+	"public_aperture_site": {
+		filename: "PublicApertureSite.csv",
+		columns:  []string{"site_key", "region_id", "x", "y", "aperture_rank", "grade", "area_size", "dao_marks", "is_active"},
+		query:    `SELECT site_key, region_id, x, y, aperture_rank, grade, area_size, COALESCE(dao_marks::text,'{}'), is_active FROM public_aperture_site_configs ORDER BY site_key`,
+	},
 	"loot_table": {
 		filename: "LootTable.csv",
 		columns:  []string{"id", "name", "entries"},
