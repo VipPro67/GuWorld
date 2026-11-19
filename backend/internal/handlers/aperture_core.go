@@ -184,6 +184,12 @@ func GetImmortalAperture(c *gin.Context) {
 		if ap.IsPlaced {
 			// Hạ khiếu: nhánh sông Quang Âm hòa nhập ngoại giới -> giảm tốc về 1.0 (hoãn kiếp nạn, giảm tốc già hóa)
 			effectiveTimeRate = 1.0
+			placedReg := ""
+			if ap.PlacedRegion != nil {
+				placedReg = *ap.PlacedRegion
+			}
+			layer := worldMapIDForRegion(placedReg)
+			effectiveTimeRate *= LayerTribulationTimeRateMultiplier(layer)
 		}
 	}
 
@@ -197,6 +203,21 @@ func GetImmortalAperture(c *gin.Context) {
 			elapsedInternalYears := elapsedSec * effectiveTimeRate / 86400.0
 			ap.InternalYearsPassed += elapsedInternalYears
 			ap.UpdatedAt = now
+		}
+	}
+
+	// Project Qi absorption forward while anchored (Hạ Khiếu) according to vertical layer rate
+	if ap.IsPlaced && ap.PlacedAt != nil {
+		elapsedMinutes := now.Sub(*ap.PlacedAt).Minutes()
+		if elapsedMinutes > 0 {
+			placedReg := ""
+			if ap.PlacedRegion != nil {
+				placedReg = *ap.PlacedRegion
+			}
+			layer := worldMapIDForRegion(placedReg)
+			hMult, eMult := LayerQiMultipliers(layer)
+			ap.HeavenQi = math.Min(ap.MaxHeavenQi, ap.HeavenQi+elapsedMinutes*(ap.MaxHeavenQi*0.01)*hMult)
+			ap.EarthQi = math.Min(ap.MaxEarthQi, ap.EarthQi+elapsedMinutes*(ap.MaxEarthQi*0.01)*eMult)
 		}
 	}
 
@@ -697,38 +718,6 @@ func UnanchorAperture(c *gin.Context) {
 		}
 	}
 
-	// Nạp Tam Khí: mỗi phút hạ khiếu nạp lại +1% trần max_heaven_qi và max_earth_qi
-	gainedHeavenQi := elapsedMinutes * (ap.MaxHeavenQi * 0.01)
-	gainedEarthQi := elapsedMinutes * (ap.MaxEarthQi * 0.01)
-
-	newHeavenQi := math.Min(ap.MaxHeavenQi, ap.HeavenQi+gainedHeavenQi)
-	newEarthQi := math.Min(ap.MaxEarthQi, ap.EarthQi+gainedEarthQi)
-
-	newState := ap.State
-	if newState == "UNBALANCED" && newHeavenQi > 0 && newEarthQi > 0 {
-		newState = "STABLE"
-	}
-
-	// Deactivate World Gateway
-	_, _ = tx.Exec(`
-		UPDATE aperture_portals
-		SET is_active = false, updated_at = NOW()
-		WHERE aperture_id = $1
-	`, ap.ID)
-
-	// Update immortal_apertures (retract into host body)
-	_, err = tx.Exec(`
-		UPDATE immortal_apertures
-		SET is_placed = false, placed_region = NULL, placed_x = NULL, placed_y = NULL, placed_at = NULL,
-		    heaven_qi = $1, earth_qi = $2, state = $3, updated_at = NOW()
-		WHERE id = $4
-	`, newHeavenQi, newEarthQi, newState, ap.ID)
-	if err != nil {
-		httperr.Respond(c, httperr.Internal("Lỗi thu hồi Tiên Khiếu", err))
-		return
-	}
-
-	// Move host back to the world map at the placement location
 	destRegion := "Southern_Border"
 	destX := 500
 	destY := 500
@@ -740,6 +729,56 @@ func UnanchorAperture(c *gin.Context) {
 	}
 	if placedY.Valid {
 		destY = int(placedY.Float64)
+	}
+
+	layer := worldMapIDForRegion(destRegion)
+	heavenMultiplier, earthMultiplier := LayerQiMultipliers(layer)
+
+	// Nạp Tam Khí: mỗi phút hạ khiếu nạp lại +1% trần max_heaven_qi và max_earth_qi theo hệ số tầng không gian
+	gainedHeavenQi := elapsedMinutes * (ap.MaxHeavenQi * 0.01) * heavenMultiplier
+	gainedEarthQi := elapsedMinutes * (ap.MaxEarthQi * 0.01) * earthMultiplier
+
+	newHeavenQi := math.Min(ap.MaxHeavenQi, ap.HeavenQi+gainedHeavenQi)
+	newEarthQi := math.Min(ap.MaxEarthQi, ap.EarthQi+gainedEarthQi)
+
+	newState := ap.State
+	if newState == "UNBALANCED" && newHeavenQi > 0 && newEarthQi > 0 {
+		newState = "STABLE"
+	}
+
+	var darkMarksGained, starMarksGained int64
+	if layer == "hac_thien" && elapsedMinutes >= 5.0 {
+		// Tẩm bổ Đạo Ngân Ám Đạo và Tinh Đạo từ Thiên Khí dị biến Hắc Thiên
+		darkMarksGained = int64(elapsedMinutes / 10.0)
+		starMarksGained = int64(elapsedMinutes / 10.0)
+		if darkMarksGained > 0 || starMarksGained > 0 {
+			if ap.DaoMarks == nil {
+				ap.DaoMarks = make(models.DaoMarksMap)
+			}
+			ap.DaoMarks["Dark Path"] += darkMarksGained
+			ap.DaoMarks["Star Path"] += starMarksGained
+		}
+	}
+
+	// Deactivate World Gateway
+	_, _ = tx.Exec(`
+		UPDATE aperture_portals
+		SET is_active = false, updated_at = NOW()
+		WHERE aperture_id = $1
+	`, ap.ID)
+
+	daoMarksJSON, _ := json.Marshal(ap.DaoMarks)
+
+	// Update immortal_apertures (retract into host body)
+	_, err = tx.Exec(`
+		UPDATE immortal_apertures
+		SET is_placed = false, placed_region = NULL, placed_x = NULL, placed_y = NULL, placed_at = NULL,
+		    heaven_qi = $1, earth_qi = $2, state = $3, dao_marks = $4, updated_at = NOW()
+		WHERE id = $5
+	`, newHeavenQi, newEarthQi, newState, daoMarksJSON, ap.ID)
+	if err != nil {
+		httperr.Respond(c, httperr.Internal("Lỗi thu hồi Tiên Khiếu", err))
+		return
 	}
 
 	_, err = tx.Exec(`
@@ -767,17 +806,21 @@ func UnanchorAperture(c *gin.Context) {
 
 	publishAperturePortalMarkerChange("portal_despawn", destRegion)
 
+	layerDesc := LayerPlacementDescription(layer, darkMarksGained, starMarksGained)
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Thu Khiếu thành công! Môn Hộ thế giới đã khép lại. Tiên Khiếu đã thu hồi vào nhục thân. Đã nạp +%.0f Thiên Khí và +%.0f Địa Khí. Tốc độ thời gian Tiên Khiếu đã khôi phục bình thường. Thân thể Cổ Tiên đã trở lại %s (%d, %d).",
-			gainedHeavenQi, gainedEarthQi, destRegion, destX, destY),
-		"heaven_qi":      newHeavenQi,
-		"earth_qi":       newEarthQi,
-		"max_heaven_qi":  ap.MaxHeavenQi,
-		"max_earth_qi":   ap.MaxEarthQi,
-		"state":          newState,
-		"is_placed":      false,
-		"current_region": destRegion,
-		"x":              destX,
-		"y":              destY,
+		"message": fmt.Sprintf("Thu Khiếu thành công! Môn Hộ thế giới đã khép lại. Tiên Khiếu đã thu hồi vào nhục thân. Vị trí hạ khiếu: %s. Đã nạp +%.0f Thiên Khí và +%.0f Địa Khí. Tốc độ thời gian Tiên Khiếu đã khôi phục bình thường. Thân thể Cổ Tiên đã trở lại %s (%d, %d).",
+			layerDesc, gainedHeavenQi, gainedEarthQi, destRegion, destX, destY),
+		"heaven_qi":          newHeavenQi,
+		"earth_qi":           newEarthQi,
+		"max_heaven_qi":      ap.MaxHeavenQi,
+		"max_earth_qi":       ap.MaxEarthQi,
+		"layer":              layer,
+		"dark_marks_gained":  darkMarksGained,
+		"star_marks_gained":  starMarksGained,
+		"state":              newState,
+		"is_placed":          false,
+		"current_region":     destRegion,
+		"x":                  destX,
+		"y":                  destY,
 	})
 }

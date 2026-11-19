@@ -135,3 +135,12 @@ realm_dang_hon_summit,1,1,EXIT_PORTAL,EXIT_SPATIAL_REALM,"{""action"": ""EXIT_SP
 realm_dang_hon_summit,15,15,Monster,monster_immemorial_soul_beast,"{""rank"": 6}",120,true
 realm_dang_hon_summit,25,25,Monster,monster_immemorial_soul_beast,"{""rank"": 7, ""name"": ""Thái Cổ Đãng Hồn Thú Hoàng""}",300,true
 realm_dang_hon_summit,25,26,INHERITANCE_ALTAR,altar_hu_immortal,"{""altar_name"": ""Đài Chân Truyền Tiên Cấp: Hồ Tiên - Đãng Hồn Sơn"", ""path"": ""Soul Path"", ""tier"": ""IMMORTAL"", ""guardian_coord"": {""x"": 25, ""y"": 25}, ""req_rank"": 6, ""req_dao_marks"": {""Soul Path"": 100}, ""rewards"": {""gus"": [""GU_GUTS""], ""recipes"": [], ""immortal_stones"": 500, ""dao_marks"": {""Soul Path"": 500}, ""legacy_text"": ""Đãng Hồn Sơn rung động, Can Đảm Cổ vô song! Hồ Tiên ta lưu lại phúc địa cho Cổ Tiên hữu duyên chấp chưởng thiên địa bí cảnh, tráng đại thần hồn vạn trượng!""}}",0,true
+du_am_luu_dia_mach,2500,2500,Boss,monster_cu_thach_cot_ma,"{""rank"": 6}",600,true
+du_huyet_tinh_tham_hac,2500,2500,Boss,boss_dia_uyen_hoang_thu,"{""rank"": 7}",900,true
+du_thach_nhan_co_do,2500,2500,Boss,boss_dia_uyen_hoang_thu,"{""rank"": 7}",900,true
+bt_thai_co_van_hai,2500,2500,Boss,monster_thai_co_bach_dieu,"{""rank"": 7}",600,true
+bt_quang_minh_tinh_doi,2500,2500,Boss,boss_bach_thien_hac_vuong,"{""rank"": 8}",900,true
+bt_thien_dinh_ngoai_vuc,2500,2500,Boss,boss_bach_thien_hac_vuong,"{""rank"": 8}",900,true
+ht_da_mac_tinh_hai,2500,2500,Boss,monster_thai_co_hon_thu,"{""rank"": 8}",600,true
+ht_u_minh_tham_uyen,2500,2500,Boss,boss_hac_thien_hon_de,"{""rank"": 9}",1200,true
+ht_di_nhan_vuong_quoc,2500,2500,Boss,boss_hac_thien_hon_de,"{""rank"": 9}",1200,true

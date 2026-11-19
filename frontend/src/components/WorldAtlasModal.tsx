@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Compass, MapPin, X, Search, Shield, Skull, Crown, Sparkles, Bug, Package, Layers } from "lucide-react";
-import type { Region } from "@/store/useGameStore";
+import { ArrowLeft, Compass, MapPin, X, Search, Shield, Skull, Crown, Sparkles, Bug, Package, Layers, Moon, Sun, Flame, Mountain, AlertTriangle, ShieldAlert } from "lucide-react";
+import { useGameStore, type Region } from "@/store/useGameStore";
 import { getRegionDetailsFromCache, getStaticRegions } from "@/lib/atlas";
 
 interface WorldAtlasModalProps {
@@ -67,6 +67,226 @@ const WORLD_HEIGHT = 10_000;
 const REGION_COLORS = [
   "#355a50", "#5b442b", "#475635", "#70502b", "#594467", "#713f43", "#3e536b",
 ];
+
+export type WorldLayerId = "dia_uyen" | "world_map" | "bai_thien" | "hac_thien";
+
+export interface WorldLayerMeta {
+  id: WorldLayerId;
+  name: string;
+  tierNumber: number;
+  shortName: string;
+  subtitle: string;
+  rankReqText: string;
+  minRank: number;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeText: string;
+  glowColor: string;
+}
+
+export const WORLD_LAYERS: WorldLayerMeta[] = [
+  {
+    id: "hac_thien",
+    name: "Thái Cổ Hắc Thiên",
+    tierNumber: 3,
+    shortName: "Hắc Thiên",
+    subtitle: "Màn đêm vĩnh hằng · Tinh thú · Hồn thú Thái Cổ",
+    rankReqText: "Chỉ Bát Chuyển (Rank 8+) mới có thể tiến vào",
+    minRank: 8,
+    badgeBg: "bg-indigo-950/80",
+    badgeBorder: "border-indigo-500/50",
+    badgeText: "text-indigo-300",
+    glowColor: "#818cf8",
+  },
+  {
+    id: "bai_thien",
+    name: "Thái Cổ Bạch Thiên",
+    tierNumber: 2,
+    shortName: "Bạch Thiên",
+    subtitle: "Cõi trời ánh sáng · Biển mây vạn dặm · Thiết Trảo Phi Hạc",
+    rankReqText: "Chỉ Cổ Tiên (Rank 6+) đúc Tiên Thể mới có thể phi thăng",
+    minRank: 6,
+    badgeBg: "bg-amber-950/80",
+    badgeBorder: "border-amber-400/50",
+    badgeText: "text-amber-300",
+    glowColor: "#facc15",
+  },
+  {
+    id: "world_map",
+    name: "Ngũ Vực Đại Lục",
+    tierNumber: 1,
+    shortName: "Ngũ Vực",
+    subtitle: "Mặt đất Cổ Giới · 5 Đại Vực & Giới Bích · Phàm nhân & Tiên nhân",
+    rankReqText: "Mọi tu sĩ (Rank 1–9)",
+    minRank: 1,
+    badgeBg: "bg-emerald-950/80",
+    badgeBorder: "border-emerald-500/50",
+    badgeText: "text-emerald-300",
+    glowColor: "#10b981",
+  },
+  {
+    id: "dia_uyen",
+    name: "Vạn Trượng Địa Uyên",
+    tierNumber: 0,
+    shortName: "Địa Uyên",
+    subtitle: "Vực sâu lòng đất · Âm lưu cự hác · Thạch Nhân cổ thành",
+    rankReqText: "Cần Ngũ Chuyển (Rank 5+) hoặc Tiên Cổ Ốc",
+    minRank: 5,
+    badgeBg: "bg-rose-950/80",
+    badgeBorder: "border-rose-500/50",
+    badgeText: "text-rose-300",
+    glowColor: "#f43f5e",
+  },
+];
+
+export function getRegionWorldMap(region?: Region | null): WorldLayerId {
+  if (!region) return "world_map";
+  if (region.world_map_id === "dia_uyen" || region.id.startsWith("du_") || region.parent_id?.startsWith("du_")) return "dia_uyen";
+  if (region.world_map_id === "bai_thien" || region.id.startsWith("bt_") || region.parent_id?.startsWith("bt_")) return "bai_thien";
+  if (region.world_map_id === "hac_thien" || region.id.startsWith("ht_") || region.parent_id?.startsWith("ht_")) return "hac_thien";
+  return "world_map";
+}
+
+interface TierSectorLayout {
+  id: string;
+  name: string;
+  shortName: string;
+  subTitle: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  gradientId: string;
+  baseColor: string;
+  strokeColor: string;
+}
+
+const LAYER_SECTOR_LAYOUTS: Record<WorldLayerId, TierSectorLayout[]> = {
+  world_map: [],
+  dia_uyen: [
+    {
+      id: "du_am_luu_dia_mach",
+      name: "Âm Lưu Địa Mạch",
+      shortName: "ÂM LƯU ĐỊA MẠCH",
+      subTitle: "Sông ngầm bùn đen & Dị thú",
+      x: 50,
+      y: 90,
+      width: 270,
+      height: 420,
+      gradientId: "grad-du-1",
+      baseColor: "#2b1313",
+      strokeColor: "#f43f5e",
+    },
+    {
+      id: "du_huyet_tinh_tham_hac",
+      name: "Huyết Tinh Thâm Hác",
+      shortName: "HUYẾT TINH THÂM HÁC",
+      subTitle: "Huyết thạch & Huyết cội nguồn",
+      x: 365,
+      y: 90,
+      width: 270,
+      height: 420,
+      gradientId: "grad-du-2",
+      baseColor: "#3a0e14",
+      strokeColor: "#fb7185",
+    },
+    {
+      id: "du_thach_nhan_co_do",
+      name: "Thạch Nhân Cổ Đô",
+      shortName: "THẠCH NHÂN CỔ ĐÔ",
+      subTitle: "Di tích Thạch Nhân bộ tộc",
+      x: 680,
+      y: 90,
+      width: 270,
+      height: 420,
+      gradientId: "grad-du-3",
+      baseColor: "#2a1c12",
+      strokeColor: "#f59e0b",
+    },
+  ],
+  bai_thien: [
+    {
+      id: "bt_thai_co_van_hai",
+      name: "Thái Cổ Vân Hải",
+      shortName: "THÁI CỔ VÂN HẢI",
+      subTitle: "Biển mây vạn dặm & Phi Hạc",
+      x: 50,
+      y: 90,
+      width: 270,
+      height: 420,
+      gradientId: "grad-bt-1",
+      baseColor: "#172d42",
+      strokeColor: "#38bdf8",
+    },
+    {
+      id: "bt_quang_minh_tinh_doi",
+      name: "Quang Minh Tinh Đới",
+      shortName: "QUANG MINH TINH ĐỚI",
+      subTitle: "Vành đai Quang Tinh & Thái Dương",
+      x: 365,
+      y: 90,
+      width: 270,
+      height: 420,
+      gradientId: "grad-bt-2",
+      baseColor: "#353215",
+      strokeColor: "#facc15",
+    },
+    {
+      id: "bt_thien_dinh_ngoai_vuc",
+      name: "Thiên Đình Ngoại Vực",
+      shortName: "THIÊN ĐÌNH NGOẠI VỰC",
+      subTitle: "Biên giới cấm địa lộng lẫy",
+      x: 680,
+      y: 90,
+      width: 270,
+      height: 420,
+      gradientId: "grad-bt-3",
+      baseColor: "#2c2642",
+      strokeColor: "#e879f9",
+    },
+  ],
+  hac_thien: [
+    {
+      id: "ht_da_mac_tinh_hai",
+      name: "Dạ Mạc Tinh Hải",
+      shortName: "DẠ MẠC TINH HẢI",
+      subTitle: "Biển sao đen kịt & Tinh thú",
+      x: 50,
+      y: 90,
+      width: 270,
+      height: 420,
+      gradientId: "grad-ht-1",
+      baseColor: "#111827",
+      strokeColor: "#818cf8",
+    },
+    {
+      id: "ht_u_minh_tham_uyen",
+      name: "U Minh Thâm Uyên",
+      shortName: "U MINH THÂM UYÊN",
+      subTitle: "Vực sâu bóng tối & Hồn thú",
+      x: 365,
+      y: 90,
+      width: 270,
+      height: 420,
+      gradientId: "grad-ht-2",
+      baseColor: "#0f172a",
+      strokeColor: "#a855f7",
+    },
+    {
+      id: "ht_di_nhan_vuong_quoc",
+      name: "Dị Nhân Vương Quốc",
+      shortName: "DỊ NHÂN VƯƠNG QUỐC",
+      subTitle: "Cứ địa liên minh Dị Nhân",
+      x: 680,
+      y: 90,
+      width: 270,
+      height: 420,
+      gradientId: "grad-ht-3",
+      baseColor: "#1e1b4b",
+      strokeColor: "#c084fc",
+    },
+  ],
+};
 
 interface GreatDomainLayout {
   id: string;
@@ -177,11 +397,24 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
     return propRegions || [];
   }, [staticRegions, propRegions]);
 
+  const player = useGameStore((state) => state.player);
+  const playerRank = player?.rank ?? 1;
+
+  const currentRegion = regions.find((region) => region.id === currentRegionId);
+  const playerCurrentLayer = useMemo(() => {
+    return getRegionWorldMap(currentRegion);
+  }, [currentRegion]);
+
+  const [selectedLayer, setSelectedLayer] = useState<WorldLayerId>(playerCurrentLayer);
+
+  useEffect(() => {
+    setSelectedLayer(playerCurrentLayer);
+  }, [playerCurrentLayer]);
+
   const majorRegions = useMemo(
     () => regions.filter((region) => region.zone_type === "NGU_VUC" && region.is_active),
     [regions],
   );
-  const currentRegion = regions.find((region) => region.id === currentRegionId);
   const currentMajorRegion = majorRegions.find((region) =>
     region.id === currentRegion?.parent_id
     || (x >= (region.min_x ?? Infinity) && x <= (region.max_x ?? -Infinity)
@@ -257,6 +490,13 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
       .sort((a, b) => ((a.atlas_y ?? a.min_y ?? 0) - (b.atlas_y ?? b.min_y ?? 0)) || ((a.atlas_x ?? a.min_x ?? 0) - (b.atlas_x ?? b.min_x ?? 0)));
   }, [regions, mapRegion?.id, selectedMajorRegion?.id]);
 
+  const layerRegions = useMemo(() => {
+    if (selectedLayer === "world_map") {
+      return subRegions;
+    }
+    return regions.filter((r) => getRegionWorldMap(r) === selectedLayer && r.is_active);
+  }, [selectedLayer, subRegions, regions]);
+
   const mapSubRegions = useMemo(() => {
     return mapRegion
       ? regions.filter((region) => region.parent_id === mapRegion.id && region.zone_type !== "HUB" && region.is_active)
@@ -275,11 +515,14 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
   const mapRegionH = mapRegion?.height || 5000;
 
   const mapViewBox = useMemo(() => {
+    if (selectedLayer !== "world_map") {
+      return "0 0 1000 600";
+    }
     if (!mapRegion) {
       return "0 0 1000 750";
     }
     return `${mapRegionX} ${mapRegionY} ${mapRegionW} ${mapRegionH}`;
-  }, [mapRegion, mapRegionX, mapRegionY, mapRegionW, mapRegionH]);
+  }, [selectedLayer, mapRegion, mapRegionX, mapRegionY, mapRegionW, mapRegionH]);
 
   const overviewPlayerPos = useMemo(() => {
     if (!currentMajorRegion) return null;
@@ -364,10 +607,16 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
   }, [cleanSearch, searchResults]);
 
   const selectSearchResult = (region: Region) => {
-    const majorId = region.zone_type === "NGU_VUC" ? region.id : region.parent_id;
-    if (majorId) {
-      setSelectedMajorRegionId(majorId);
-      setZoomedRegionId(majorId);
+    const layer = getRegionWorldMap(region);
+    setSelectedLayer(layer);
+    if (layer === "world_map") {
+      const majorId = region.zone_type === "NGU_VUC" ? region.id : region.parent_id;
+      if (majorId) {
+        setSelectedMajorRegionId(majorId);
+        setZoomedRegionId(majorId);
+      }
+    } else {
+      setZoomedRegionId(null);
     }
     const inspectedId = region.zone_type === "NGU_VUC"
       ? regions.find((child) => child.parent_id === region.id && child.is_active)?.id ?? region.id
@@ -459,28 +708,121 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
         <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1.25fr)_minmax(330px,0.85fr)] min-h-0 flex-1 overflow-y-auto lg:overflow-hidden custom-scrollbar">
           {/* Left Column: Map Screen */}
           <div className="flex shrink-0 flex-col border-b border-white/10 p-2.5 sm:p-4 lg:border-b-0 lg:border-r lg:min-h-0 lg:shrink">
+            {/* 4-Tier Vertical Layer Switcher HUD */}
+            <div className="mb-2 grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-[#18120a] border border-[#5a4224]/50 rounded-xl shadow-inner">
+              {WORLD_LAYERS.map((layer) => {
+                const isSelected = selectedLayer === layer.id;
+                const isCurrent = playerCurrentLayer === layer.id;
+                return (
+                  <button
+                    key={layer.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedLayer(layer.id);
+                      setZoomedRegionId(null);
+                      if (layer.id !== "world_map") {
+                        const firstRegion = regions.find((r) => getRegionWorldMap(r) === layer.id);
+                        if (firstRegion) setInspectedSubRegionId(firstRegion.id);
+                      } else {
+                        setInspectedSubRegionId(currentRegionId);
+                      }
+                    }}
+                    className={`relative flex items-center justify-between gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      isSelected
+                        ? `${layer.badgeBg} ${layer.badgeBorder} border ${layer.badgeText} shadow-md ring-1 ring-white/10`
+                        : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0 truncate">
+                      {layer.id === "hac_thien" && <Moon className="h-3.5 w-3.5 text-indigo-400 shrink-0" />}
+                      {layer.id === "bai_thien" && <Sun className="h-3.5 w-3.5 text-amber-300 shrink-0" />}
+                      {layer.id === "world_map" && <Mountain className="h-3.5 w-3.5 text-emerald-400 shrink-0" />}
+                      {layer.id === "dia_uyen" && <Flame className="h-3.5 w-3.5 text-rose-400 shrink-0" />}
+                      <span className="truncate">T{layer.tierNumber}: {layer.shortName}</span>
+                    </div>
+                    {isCurrent && (
+                      <span className="rounded bg-rose-600 px-1 py-0.2 text-[8px] font-bold text-white tracking-wider shrink-0 animate-pulse">
+                        VỊ TRÍ
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Cultivation Rank Requirement Warning Banner */}
+            {selectedLayer === "bai_thien" && playerRank < 6 && (
+              <div className="mb-2 px-3 py-2 rounded-xl border border-amber-500/40 bg-amber-950/40 text-amber-200 text-xs flex items-start gap-2 shadow-md">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Khí Cương Phong Bích cản đường! </span>
+                  <span className="opacity-90">
+                    Đạo hữu hiện tại ở cảnh giới Phàm Nhân (Rank {playerRank}). Chỉ Cổ Tiên (Lục Chuyển trở lên) đúc thành Tiên Thể mới có thể phi thăng Thái Cổ Bạch Thiên. Phàm nhân nếu cưỡng ép vượt qua sẽ nhận 90% sát thương và bị cuồng phong hất văng trở lại!
+                  </span>
+                </div>
+              </div>
+            )}
+            {selectedLayer === "hac_thien" && playerRank < 8 && (
+              <div className="mb-2 px-3 py-2 rounded-xl border border-indigo-500/40 bg-indigo-950/40 text-indigo-200 text-xs flex items-start gap-2 shadow-md">
+                <ShieldAlert className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Cực Điểm Không Gian hiểm trở! </span>
+                  <span className="opacity-90">
+                    Thái Cổ Hắc Thiên ẩn chứa Hư Không Liệt Phùng và Thái Cổ Hồn Phong. Chỉ có Bát Chuyển Cổ Tiên (Rank 8+) mới có đủ uy áp và thể phách để bước vào Thái Cổ Hắc Thiên!
+                  </span>
+                </div>
+              </div>
+            )}
+            {selectedLayer === "dia_uyen" && playerRank < 5 && (
+              <div className="mb-2 px-3 py-2 rounded-xl border border-rose-500/40 bg-rose-950/40 text-rose-200 text-xs flex items-start gap-2 shadow-md">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Chướng Khí Địa Câu kịch độc! </span>
+                  <span className="opacity-90">
+                    Vạn Trượng Địa Uyên có áp lực lòng đất khủng khiếp và chướng khí nồng nặc. Cần tu vi tối thiểu Bậc 5 (Ngũ Chuyển) hoặc Tiên Cổ Ốc hộ thân để tiến sâu vào an toàn!
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Map Top Navigation Bar */}
             <div className="mb-2 flex items-center justify-between gap-2">
-              {mapRegion ? (
-                <button
-                  onClick={() => setZoomedRegionId(null)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-950/60 px-3 py-1.5 text-xs font-semibold text-cyan-200 shadow transition hover:border-cyan-400 hover:bg-cyan-900/80"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" /> Toàn cảnh Đại Vực
-                </button>
+              {selectedLayer === "world_map" ? (
+                mapRegion ? (
+                  <button
+                    onClick={() => setZoomedRegionId(null)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-950/60 px-3 py-1.5 text-xs font-semibold text-cyan-200 shadow transition hover:border-cyan-400 hover:bg-cyan-900/80"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" /> Toàn cảnh Đại Vực
+                  </button>
+                ) : (
+                  <span className="text-xs font-medium text-zinc-400">
+                    Nhấp vào một Đại Vực để mở lưới khu vực con
+                  </span>
+                )
               ) : (
-                <span className="text-xs font-medium text-zinc-400">
-                  Nhấp vào một Đại Vực để mở lưới khu vực con
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-amber-200">
+                    {WORLD_LAYERS.find((l) => l.id === selectedLayer)?.name}
+                  </span>
+                  <span className="text-[11px] text-zinc-400 hidden sm:inline">
+                    · {WORLD_LAYERS.find((l) => l.id === selectedLayer)?.subtitle}
+                  </span>
+                </div>
               )}
 
-              {mapRegion && (
+              {selectedLayer === "world_map" && mapRegion && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold text-cyan-300">{mapRegion.name}</span>
                   <span className="rounded bg-cyan-900/50 px-2 py-0.5 text-[10px] font-mono text-cyan-200 border border-cyan-700/40">
                     C{mapRegion.min_rank}–C{mapRegion.max_rank}
                   </span>
                 </div>
+              )}
+              {selectedLayer !== "world_map" && (
+                <span className="rounded bg-black/50 px-2 py-0.5 text-[10px] font-mono text-zinc-300 border border-white/10 shrink-0">
+                  {WORLD_LAYERS.find((l) => l.id === selectedLayer)?.rankReqText}
+                </span>
               )}
             </div>
 
@@ -506,6 +848,57 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                     <feGaussianBlur stdDeviation="3.5" result="blur" />
                     <feComposite in="SourceGraphic" in2="blur" operator="over" />
                   </filter>
+
+                  {/* Gradients for Dia Uyen (Abyss) */}
+                  <linearGradient id="grad-du-1" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#450a0a" stopOpacity="0.95" />
+                    <stop offset="70%" stopColor="#2b1313" stopOpacity="0.95" />
+                    <stop offset="100%" stopColor="#1c0707" stopOpacity="0.95" />
+                  </linearGradient>
+                  <linearGradient id="grad-du-2" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#881337" stopOpacity="0.95" />
+                    <stop offset="70%" stopColor="#3a0e14" stopOpacity="0.95" />
+                    <stop offset="100%" stopColor="#1f0509" stopOpacity="0.95" />
+                  </linearGradient>
+                  <linearGradient id="grad-du-3" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#57300a" stopOpacity="0.95" />
+                    <stop offset="70%" stopColor="#2a1c12" stopOpacity="0.95" />
+                    <stop offset="100%" stopColor="#180e08" stopOpacity="0.95" />
+                  </linearGradient>
+
+                  {/* Gradients for Bach Thien (White Heaven) */}
+                  <linearGradient id="grad-bt-1" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#0369a1" stopOpacity="0.95" />
+                    <stop offset="70%" stopColor="#172d42" stopOpacity="0.95" />
+                    <stop offset="100%" stopColor="#0b1722" stopOpacity="0.95" />
+                  </linearGradient>
+                  <linearGradient id="grad-bt-2" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#a16207" stopOpacity="0.95" />
+                    <stop offset="70%" stopColor="#353215" stopOpacity="0.95" />
+                    <stop offset="100%" stopColor="#1a1907" stopOpacity="0.95" />
+                  </linearGradient>
+                  <linearGradient id="grad-bt-3" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#7e22ce" stopOpacity="0.95" />
+                    <stop offset="70%" stopColor="#2c2642" stopOpacity="0.95" />
+                    <stop offset="100%" stopColor="#141120" stopOpacity="0.95" />
+                  </linearGradient>
+
+                  {/* Gradients for Hac Thien (Black Heaven) */}
+                  <linearGradient id="grad-ht-1" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#312e81" stopOpacity="0.95" />
+                    <stop offset="70%" stopColor="#111827" stopOpacity="0.95" />
+                    <stop offset="100%" stopColor="#030712" stopOpacity="0.95" />
+                  </linearGradient>
+                  <linearGradient id="grad-ht-2" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#581c87" stopOpacity="0.95" />
+                    <stop offset="70%" stopColor="#0f172a" stopOpacity="0.95" />
+                    <stop offset="100%" stopColor="#020617" stopOpacity="0.95" />
+                  </linearGradient>
+                  <linearGradient id="grad-ht-3" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4c1d95" stopOpacity="0.95" />
+                    <stop offset="70%" stopColor="#1e1b4b" stopOpacity="0.95" />
+                    <stop offset="100%" stopColor="#090514" stopOpacity="0.95" />
+                  </linearGradient>
 
                   {/* Domain Background Gradients */}
                   <radialGradient id="grad-trung-chau" cx="50%" cy="50%" r="60%">
@@ -539,8 +932,180 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                   </linearGradient>
                 </defs>
 
+                {/* 0. Non-world_map Layer SVG View: Dia Uyen, Bach Thien, Hac Thien */}
+                {selectedLayer !== "world_map" && (
+                  <g className="transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300">
+                    {/* Connecting Elemental Streams / Pathways between Sectors */}
+                    <path
+                      d="M 185 300 C 275 350, 410 250, 500 300 C 590 350, 725 250, 815 300"
+                      fill="none"
+                      stroke={
+                        selectedLayer === "dia_uyen"
+                          ? "#f43f5e"
+                          : selectedLayer === "bai_thien"
+                          ? "#38bdf8"
+                          : "#818cf8"
+                      }
+                      strokeWidth="3"
+                      strokeDasharray="6 4"
+                      opacity="0.6"
+                      filter="url(#wall-glow)"
+                    />
+
+                    {/* Sector Cards */}
+                    {LAYER_SECTOR_LAYOUTS[selectedLayer]?.map((sector) => {
+                      const region = regions.find((r) => r.id === sector.id);
+                      const isInspected = inspectedRegion?.id === sector.id;
+                      const isCurrent = currentRegion?.id === sector.id;
+                      const isMatched = region ? isRegionMatch(region) : true;
+                      const minR = region?.min_rank ?? (selectedLayer === "hac_thien" ? 8 : selectedLayer === "bai_thien" ? 6 : 5);
+                      const maxR = region?.max_rank ?? 9;
+
+                      return (
+                        <g
+                          key={sector.id}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Chọn ${sector.name}`}
+                          onClick={() => setInspectedSubRegionId(sector.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setInspectedSubRegionId(sector.id);
+                            }
+                          }}
+                          className={`cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 hover:brightness-125 ${!isMatched ? "opacity-30" : "opacity-100"}`}
+                        >
+                          {/* Sector Background Card */}
+                          <rect
+                            x={sector.x}
+                            y={sector.y}
+                            width={sector.width}
+                            height={sector.height}
+                            rx="16"
+                            fill={`url(#${sector.gradientId})`}
+                            stroke={isInspected ? "#f59e0b" : isCurrent ? "#ef4444" : sector.strokeColor}
+                            strokeWidth={isInspected ? 4 : isCurrent ? 3.5 : 2}
+                            strokeOpacity={isInspected || isCurrent ? 1 : 0.65}
+                          />
+
+                          {/* Sector Center Icon & Information */}
+                          <g transform={`translate(${sector.x + sector.width / 2}, ${sector.y + sector.height / 2})`}>
+                            {/* Sector Main Title */}
+                            <text
+                              x="0"
+                              y="-45"
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fill={isInspected ? "#fffbeb" : "#fef3c7"}
+                              fontSize="16"
+                              fontWeight="800"
+                              letterSpacing="1"
+                              className="pointer-events-none select-none drop-shadow-md"
+                            >
+                              {sector.shortName}
+                            </text>
+
+                            {/* Subtitle / Characteristic */}
+                            <text
+                              x="0"
+                              y="-15"
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fill={isInspected ? "#fde68a" : "#d8b485"}
+                              fontSize="11"
+                              fontWeight="500"
+                              className="pointer-events-none select-none"
+                            >
+                              {sector.subTitle}
+                            </text>
+
+                            {/* Rank range badge */}
+                            <g transform="translate(0, 20)">
+                              <rect
+                                x="-36"
+                                y="-10"
+                                width="72"
+                                height="20"
+                                rx="10"
+                                fill="#000000"
+                                fillOpacity="0.6"
+                                stroke={sector.strokeColor}
+                                strokeWidth="1"
+                                strokeOpacity="0.6"
+                              />
+                              <text
+                                x="0"
+                                y="1"
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                fill="#fcd34d"
+                                fontSize="11"
+                                fontWeight="700"
+                                fontFamily="monospace"
+                                className="pointer-events-none select-none"
+                              >
+                                C{minR}–C{maxR}
+                              </text>
+                            </g>
+
+                            {/* Inspect Indicator Badge */}
+                            {isInspected && !isCurrent && (
+                              <g transform="translate(0, 52)">
+                                <rect x="-35" y="-8.5" width="70" height="17" rx="8.5" fill="#f59e0b" fillOpacity="0.85" />
+                                <text
+                                  x="0"
+                                  y="1"
+                                  textAnchor="middle"
+                                  dominantBaseline="middle"
+                                  fill="#1c1917"
+                                  fontSize="9"
+                                  fontWeight="800"
+                                  letterSpacing="0.5"
+                                  className="pointer-events-none select-none"
+                                >
+                                  ĐANG XEM
+                                </text>
+                              </g>
+                            )}
+
+                            {/* Current Player Location Badge */}
+                            {isCurrent && (
+                              <g transform="translate(0, 52)">
+                                <rect x="-42" y="-8.5" width="84" height="17" rx="8.5" fill="#ef4444" fillOpacity="0.9" stroke="#fee2e2" strokeWidth="0.8" />
+                                <text
+                                  x="0"
+                                  y="1"
+                                  textAnchor="middle"
+                                  dominantBaseline="middle"
+                                  fill="#ffffff"
+                                  fontSize="9"
+                                  fontWeight="800"
+                                  letterSpacing="0.5"
+                                  className="pointer-events-none select-none"
+                                >
+                                  ĐANG Ở ĐÂY
+                                </text>
+                              </g>
+                            )}
+                          </g>
+
+                          {/* Player Pointer Icon on current sector */}
+                          {isCurrent && (
+                            <g transform={`translate(${sector.x + sector.width / 2}, ${sector.y + sector.height / 2 - 95})`} className="pointer-events-none">
+                              <circle cx="0" cy="0" r="16" fill="#f43f5e" fillOpacity="0.3" />
+                              <circle cx="0" cy="0" r="7" fill="#f43f5e" stroke="#fff1f2" strokeWidth="2.5" />
+                              <path d="M 0 -18 L -4 -6 L 4 -6 Z" fill="#fff1f2" />
+                            </g>
+                          )}
+                        </g>
+                      );
+                    })}
+                  </g>
+                )}
+
                 {/* 1. Large 5 Major Regions view (Bố cục Ngũ Vực Chuẩn Cổ Chân Nhân) */}
-                {!mapRegion && (
+                {selectedLayer === "world_map" && !mapRegion && (
                   <g className="transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300">
                     {/* Background Domain Polygons */}
                     {majorRegions.map((region) => {
@@ -716,7 +1281,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                 )}
 
                 {/* 2. Sub-regions grid view */}
-                {mapRegion &&
+                {selectedLayer === "world_map" && mapRegion &&
                   mapSubRegions.map((region, index) => {
                     const minX = region.atlas_x !== undefined && region.atlas_x !== null ? region.atlas_x : (region.min_x ?? 0);
                     const minY = region.atlas_y !== undefined && region.atlas_y !== null ? region.atlas_y : (region.min_y ?? 0);
@@ -820,7 +1385,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                   })}
 
                 {/* 3. Hubs */}
-                {mapHubs.map((hub) => {
+                {selectedLayer === "world_map" && mapHubs.map((hub) => {
                   const hubX = hub.atlas_x !== undefined ? hub.atlas_x + (hub.width || 1000) / 2 : hub.entry_x ?? ((hub.min_x ?? 0) + (hub.max_x ?? 0)) / 2;
                   const hubY = hub.atlas_y !== undefined ? hub.atlas_y + (hub.height || 1000) / 2 : hub.entry_y ?? ((hub.min_y ?? 0) + (hub.max_y ?? 0)) / 2;
                   const isInspected = inspectedRegion?.id === hub.id;
@@ -840,7 +1405,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                 })}
 
                 {/* 4. Player Pointer */}
-                {hasPlayerPosition && (!mapRegion || playerInZoomedRegion) && (
+                {selectedLayer === "world_map" && hasPlayerPosition && (!mapRegion || playerInZoomedRegion) && (
                   <g className="pointer-events-none">
                     <circle cx={playerAtlasX} cy={playerAtlasY} r={mapRegion ? 120 : 260} fill="#f43f5e" fillOpacity="0.25" />
                     <circle cx={playerAtlasX} cy={playerAtlasY} r={mapRegion ? 50 : 100} fill="#f43f5e" stroke="#fff1f2" strokeWidth={mapRegion ? 20 : 40} />
@@ -942,7 +1507,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                     : "border-transparent text-zinc-400 hover:text-zinc-200"
                 }`}
               >
-                <Layers className="h-3.5 w-3.5" /> Khu Vực ({subRegions.length})
+                <Layers className="h-3.5 w-3.5" /> Khu Vực ({layerRegions.length})
               </button>
             </div>
 
@@ -1103,7 +1668,7 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
               ) : (
                 /* Subregions List */
                 <div className="space-y-1.5">
-                  {subRegions.map((region) => {
+                  {layerRegions.map((region) => {
                     const isSelected = inspectedRegion?.id === region.id;
                     const isCurrent = currentRegion?.id === region.id;
 

@@ -31,12 +31,38 @@ func schemaWorld() error {
 	);
 	INSERT INTO world_maps (id, name, description, map_type, width, height, min_rank, max_rank, is_active)
 	VALUES
-		('world_map', 'WorldMap', 'Năm đại vực của thế giới hiện tại.', 'WORLD', 30000, 20000, 1, 9, TRUE),
-		('bai_thien', 'Bạch Thiên · Tầng 2', 'Đại vực tầng 2; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.', 'WORLD', 30000, 20000, 6, 9, FALSE),
-		('hac_thien', 'Hắc Thiên · Tầng 3', 'Đại vực tầng 3; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.', 'WORLD', 30000, 20000, 8, 9, FALSE)
-	ON CONFLICT (id) DO NOTHING;
-	UPDATE world_maps SET name='Bạch Thiên · Tầng 2', description='Đại vực tầng 2; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.' WHERE id='bai_thien';
-	UPDATE world_maps SET name='Hắc Thiên · Tầng 3', description='Đại vực tầng 3; đang chuẩn bị dữ liệu, lối lên tầng chưa mở.' WHERE id='hac_thien';
+		('dia_uyen', 'Địa Uyên · Tầng 0', 'Thế giới vực sâu lòng đất dưới chân Ngũ Vực, nơi đan xen địa câu, địa mạch, khoáng thạch và ma quái u tối.', 'WORLD', 30000, 20000, 5, 9, TRUE),
+		('world_map', 'WorldMap (Ngũ Vực) · Tầng 1', 'Năm đại vực của thế giới hiện tại.', 'WORLD', 30000, 20000, 1, 9, TRUE),
+		('bai_thien', 'Thái Cổ Bạch Thiên · Tầng 2', 'Thái Cổ Bạch Thiên · Tầng 2 - Cõi trời ánh sáng vĩnh hằng, biển mây bát ngát, chốn ngự trị của chim hạc và Động Thiên chính đạo.', 'WORLD', 30000, 20000, 6, 9, TRUE),
+		('hac_thien', 'Thái Cổ Hắc Thiên · Tầng 3', 'Thái Cổ Hắc Thiên · Tầng 3 - Cõi trời bóng đêm vô tận, thế giới của Hồn thú Thái cổ, mộng cảnh trôi dạt và cứ địa Dị Nhân ẩn náu.', 'WORLD', 30000, 20000, 8, 9, TRUE)
+	ON CONFLICT (id) DO UPDATE SET
+		name = EXCLUDED.name,
+		description = EXCLUDED.description,
+		min_rank = EXCLUDED.min_rank,
+		max_rank = EXCLUDED.max_rank,
+		is_active = EXCLUDED.is_active,
+		updated_at = NOW();
+
+	UPDATE world_maps SET
+		name='Địa Uyên · Tầng 0',
+		description='Thế giới vực sâu lòng đất dưới chân Ngũ Vực, nơi đan xen địa câu, địa mạch, khoáng thạch và ma quái u tối.',
+		min_rank=5, max_rank=9, is_active=TRUE, updated_at=NOW()
+	WHERE id='dia_uyen';
+	UPDATE world_maps SET
+		name='WorldMap (Ngũ Vực) · Tầng 1',
+		description='Năm đại vực của thế giới hiện tại.',
+		min_rank=1, max_rank=9, is_active=TRUE, updated_at=NOW()
+	WHERE id='world_map';
+	UPDATE world_maps SET
+		name='Thái Cổ Bạch Thiên · Tầng 2',
+		description='Thái Cổ Bạch Thiên · Tầng 2 - Cõi trời ánh sáng vĩnh hằng, biển mây bát ngát, chốn ngự trị của chim hạc và Động Thiên chính đạo.',
+		min_rank=6, max_rank=9, is_active=TRUE, updated_at=NOW()
+	WHERE id='bai_thien';
+	UPDATE world_maps SET
+		name='Thái Cổ Hắc Thiên · Tầng 3',
+		description='Thái Cổ Hắc Thiên · Tầng 3 - Cõi trời bóng đêm vô tận, thế giới của Hồn thú Thái cổ, mộng cảnh trôi dạt và cứ địa Dị Nhân ẩn náu.',
+		min_rank=8, max_rank=9, is_active=TRUE, updated_at=NOW()
+	WHERE id='hac_thien';
 
 	`); err != nil {
 		return err

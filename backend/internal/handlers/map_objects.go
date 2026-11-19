@@ -200,6 +200,18 @@ func aperturePortalMarkersInRegion(regionID, viewerRegion string, authID uuid.UU
 			continue
 		}
 		detail.IsMine = ownerID.Valid && ownerID.String == authID.String()
+
+		// Gate visibility by vertical world layer:
+		// Portals situated in higher heavens (bai_thien / hac_thien) or deep abyss (dia_uyen)
+		// are completely imperceptible across vertical boundaries (Khí Cương Phong Bích / Địa Tầng).
+		// Only viewers physically located on the same world map layer can see or scout them,
+		// with the sole exception of the portal's owner who always senses their own aperture.
+		portalLayer := worldMapIDForRegion(regionID)
+		viewerLayer := worldMapIDForRegion(viewerRegion)
+		if !detail.IsMine && portalLayer != viewerLayer {
+			continue
+		}
+
 		owner.CurrentRegion = regionID
 		scoutingPower := gamefx.AperturePortalDiscoveryPower(viewer, models.FilterEquippedActive(viewer.GuInventory), viewer.DaoMarks, &owner)
 		portalDefense := gamefx.AperturePortalConcealmentPower(&owner, models.FilterEquippedActive(owner.GuInventory), owner.DaoMarks, viewer, regionID, viewerRegion, detail.ConcealmentPower)

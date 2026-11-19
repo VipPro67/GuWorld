@@ -5515,11 +5515,12 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <div>
                 <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Tầng bản đồ</label>
                 <select value={regionEdit.world_map_id || "world_map"} onChange={e => setRegionEdit({...regionEdit, world_map_id: e.target.value})} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-200">
-                  <option value="world_map">WorldMap (5 Đại Vực hiện tại)</option>
-                  <option value="bai_thien" disabled>Bạch Thiên (đang khóa)</option>
-                  <option value="hac_thien" disabled>Hắc Thiên (đang khóa)</option>
+                  <option value="dia_uyen">Địa Uyên · Tầng 0</option>
+                  <option value="world_map">WorldMap (Ngũ Vực) · Tầng 1</option>
+                  <option value="bai_thien">Thái Cổ Bạch Thiên · Tầng 2</option>
+                  <option value="hac_thien">Thái Cổ Hắc Thiên · Tầng 3</option>
                 </select>
-                <p className="mt-1 text-[10px] text-amber-300/80">Gán tầng chỉ là cấu hình dữ liệu. Gameplay tầng 2/3 chưa mở cho đến khi vị trí, hiện diện và combat được phân tầng.</p>
+                <p className="mt-1 text-[10px] text-amber-300/80">Gán tầng thế giới cho khu vực (Tầng 0: Địa Uyên, Tầng 1: Ngũ Vực, Tầng 2: Bạch Thiên, Tầng 3: Hắc Thiên).</p>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>

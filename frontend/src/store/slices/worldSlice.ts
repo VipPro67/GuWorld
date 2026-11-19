@@ -33,6 +33,7 @@ export interface WorldSlice {
   applyWorldDropsEvent: (event: { region_id?: string; map_instance_id?: string; scope?: { region_id?: string; map_instance_id?: string } }) => void;
   lootGroundDrop: (dropId: string) => Promise<{ success: boolean; message: string; looted?: string[] } | null>;
   movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: ApiResponseData } | null>;
+  skyfall: () => Promise<{ success: boolean; message: string } | null>;
   fetchGrid: (radius?: number) => Promise<{ x: number; y: number; vision_radius: number; max_vision_radius?: number; cells: ApiResponseData[]; stats: ApiResponseData; players_on_map?: ApiResponseData[]; ground_drops?: ApiResponseData[]; world_width?: number; world_height?: number } | null>;
 }
 
@@ -160,6 +161,24 @@ export const createWorldSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
     } finally {
       set({ actionLoading: false });
     }
+  },
+
+  skyfall: async () => {
+    const res = await executeGameAction<{ message?: string; player?: Player }>(get, set, {
+      endpoint: "/api/world/skyfall",
+      method: "POST",
+      onSuccess: (data) => {
+        if (data.player) {
+          get().setPlayerFromServer(data.player);
+        }
+      },
+      successToast: (data) => data.message || "Rơi tự do thành công!",
+      errorMessage: "Rơi tự do thất bại",
+    });
+    if (!res.ok || !res.data) {
+      return res.error ? { success: false, message: res.error } : null;
+    }
+    return { success: true, message: res.data.message || "" };
   },
 
   fetchGrid: async (radius?: number) => {

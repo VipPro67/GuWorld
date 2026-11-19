@@ -21,6 +21,8 @@ var itemBlockCodeToKey = map[string]string{
 	"RESTORE_HP":                  "restore_hp",
 	"RESTORE_MANA":                "restore_mana",
 	"INCREASE_HUMAN_QI":           "increase_human_qi",
+	"RESTORE_EARTH_QI":            "restore_earth_qi",
+	"RESTORE_HEAVEN_QI":           "restore_heaven_qi",
 	"HEAL_APERTURE":               "heal_aperture",
 	"INCREASE_APERTURE_AREA":      "increase_aperture_area",
 	"INCREASE_APERTURE_TIME_RATE": "increase_aperture_time_rate",
@@ -219,7 +221,7 @@ var itemEffectCodes = map[string]bool{
 	"restore_hp": true, "restore_mana": true, "soul_boost": true, "remove_negative_status": true,
 	"lifespan_boost": true, "open_mine_chest": true, "open_immortal_mine_chest": true, "heal_aperture": true,
 	"increase_aperture_area": true, "increase_aperture_time_rate": true,
-	"increase_human_qi": true, "random_constitution": true, "random_race": true,
+	"increase_human_qi": true, "restore_earth_qi": true, "restore_heaven_qi": true, "random_constitution": true, "random_race": true,
 	"change_race": true, "hunger": true, "exit_spatial_realm": true,
 	"add_dao_marks": true, "spring_egg_hatch": true,
 }

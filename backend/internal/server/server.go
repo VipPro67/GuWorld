@@ -143,7 +143,8 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodPost, "/clear-redis-cache", "cache.flush", handlers.AdminClearRedisCache, "admin.clear_redis_cache", "redis_cache", true, "Redis", true, true, true},
 		// audit
 		{http.MethodGet, "/audit-logs", "audit.read", handlers.AdminGetAuditLogs, "", "", false, "", false, false, false},
-		// regions
+		// regions & world maps
+		{http.MethodGet, "/world-maps", "regions.read", handlers.GetWorldMaps, "", "", false, "", false, false, false},
 		{http.MethodGet, "/regions", "regions.read", handlers.AdminListRegions, "", "", false, "", false, false, false},
 		{http.MethodPost, "/regions", "regions.update", handlers.AdminCreateRegion, "admin.create_region", "region", false, "", false, false, false},
 		{http.MethodPut, "/regions/:id", "regions.update", handlers.AdminUpdateRegion, "admin.update_region", "region", false, "", false, false, false},
@@ -1169,10 +1170,12 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 		api.POST("/explore/move", middleware.AuthRequired(), middleware.RequireOnboarded(), handlers.MovePlayer)
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
+		api.GET("/world/maps", middleware.AuthRequired(), handlers.GetWorldMaps)
 		api.GET("/world/map-objects", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetZoneMapObjects)
 		api.GET("/world/monsters", middleware.AuthRequired(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetWorldMonsters)
 		api.GET("/world/revisions", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.GetWorldRevisions)
 		api.POST("/world/portal/transfer", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.PortalTransfer)
+		api.POST("/world/skyfall", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.SkyfallDescent)
 
 		// Ground drops / Chiến lợi phẩm trên bản đồ
 		api.GET("/world/drops", middleware.AuthRequired(), middleware.RateLimitByPlayer(60, time.Minute), handlers.GetTileGroundDrops)

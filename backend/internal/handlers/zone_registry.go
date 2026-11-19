@@ -494,7 +494,16 @@ func worldMapIDForRegion(regionID string) string {
 		}
 		current = region.ParentID
 	}
-	return "world_map"
+	switch {
+	case regionID == "bai_thien" || strings.Contains(regionID, "bai_thien") || strings.Contains(regionID, "bach_thien") || strings.HasPrefix(regionID, "bt_"):
+		return "bai_thien"
+	case regionID == "hac_thien" || strings.Contains(regionID, "hac_thien") || strings.HasPrefix(regionID, "ht_"):
+		return "hac_thien"
+	case regionID == "dia_uyen" || strings.Contains(regionID, "dia_uyen") || strings.HasPrefix(regionID, "du_"):
+		return "dia_uyen"
+	default:
+		return "world_map"
+	}
 }
 
 // hubEntryPoint returns the hub (lobby) spawn coordinates.
@@ -598,7 +607,16 @@ func zoneWorldMapIDLocked(zone *models.Region) string {
 		}
 		parentID = parent.ParentID
 	}
-	return "world_map"
+	switch {
+	case zone.ID == "bai_thien" || strings.Contains(zone.ID, "bai_thien") || strings.Contains(zone.ID, "bach_thien"):
+		return "bai_thien"
+	case zone.ID == "hac_thien" || strings.Contains(zone.ID, "hac_thien"):
+		return "hac_thien"
+	case zone.ID == "dia_uyen" || strings.Contains(zone.ID, "dia_uyen"):
+		return "dia_uyen"
+	default:
+		return "world_map"
+	}
 }
 
 func nearestHubOnMap(x, y int, mapID string) (string, int, int) {

@@ -146,6 +146,11 @@ func checkMovement(tx *sql.Tx, player *models.Player, spec movementSpec) error {
 	}
 
 	regionChanged := spec.targetRegion != "" && spec.targetRegion != player.CurrentRegion
+	if regionChanged {
+		if err := checkLayerTransitionGuard(context.Background(), tx, player, player.CurrentRegion, spec.targetRegion); err != nil {
+			return err
+		}
+	}
 	if policy.requireRegionEntry && regionChanged {
 		if err := checkRegionEntry(spec.targetRegion, player.Rank, player.GuInventory); err != nil {
 			status := policy.regionEntryStatus
@@ -223,6 +228,12 @@ func applyDestination(ctx context.Context, tx *sql.Tx, player *models.Player, re
 	player.X = x
 	player.Y = y
 	if player.CurrentRegion != oldRegion {
+		fromMap := worldMapIDForRegion(oldRegion)
+		toMap := worldMapIDForRegion(player.CurrentRegion)
+		if fromMap != toMap {
+			layerMsg, _ := applyLayerTransitionEffects(ctx, tx, player, fromMap, toMap)
+			return layerMsg
+		}
 		return applyRegionalWallDebuff(ctx, player, largeZoneForRegion(oldRegion), largeZoneForRegion(player.CurrentRegion), tx)
 	}
 	return ""

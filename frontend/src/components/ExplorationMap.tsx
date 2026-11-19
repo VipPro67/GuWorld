@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Compass, Sparkles, DoorOpen, Droplets, Footprints, Landmark, ShieldAlert, Map as MapIcon, Package, Eye, Mountain, Swords, Waypoints, Store, UserRound, LogOut } from "lucide-react";
+import { Compass, Sparkles, DoorOpen, Droplets, Footprints, Landmark, ShieldAlert, Map as MapIcon, Package, Eye, Mountain, Swords, Waypoints, Store, UserRound, LogOut, ArrowDownToLine, Flame, Sun, Moon } from "lucide-react";
 import { useGameStore, Player, GroundDrop, ApertureResourcePoint } from "@/store/useGameStore";
 import { useWorldStore, type WorldMonsterActor } from "@/store/useWorldStore";
 import { usePolling } from "@/lib/usePolling";
@@ -69,6 +69,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const fetchRegions = useGameStore((state) => state.fetchRegions);
   const fetchGrid = useGameStore((state) => state.fetchGrid);
   const movePlayer = useGameStore((state) => state.movePlayer);
+  const skyfall = useGameStore((state) => state.skyfall);
   const enterAperturePortal = useGameStore((state) => state.enterPortal);
   const harvestVein = useWorldStore((state) => state.harvestVein);
   const mapMarkers = useWorldStore((state) => state.zoneMarkers);
@@ -225,6 +226,17 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const isMemberNotLeader = Boolean(player.party_id) && (party === null || party.leader_id !== player.id);
   const currentRegion = regions.find((r) => r.id === player.current_region);
   const regionName = currentRegion?.name || "Thế Giới Cổ Sư";
+
+  const currentLayer = useMemo(() => {
+    if (gridData?.world_map_id === "dia_uyen" || gridData?.world_map_id === "bai_thien" || gridData?.world_map_id === "hac_thien") {
+      return gridData.world_map_id;
+    }
+    if (currentRegion?.world_map_id === "dia_uyen" || currentRegion?.id.startsWith("du_") || currentRegion?.parent_id?.startsWith("du_")) return "dia_uyen";
+    if (currentRegion?.world_map_id === "bai_thien" || currentRegion?.id.startsWith("bt_") || currentRegion?.parent_id?.startsWith("bt_")) return "bai_thien";
+    if (currentRegion?.world_map_id === "hac_thien" || currentRegion?.id.startsWith("ht_") || currentRegion?.parent_id?.startsWith("ht_")) return "hac_thien";
+    return "world_map";
+  }, [gridData?.world_map_id, currentRegion]);
+
   const greatRegion = useMemo(() => {
     let region = currentRegion;
     const visited = new Set<string>();
@@ -236,13 +248,45 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     return undefined;
   }, [currentRegion, regions]);
   const backgroundPanel = greatRegion ? GREAT_REGION_BACKGROUND_PANEL[greatRegion.id] : undefined;
-  const mapBackgroundStyle: React.CSSProperties = {
-    backgroundColor: "#111812",
-    backgroundImage: `linear-gradient(180deg, rgba(7, 12, 12, .48), rgba(7, 10, 12, .68)), url('/assets/world/${backgroundPanel === undefined ? "ground-moss.webp" : "great-regions-atlas.png"}')`,
-    backgroundSize: backgroundPanel === undefined ? "auto, cover" : "auto, 700% 100%",
-    backgroundPosition: backgroundPanel === undefined ? "center, center" : `center, ${(backgroundPanel / 6) * 100}% center`,
-    backgroundRepeat: "no-repeat",
-  };
+  const mapBackgroundStyle: React.CSSProperties = useMemo(() => {
+    if (currentLayer === "dia_uyen") {
+      return {
+        backgroundColor: "#160b0b",
+        backgroundImage: "radial-gradient(ellipse at 50% 50%, rgba(185, 28, 28, 0.15), transparent 70%), linear-gradient(180deg, rgba(20, 10, 10, 0.85), rgba(15, 7, 7, 0.95))",
+      };
+    }
+    if (currentLayer === "bai_thien") {
+      return {
+        backgroundColor: "#0d2035",
+        backgroundImage: "radial-gradient(circle at 50% 20%, rgba(251, 191, 36, 0.18), transparent 60%), linear-gradient(180deg, rgba(14, 38, 64, 0.75), rgba(8, 20, 36, 0.92))",
+      };
+    }
+    if (currentLayer === "hac_thien") {
+      return {
+        backgroundColor: "#05050f",
+        backgroundImage: "radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.12), transparent 65%), linear-gradient(180deg, rgba(8, 6, 20, 0.9), rgba(3, 2, 10, 0.98))",
+      };
+    }
+    return {
+      backgroundColor: "#111812",
+      backgroundImage: `linear-gradient(180deg, rgba(7, 12, 12, .48), rgba(7, 10, 12, .68)), url('/assets/world/${backgroundPanel === undefined ? "ground-moss.webp" : "great-regions-atlas.png"}')`,
+      backgroundSize: backgroundPanel === undefined ? "auto, cover" : "auto, 700% 100%",
+      backgroundPosition: backgroundPanel === undefined ? "center, center" : `center, ${(backgroundPanel / 6) * 100}% center`,
+      backgroundRepeat: "no-repeat",
+    };
+  }, [currentLayer, backgroundPanel]);
+
+  const handleSkyfall = useCallback(async () => {
+    if (actionLoading || Boolean(player.active_combat)) return;
+    const destName = currentLayer === "hac_thien" ? "Thái Cổ Bạch Thiên" : "Ngũ Vực (Mặt đất)";
+    if (!window.confirm(`Đạo hữu có chắc chắn muốn buông mình Rơi Tự Do (Skyfall), xuyên qua tầng giới hạ xuống ${destName}?`)) {
+      return;
+    }
+    const res = await skyfall();
+    if (res?.success) {
+      void loadGrid();
+    }
+  }, [actionLoading, player.active_combat, currentLayer, skyfall, loadGrid]);
 
   const handleCellClick = async (x: number, y: number, isMovable: boolean, cell?: GridCell, marker?: { kind: string; id: string; isMine?: boolean; name?: string }, resourcePointId?: string) => {
     if (autoFarmRunningRef.current) return;
@@ -583,6 +627,26 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
               </span>
               <span className="text-xs text-zinc-500">·</span>
               <span className="text-xs font-mono text-zinc-400">({player.x}, {player.y})</span>
+              {!isApertureMap && (
+                <>
+                  <span className="text-xs text-zinc-500">·</span>
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                    currentLayer === "dia_uyen"
+                      ? "bg-rose-950/70 border-rose-500/50 text-rose-300"
+                      : currentLayer === "bai_thien"
+                      ? "bg-amber-950/70 border-amber-400/50 text-amber-300"
+                      : currentLayer === "hac_thien"
+                      ? "bg-indigo-950/70 border-indigo-500/50 text-indigo-300"
+                      : "bg-emerald-950/70 border-emerald-500/50 text-emerald-300"
+                  }`}>
+                    {currentLayer === "dia_uyen" && <Flame className="w-3 h-3 text-rose-400" />}
+                    {currentLayer === "bai_thien" && <Sun className="w-3 h-3 text-amber-300" />}
+                    {currentLayer === "hac_thien" && <Moon className="w-3 h-3 text-indigo-400" />}
+                    {currentLayer === "world_map" && <Mountain className="w-3 h-3 text-emerald-400" />}
+                    <span>{currentLayer === "dia_uyen" ? "Tầng 0: Địa Uyên" : currentLayer === "bai_thien" ? "Tầng 2: Bạch Thiên" : currentLayer === "hac_thien" ? "Tầng 3: Hắc Thiên" : "Tầng 1: Ngũ Vực"}</span>
+                  </span>
+                </>
+              )}
             </div>
             <h2 className="text-lg font-serif font-bold text-zinc-100">
               {isApertureMap ? "Lưới Địa Hình" : regionName}
@@ -622,6 +686,18 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
           </div>
 
           {!isApertureMap && <>
+          {(currentLayer === "bai_thien" || currentLayer === "hac_thien") && (
+            <button
+              type="button"
+              onClick={() => void handleSkyfall()}
+              disabled={actionLoading || Boolean(player.active_combat)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-600/30 to-indigo-600/30 border border-sky-400/50 text-sky-200 hover:from-sky-600/50 hover:to-indigo-600/50 transition-all font-serif text-xs font-bold shadow-lg shadow-sky-950/40 cursor-pointer animate-pulse disabled:opacity-50"
+              title={currentLayer === "hac_thien" ? "Rơi Tự Do từ Hắc Thiên xuống Bạch Thiên" : "Rơi Tự Do từ Bạch Thiên xuyên qua Khí Cương Phong Bích về Ngũ Vực"}
+            >
+              <ArrowDownToLine className="w-3.5 h-3.5 text-sky-300" />
+              <span>Rơi Tự Do</span>
+            </button>
+          )}
           <button
             onClick={() => setShowAtlas(true)}
             className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-serif text-xs font-semibold shadow-lg shadow-amber-950/20 cursor-pointer"
@@ -848,6 +924,31 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
         <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-lime-100"><Mountain className="h-4 w-4 text-lime-300" />Điểm tài nguyên</span>
       </section>
       <div className="relative border border-zinc-900 rounded-3xl p-2 sm:p-3 shadow-2xl overflow-hidden flex flex-col items-center justify-center" style={mapBackgroundStyle}>
+        {/* Atmospheric Overlays for Vertical Layers */}
+        {currentLayer === "dia_uyen" && (
+          <div className="pointer-events-none absolute inset-0 z-10 rounded-3xl overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-t from-rose-950/40 via-transparent to-black/50 ring-2 ring-inset ring-rose-700/40" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(225,29,72,0.15),transparent_70%)] animate-pulse" />
+          </div>
+        )}
+        {currentLayer === "bai_thien" && (
+          <div className="pointer-events-none absolute inset-0 z-10 rounded-3xl overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-amber-300/12 via-sky-300/5 to-transparent ring-2 ring-inset ring-amber-400/40" />
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent)] animate-[pulse_5s_ease-in-out_infinite]" />
+          </div>
+        )}
+        {currentLayer === "hac_thien" && (
+          <div className="pointer-events-none absolute inset-0 z-10 rounded-3xl overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-indigo-950/40 via-transparent to-black/70 ring-2 ring-inset ring-indigo-500/40" />
+            <div
+              className="absolute inset-0 opacity-40"
+              style={{
+                backgroundImage: "radial-gradient(1.5px 1.5px at 20px 30px, #e0e7ff, rgba(0,0,0,0)), radial-gradient(1px 1px at 40px 70px, #a5b4fc, rgba(0,0,0,0)), radial-gradient(1.5px 1.5px at 80px 40px, #ffffff, rgba(0,0,0,0)), radial-gradient(2px 2px at 120px 90px, #c7d2fe, rgba(0,0,0,0))",
+                backgroundSize: "160px 160px",
+              }}
+            />
+          </div>
+        )}
         {gridData ? (
           <div
             className={`grid gap-px w-full ${maxContainerWidth} aspect-square transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300`}

@@ -487,7 +487,7 @@ func GetWorldMaps(c *gin.Context) {
 	rows, err := db.DB.QueryContext(c.Request.Context(), `
 		SELECT id, name, description, map_type, width, height, min_rank, max_rank,
 		       COALESCE(rules::text, '{}'), is_active
-		FROM world_maps ORDER BY CASE id WHEN 'world_map' THEN 0 WHEN 'bai_thien' THEN 1 WHEN 'hac_thien' THEN 2 ELSE 3 END, id`)
+		FROM world_maps ORDER BY CASE id WHEN 'dia_uyen' THEN 0 WHEN 'world_map' THEN 1 WHEN 'bai_thien' THEN 2 WHEN 'hac_thien' THEN 3 ELSE 4 END, id`)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể tải danh sách tầng bản đồ", err))
 		return

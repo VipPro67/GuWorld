@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 
@@ -38,6 +39,8 @@ var ApplyItemEffects = map[string]ItemEffectHandler{
 	"increase_aperture_time_rate": increaseApertureTimeRateEffect,
 	"add_dao_marks":               addDaoMarksEffect,
 	"increase_human_qi":           increaseHumanQi,
+	"restore_earth_qi":            restoreEarthQiEffect,
+	"restore_heaven_qi":           restoreHeavenQiEffect,
 	"random_constitution":         randomConstitutionEffect,
 	"random_race":                 randomRaceEffect,
 	"exit_spatial_realm":          exitSpatialRealmEffect,
@@ -256,6 +259,88 @@ func increaseHumanQi(tx *sql.Tx, player *models.Player, item models.ItemSpec, va
 	gained := AddHumanQi(player, val)
 
 	return fmt.Sprintf("Đạo hữu sử dụng %s, tăng %.0f nhân khí!", item.Name, gained), nil
+}
+
+func restoreEarthQiEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
+	if val <= 0 {
+		return "", nil
+	}
+	if !util.IsImmortalPlayer(player) {
+		return "", fmt.Errorf("%s chỉ dành cho Cổ Tiên để nạp Địa Khí cho Tiên Khiếu.", item.Name)
+	}
+
+	var apID string
+	var earthQi, maxEarthQi float64
+	var heavenQi float64
+	var state string
+	err := tx.QueryRow(`
+		SELECT id, earth_qi, max_earth_qi, heaven_qi, state
+		FROM immortal_apertures
+		WHERE player_id = $1
+	`, player.ID).Scan(&apID, &earthQi, &maxEarthQi, &heavenQi, &state)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("không tìm thấy Tiên Khiếu của đạo hữu.")
+	} else if err != nil {
+		return "", fmt.Errorf("lỗi khi truy vấn Tiên Khiếu: %w", err)
+	}
+
+	newEarthQi := math.Min(maxEarthQi, earthQi+val)
+	newState := state
+	if newState == "UNBALANCED" && newEarthQi > 0 && heavenQi > 0 {
+		newState = "STABLE"
+	}
+
+	_, err = tx.Exec(`
+		UPDATE immortal_apertures
+		SET earth_qi = $1, state = $2, updated_at = NOW()
+		WHERE id = $3
+	`, newEarthQi, newState, apID)
+	if err != nil {
+		return "", fmt.Errorf("không thể cập nhật Địa Khí Tiên Khiếu: %w", err)
+	}
+
+	return fmt.Sprintf("Đạo hữu sử dụng %s, nạp thêm +%.0f Địa Khí vào Tiên Khiếu (Hiện tại: %.0f/%.0f)!", item.Name, val, newEarthQi, maxEarthQi), nil
+}
+
+func restoreHeavenQiEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {
+	if val <= 0 {
+		return "", nil
+	}
+	if !util.IsImmortalPlayer(player) {
+		return "", fmt.Errorf("%s chỉ dành cho Cổ Tiên để nạp Thiên Khí cho Tiên Khiếu.", item.Name)
+	}
+
+	var apID string
+	var heavenQi, maxHeavenQi float64
+	var earthQi float64
+	var state string
+	err := tx.QueryRow(`
+		SELECT id, heaven_qi, max_heaven_qi, earth_qi, state
+		FROM immortal_apertures
+		WHERE player_id = $1
+	`, player.ID).Scan(&apID, &heavenQi, &maxHeavenQi, &earthQi, &state)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("không tìm thấy Tiên Khiếu của đạo hữu.")
+	} else if err != nil {
+		return "", fmt.Errorf("lỗi khi truy vấn Tiên Khiếu: %w", err)
+	}
+
+	newHeavenQi := math.Min(maxHeavenQi, heavenQi+val)
+	newState := state
+	if newState == "UNBALANCED" && newHeavenQi > 0 && earthQi > 0 {
+		newState = "STABLE"
+	}
+
+	_, err = tx.Exec(`
+		UPDATE immortal_apertures
+		SET heaven_qi = $1, state = $2, updated_at = NOW()
+		WHERE id = $3
+	`, newHeavenQi, newState, apID)
+	if err != nil {
+		return "", fmt.Errorf("không thể cập nhật Thiên Khí Tiên Khiếu: %w", err)
+	}
+
+	return fmt.Sprintf("Đạo hữu sử dụng %s, nạp thêm +%.0f Thiên Khí vào Tiên Khiếu (Hiện tại: %.0f/%.0f)!", item.Name, val, newHeavenQi, maxHeavenQi), nil
 }
 
 func lifespanBoostEffect(tx *sql.Tx, player *models.Player, item models.ItemSpec, val float64) (string, error) {

@@ -16,6 +16,8 @@ var itemNativeActionToKey = map[string]string{
 	"RESTORE_HP":                  "restore_hp",
 	"RESTORE_MANA":                "restore_mana",
 	"INCREASE_HUMAN_QI":           "increase_human_qi",
+	"RESTORE_EARTH_QI":            "restore_earth_qi",
+	"RESTORE_HEAVEN_QI":           "restore_heaven_qi",
 	"HEAL_APERTURE":               "heal_aperture",
 	"INCREASE_APERTURE_AREA":      "increase_aperture_area",
 	"INCREASE_APERTURE_TIME_RATE": "increase_aperture_time_rate",

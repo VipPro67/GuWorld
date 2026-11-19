@@ -2,7 +2,7 @@
 
 ## Tính năng làm gì?
 
-Bản đồ theo vùng là nơi di chuyển, gặp quái, thu thập tài nguyên, dùng cổng và tương tác vật phẩm rơi. Di chuyển được xử lý theo từng ô; world realtime đồng bộ vị trí/presence, còn chiến đấu vẫn theo lượt.
+Bản đồ thế giới được tổ chức theo hệ thống 4 tầng thẳng đứng (Tầng 0: Địa Uyên, Tầng 1: Ngũ Vực `world_map`, Tầng 2: Bạch Thiên `bai_thien`, Tầng 3: Hắc Thiên `hac_thien`). Bản đồ theo vùng là nơi di chuyển, gặp quái, thu thập tài nguyên, dùng cổng và tương tác vật phẩm rơi. Di chuyển được xử lý theo từng ô; world realtime đồng bộ vị trí/presence, còn chiến đấu vẫn theo lượt.
 
 ## Điều kiện mở và quyền truy cập
 
@@ -19,6 +19,33 @@ Mở **Khám Phá Dã Ngoại** từ Lobby để dùng bản đồ trong popup. 
 Lưới bản đồ gắn với khu vực và tọa độ đã tải; khi player đổi vùng hoặc vị trí, phản hồi grid cũ bị bỏ qua. Thay đổi ô map, drop, điểm tài nguyên và portal được phát qua `world:change` sau khi ghi dữ liệu thành công; publisher xác định người nhận theo region/map/instance, rồi Redis phân phối event kèm danh sách đó cho các backend. Mỗi backend chỉ gửi tới phiên người chơi cục bộ có trong danh sách. Ô đã xóa được phản ánh ngay; những thay đổi cần dữ liệu snapshot mới sẽ kích hoạt tải lại ngay thay vì chờ chu kỳ polling. Nền của khu vực con lấy địa hình từ Đại Vực cha trong `great-regions-atlas.png`; khu vực không thuộc Đại Vực như Tiên Khiếu dùng nền rừng mặc định.
 
 ## Luật, chi phí và giới hạn
+
+### Di chuyển xuyên tầng (Layer Transitions & Skyfall)
+
+Di chuyển giữa các tầng thẳng đứng (Tầng 0: Địa Uyên, Tầng 1: Ngũ Vực `world_map`, Tầng 2: Bạch Thiên `bai_thien`, Tầng 3: Hắc Thiên `hac_thien`) chịu sự kiểm tra nghiêm ngặt của tu vi và Tiên Cổ Ốc:
+- **Khí Cương Phong Bích (Ngũ Vực ➔ Bạch Thiên)**:
+  - Cổ Tiên (Rank 6+): Vận dụng Tiên Thể lướt qua an toàn, tiêu hao 50 Chân Nguyên/Tiên Nguyên (nếu thiếu sẽ chịu 5% Max HP mài mòn).
+  - Phàm nhân (Rank < 6): Không có Tiên Thể, nếu không trang bị Tiên Cổ Ốc sẽ bị phong nhận xé rách nhận sát thương 90% Max HP, dính trạng thái `severely_wounded` và bị cuồng phong hất văng trở lại. Nếu ngồi trong Tiên Cổ Ốc đang trang bị (`player_gu_houses`), Cổ Ốc chịu áp lực thay chủ nhân (tiêu hao 20 độ bền và 10% phàm cổ), cho phép phàm nhân phi thăng an toàn.
+- **Cực Điểm Không Gian (Bạch Thiên ➔ Hắc Thiên)**:
+  - Yêu cầu tu vi Rank 8 (Bát Chuyển) để bước qua an toàn.
+  - Cổ Tiên Thất Chuyển (Rank 7): Được phép tiến vào nếu trang bị Tiên Cổ Ốc (tiêu hao 15 độ bền). Nếu không có Cổ Ốc, chịu 40% Max HP sát thương không gian và dính debuff `spatial_suppression` (giảm 30% tốc độ trong 10 phút).
+  - Tu vi dưới Rank 7 bị cấm hoàn toàn, chịu 70% Max HP sát thương chấn động khi cố tình xâm nhập.
+- **Địa Câu Chướng Khí (Ngũ Vực ➔ Địa Uyên)**:
+  - Yêu cầu tu vi Rank 5+ (Ngũ Chuyển đỉnh phong hoặc Cổ Tiên) hoặc Tiên Cổ Ốc.
+  - Phàm nhân cấp thấp (Rank < 5) bị chướng khí ngạt thở chặn lại, nhận 50% Max HP sát thương và dính độc `dia_uyen_miasma`.
+- **Rơi Tự Do (Skyfall - `POST /api/world/skyfall`)**:
+  - Nhân vật đang ở Bạch Thiên, Hắc Thiên hoặc Địa Uyên có thể lao mình rơi tự do theo phương thẳng đứng.
+  - Tọa độ chiếu 1:1: Rơi từ tọa độ `(X, Y)` ở Bạch Thiên sẽ đáp thẳng xuống đúng tọa độ `(X, Y)` của đại vực tương ứng ở Ngũ Vực (hoặc từ Hắc Thiên rơi xuống Bạch Thiên).
+  - Cổ Tiên hạ giới an toàn; phàm nhân rơi từ Bạch Thiên không có Tiên Thể hay Cổ Ốc chịu 40% Max HP sát thương chấn động khi chạm đất.
+
+### Hạ Khiếu Cắm Rễ Tiên Khiếu Đa Tầng (Vertical Aperture Anchoring)
+
+Cổ Tiên (Rank 6+) hạ khiếu tại các tầng thế giới khác nhau tạo ra sự phân hóa sinh thái và tài nguyên:
+- **Tầng 0 (Địa Uyên)**: Dồi dào Địa Khí (350%), cực kỳ hiếm Thiên Khí (20%). Rất thích hợp cho Cổ Tiên tu luyện Thổ Đạo, Kim Đạo, Cốt Đạo, Luyện Đạo.
+- **Tầng 1 (Ngũ Vực)**: Cân bằng tự nhiên chuẩn mực (100% Thiên Khí, 100% Địa Khí).
+- **Tầng 2 (Bạch Thiên)**: Dồi dào Thiên Khí (300%), thiếu hụt Địa Khí (30%). Cổ Tiên cần mang theo Địa Khí Đan (`EARTH_QI_PILL`) hoặc định kỳ hạ phàm nạp khí.
+- **Tầng 3 (Hắc Thiên)**: Thiên Khí dị biến (100% pha trộn Ám/Tinh Đạo), Địa Khí thấp (50%). Hạ khiếu trên 5 phút tẩm bổ thêm Đạo Ngân Ám Đạo và Tinh Đạo khi Thu Khiếu. Dòng chảy thời gian tai kiếp suy giảm 1.5 lần (chu kỳ tai kiếp kéo dài thêm +50% thời gian thực tế do Thiên Ý khó cảm ứng).
+- **Cách ly tầm nhìn Môn Hộ**: Môn Hộ của Tiên Khiếu đặt tại Bạch Thiên hoặc Địa Uyên chỉ hiển thị và do thám được bởi người chơi đang ở cùng tầng không gian (`world_map_id`). Chủ Khiếu luôn nhìn thấy Môn Hộ của bản thân.
 
 ### Xác suất ambush
 

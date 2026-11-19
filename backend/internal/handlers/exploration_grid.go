@@ -65,6 +65,16 @@ func GetGrid(c *gin.Context) {
 	if maxVisionRadius < 2 {
 		maxVisionRadius = 2
 	}
+	mapLayer := worldMapIDForRegion(player.CurrentRegion)
+	if mapLayer == "bai_thien" {
+		// Celestial cloud ocean has crystal clarity: +1 vision radius bonus
+		maxVisionRadius += 1
+	} else if mapLayer == "hac_thien" {
+		// Black Heaven perpetual darkness restricts baseline vision
+		if maxVisionRadius > 2 && rawInvestigation < 4 {
+			maxVisionRadius = 2
+		}
+	}
 	// Hard cap for grid matrix viewport to avoid rendering too many tiles (e.g. max radius 5 gives 11x11 = 121 tiles)
 	const MaxVisualGridRadius = 5
 	if maxVisionRadius > MaxVisualGridRadius {

@@ -39,6 +39,8 @@ type ApertureCheck struct {
 	TribulationPendingAt     sql.NullTime
 	State                    string
 	DaoMarks                 models.DaoMarksMap
+	IsPlaced                 bool
+	PlacedRegion             string
 }
 
 func checkAndTriggerSingleAperture(apertureID string) error {
@@ -137,7 +139,8 @@ func CheckAndTriggerTribulations(ctx context.Context) error {
 	rows, err := db.DB.Query(`
 		SELECT id, player_id, time_rate, area_size, aperture_hp, max_aperture_hp, internal_years_passed, next_tribulation_year, essence_production_per_year,
 			rank_start_year, earth_calamity_count, heavenly_tribulation_count, grand_tribulation_count, myriad_tribulation_count, chaos_calamity_count, tribulation_pending_at, state,
-			COALESCE(dao_marks, '{}'::jsonb)
+			COALESCE(dao_marks, '{}'::jsonb),
+			COALESCE(is_placed, false), COALESCE(placed_region, '')
 		FROM immortal_apertures
 		WHERE player_id IS NOT NULL AND state IN ('STABLE', 'DAMAGED', 'TRIBULATION_PENDING', 'TRIBULATION_ACTIVE')
 	`)
@@ -149,7 +152,8 @@ func CheckAndTriggerTribulations(ctx context.Context) error {
 	for rows.Next() {
 		var ap ApertureCheck
 		if err := rows.Scan(&ap.ID, &ap.PlayerID, &ap.TimeRate, &ap.AreaSize, &ap.ApertureHP, &ap.MaxApertureHP, &ap.InternalYearsPassed, &ap.NextTribulationYear, &ap.EssenceProductionPerYear,
-			&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.TribulationPendingAt, &ap.State, &ap.DaoMarks); err == nil {
+			&ap.RankStartYear, &ap.EarthCalamityCount, &ap.HeavenlyTribulationCount, &ap.GrandTribulationCount, &ap.MyriadTribulationCount, &ap.ChaosCalamityCount, &ap.TribulationPendingAt, &ap.State, &ap.DaoMarks,
+			&ap.IsPlaced, &ap.PlacedRegion); err == nil {
 			apertures = append(apertures, ap)
 		}
 	}
@@ -403,7 +407,12 @@ func CheckAndTriggerTribulations(ctx context.Context) error {
 				continue // Keep lifespan checks running; active combat/event progression owns this state.
 			}
 
-			subjectiveYearsPassed := 60.0 * ap.TimeRate * timeSpeedMultiplier / 86400.0
+			effectiveRate := ap.TimeRate
+			if ap.IsPlaced {
+				effectiveRate = 1.0 * LayerTribulationTimeRateMultiplier(worldMapIDForRegion(ap.PlacedRegion))
+			}
+
+			subjectiveYearsPassed := 60.0 * effectiveRate * timeSpeedMultiplier / 86400.0
 			newYearsPassed := ap.InternalYearsPassed + subjectiveYearsPassed
 			yearsDiff := math.Floor(newYearsPassed) - math.Floor(ap.InternalYearsPassed)
 
