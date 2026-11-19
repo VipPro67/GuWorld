@@ -29,6 +29,8 @@ Base path: `/api`. Route được đăng ký trong `backend/internal/server/serv
 `/player` yêu cầu đăng nhập và onboarding. Các route:
 
 - GET `/player/respawn-choice`, `/player/status/:id`, `/player/inventory/gus`, `/player/stats`, `/player/passive-stats`, `/player/profile/:username`, `/player/referrals`, `/player/combat-settings`, `/player/audit-logs`, `/player/notifications`, `/player/notifications/unread-count`, `/player/beast-betting/current`, `/player/beast-betting/history`.
+
+`GET /player/audit-logs` chỉ trả các bản ghi có `player_id` hoặc `affected_player_id` trùng với player đã xác thực; hỗ trợ lọc action/entity/success/search và phân trang theo thời gian giảm dần với ID làm khóa phụ ổn định.
 - POST `/player/respawn-choice`, `/player/use-item`, `/player/use-items`, `/player/recharge`, `/player/clear-stress`, `/player/referrals/claim`, `/player/referrals/bind`, `/player/avatar`, `/player/redeem-gift-code`, `/player/complete-tutorial`, `/player/complete-onboarding`, `/player/notifications/read`, `/player/notifications/read-all`, `/player/beast-betting/bet`.
 - `POST /player/redeem-gift-code` trả `409 Conflict` nếu phần thưởng là Tiên Cổ đã tồn tại trong thiên hạ; giao dịch đổi mã không được ghi nhận trong trường hợp này.
 - PUT `/player/profile/settings`, `/player/combat-settings`.
@@ -93,7 +95,7 @@ Damage breakdown có thể bổ sung `race_damage_bonus`/`race_damage_target` kh
 
 Effect catalog: GET `/admin/effect-catalog/metadata` trả vocabulary và `condition_value_types`; POST `/admin/effect-catalog/validate` kiểm tra Block v2 và context compatibility. Race conditions dùng chuỗi ở `ACTOR_RACE`/`TARGET_RACE`; trong runtime hỗ trợ, thiếu race ở context làm block không khớp. Preflight vẫn từ chối context không có evaluator cho trigger/operation đó.
 
-Admin UI dùng `/admin/*`. Mọi route yêu cầu `AuthRequired`, `admin` rate limit và permission tương ứng. Route inventory là `adminRouteSpecs()` trong `server.go`; các nhóm bao gồm access/resources, monitor/traces, billing, combat history/rankings, player/inventory, aperture, Gu, sect, data import/export, cache, audit, regions/map cells/drops, mỏ tài nguyên thế giới và Nguyên Tuyền (`/admin/primeval-veins*`, `/admin/world-resource-points*`), shop, arena shop, monsters, pets, moderation và role management. Các thao tác ghi được audit; mutation nguy hiểm có thể yêu cầu reason/confirmation/re-auth/idempotency.
+Admin UI dùng `/admin/*`. Mọi route yêu cầu `AuthRequired`, `admin` rate limit và permission tương ứng. Route inventory là `adminRouteSpecs()` trong `server.go`; các nhóm bao gồm access/resources, monitor/traces, billing, combat history/rankings, player/inventory, aperture, Gu, sect, data import/export, cache, audit, regions/map cells/drops, mỏ tài nguyên thế giới và Nguyên Tuyền (`/admin/primeval-veins*`, `/admin/world-resource-points*`), shop, arena shop, monsters, pets, moderation và role management. `GET /admin/apertures` gồm cả khiếu vô chủ; `GET /admin/apertures/:id` trả chi tiết cùng danh sách mỏ, tọa độ, sinh khí, trạng thái và stock để Admin xem. Các thao tác ghi được audit; mutation nguy hiểm có thể yêu cầu reason/confirmation/re-auth/idempotency.
 
 Monitoring traces (`GET /admin/monitor/requests/traces`, `/traces/:id`) trả thêm `error_kind`, `error_chain`, `root_cause`, `stacktrace` và `worker_run_id` khi có. `error` chỉ mô tả lỗi thật; response body của request thành công không được gán vào trường này. Tìm kiếm trace cũng so khớp error/root cause. Worker trace dùng `worker_run_id` làm ID để ghép với log `background_worker_failed`.
 

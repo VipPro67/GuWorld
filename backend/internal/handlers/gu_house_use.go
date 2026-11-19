@@ -135,7 +135,7 @@ func UseGuHouse(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể lưu trạng thái nhân vật", err))
 		return
 	}
-	auditlog.Log(tx, auditlog.Entry{PlayerID: &playerID, Action: "gu_house.use", EntityType: "gu_house", EntityID: houseID, RequestSummary: "Dùng effect ON_USE từ Tiên Cổ Ốc " + houseName + ": " + outcome.EffectsSummary, Metadata: map[string]interface{}{"house_id": houseID, "core_gu_instance_id": gu.InstanceID, "effect_key": selected.Key, "mana_cost": cost}, IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{PlayerID: &playerID, Action: "gu_house.use", EntityType: "gu_house", EntityID: houseID, RequestSummary: "Dùng effect ON_USE từ Tiên Cổ Ốc " + houseName + ": " + outcome.EffectsSummary, Metadata: map[string]interface{}{"house_id": houseID, "core_gu_instance_id": gu.InstanceID, "effect_key": selected.Key, "mana_cost": cost}, IPAddress: c.ClientIP(), Success: true})
 	if err := tx.Commit(); err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể hoàn tất effect Tiên Cổ Ốc", err))
 		return

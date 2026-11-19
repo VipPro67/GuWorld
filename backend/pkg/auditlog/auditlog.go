@@ -1,6 +1,7 @@
 package auditlog
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -19,6 +20,7 @@ type Querier interface {
 
 type Entry struct {
 	PlayerID            *uuid.UUID
+	AffectedPlayerID    *uuid.UUID
 	ActorUsername       string
 	Action              string
 	EffectiveRoles      []string
@@ -33,6 +35,23 @@ type Entry struct {
 	IPAddress           string
 	Success             bool
 	ErrorMessage        string
+}
+
+// LogContext copies the request trace ID into an entry before persisting it.
+// Explicit RequestID values take precedence for callers with operation IDs.
+func LogContext(ctx context.Context, q Querier, entry Entry) {
+	if entry.RequestID == "" {
+		entry.RequestID = logger.TraceIDFromContext(ctx)
+	}
+	Log(q, entry)
+}
+
+// LogCheckedContext is the context-aware form of LogChecked.
+func LogCheckedContext(ctx context.Context, q Querier, entry Entry) error {
+	if entry.RequestID == "" {
+		entry.RequestID = logger.TraceIDFromContext(ctx)
+	}
+	return LogChecked(q, entry)
 }
 
 func Log(q Querier, entry Entry) {
@@ -67,6 +86,10 @@ func LogChecked(q Querier, entry Entry) error {
 	if entry.PlayerID != nil {
 		pid = *entry.PlayerID
 	}
+	var affectedPID interface{}
+	if entry.AffectedPlayerID != nil {
+		affectedPID = *entry.AffectedPlayerID
+	}
 	rolesJSON, err := json.Marshal(entry.EffectiveRoles)
 	if err != nil {
 		err = fmt.Errorf("marshal audit roles: %w", err)
@@ -93,7 +116,7 @@ func LogChecked(q Querier, entry Entry) error {
 		return err
 	}
 
-	const insertSQL = `INSERT INTO audit_logs (player_id, actor_username, action, effective_roles, effective_permission, entity_type, entity_id, change_data, reason, request_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8::jsonb,$9,$10,$11,$12::jsonb,$13,$14,$15,$16)`
+	const insertSQL = `INSERT INTO audit_logs (player_id, affected_player_id, actor_username, action, effective_roles, effective_permission, entity_type, entity_id, change_data, reason, request_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13::jsonb,$14,$15,$16,$17)`
 
 	if tx, ok := execDB.(*sql.Tx); ok {
 		if _, err := tx.Exec("SAVEPOINT auditlog_insert"); err != nil {
@@ -102,7 +125,7 @@ func LogChecked(q Querier, entry Entry) error {
 		}
 		if _, err := tx.Exec(
 			insertSQL,
-			pid, entry.ActorUsername, entry.Action, string(rolesJSON), entry.EffectivePermission, entry.EntityType, entry.EntityID, string(changeJSON), entry.Reason, entry.RequestID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
+			pid, affectedPID, entry.ActorUsername, entry.Action, string(rolesJSON), entry.EffectivePermission, entry.EntityType, entry.EntityID, string(changeJSON), entry.Reason, entry.RequestID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
 		); err != nil {
 			recordWriteFailure(entry, err)
 			_, _ = tx.Exec("ROLLBACK TO SAVEPOINT auditlog_insert")
@@ -118,7 +141,7 @@ func LogChecked(q Querier, entry Entry) error {
 
 	_, err = execDB.Exec(
 		insertSQL,
-		pid, entry.ActorUsername, entry.Action, string(rolesJSON), entry.EffectivePermission, entry.EntityType, entry.EntityID, string(changeJSON), entry.Reason, entry.RequestID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
+		pid, affectedPID, entry.ActorUsername, entry.Action, string(rolesJSON), entry.EffectivePermission, entry.EntityType, entry.EntityID, string(changeJSON), entry.Reason, entry.RequestID, entry.RequestSummary, metaJSON, entry.IPAddress, entry.Success, entry.ErrorMessage, time.Now().UTC(),
 	)
 	if err != nil {
 		recordWriteFailure(entry, err)

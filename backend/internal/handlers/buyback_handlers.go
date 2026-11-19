@@ -307,7 +307,7 @@ func CreateBuybackOrder(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &creator.ID, Action: "marketplace.create_order",
 		EntityType: "buyback_order", EntityID: orderID.String(),
 		RequestSummary: fmt.Sprintf("Tạo đơn %s %d %s (giá %.3f)", req.OrderType, req.QuantityRequested, req.ItemType, req.UnitPrice),
@@ -583,7 +583,7 @@ func SellToBuybackOrder(c *gin.Context) {
 			return
 		}
 
-		auditlog.Log(db.DB, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 			PlayerID: &actor.ID, Action: "marketplace.sell_buyback",
 			EntityType: "buyback_order", EntityID: orderUUID.String(),
 			RequestSummary: fmt.Sprintf("Bán %d vật phẩm vào đơn thu mua (nhận %.3f)", tradeQty, sellerPayout),
@@ -680,7 +680,7 @@ func SellToBuybackOrder(c *gin.Context) {
 			return
 		}
 
-		auditlog.Log(db.DB, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 			PlayerID: &actor.ID, Action: "marketplace.buy_sell_order",
 			EntityType: "buyback_order", EntityID: orderUUID.String(),
 			RequestSummary: fmt.Sprintf("Mua %d vật phẩm từ đơn rao bán (trả %.3f)", tradeQty, totalCost),
@@ -841,7 +841,7 @@ func CancelBuybackOrder(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &creator.ID, Action: "marketplace.cancel_order",
 		EntityType: "buyback_order", EntityID: orderUUID.String(),
 		RequestSummary: fmt.Sprintf("Hủy đơn %s thành công", orderType),

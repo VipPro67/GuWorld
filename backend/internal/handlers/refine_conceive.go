@@ -471,7 +471,7 @@ func ConceiveRecipe(c *gin.Context) {
 		ClearPendingPlayerQueues(player.ID.String())
 		PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, ItemInventoryDomain)
 
-		auditlog.Log(db.DB, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 			PlayerID:       &authID,
 			Action:         "recipe.conceive.backlash",
 			EntityType:     "refining_recipe",
@@ -583,7 +583,7 @@ func ConceiveRecipe(c *gin.Context) {
 		msg = fmt.Sprintf("Khai sáng thành công! Đạo hữu đã lĩnh ngộ được Tàn Phương [%s] (Độ hoàn thiện: %.1f%%)!", finalGuName, finalRate)
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "recipe.conceive",
 		EntityType:     "refining_recipe",

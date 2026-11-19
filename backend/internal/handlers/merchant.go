@@ -809,7 +809,7 @@ func SellToMerchant(c *gin.Context) {
 		return
 	}
 	gainSummary := formatGainSummary(primeval, immortal)
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "merchant.sell",
 		EntityType:     "merchant",
@@ -1015,7 +1015,7 @@ func BuyFromMerchant(c *gin.Context) {
 	for _, line := range req.Items {
 		summaryLines = append(summaryLines, fmt.Sprintf("%s x%d", line.ItemID, line.Quantity))
 	}
-	if err := auditlog.LogChecked(tx, auditlog.Entry{
+	if err := auditlog.LogCheckedContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "merchant.buy",
 		EntityType:     "merchant",

@@ -118,7 +118,7 @@ func AdminUpdatePlayerQuest(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể lưu nhiệm vụ", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_quest_progress", EntityType: "player_quest_progress", EntityID: playerID.String() + ":" + questID, RequestSummary: fmt.Sprintf("quest=%s status=%s", questID, req.Status), IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_quest_progress", EntityType: "player_quest_progress", EntityID: playerID.String() + ":" + questID, RequestSummary: fmt.Sprintf("quest=%s status=%s", questID, req.Status), IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật tiến độ nhiệm vụ", "quest_id": questID, "status": req.Status, "progress_data": req.ProgressData, "completed_at": completedAt})
 }
 
@@ -157,6 +157,6 @@ func AdminDeletePlayerQuest(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể lưu thay đổi", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.delete_quest_progress", EntityType: "player_quest_progress", EntityID: playerID.String() + ":" + questID, IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.delete_quest_progress", EntityType: "player_quest_progress", EntityID: playerID.String() + ":" + questID, IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa tiến độ nhiệm vụ", "quest_id": questID})
 }

@@ -171,7 +171,7 @@ func CreateSect(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.create", EntityType: "sect",
 		EntityID:       sectID,
 		RequestSummary: fmt.Sprintf("Khai tông lập phái \"%s\" tại %s (%d, %d), chi phí %d Nguyên Thạch", req.Name, currentRegion, player.X, player.Y, cost),
@@ -468,7 +468,7 @@ func SetMemberRank(c *gin.Context) {
 		}
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.set_member_rank", EntityType: "sect_member",
 		EntityID:       targetMemberID.String(),
 		RequestSummary: fmt.Sprintf("Đổi chức vụ đệ tử %s: %s → %s", targetMemberID.String(), targetRank, req.Rank),
@@ -568,7 +568,7 @@ func KickMember(c *gin.Context) {
 	if kickedLabel == "" {
 		kickedLabel = targetMemberID.String()
 	}
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.kick_member", EntityType: "sect_member",
 		EntityID:       targetMemberID.String(),
 		RequestSummary: fmt.Sprintf("Trục xuất đệ tử %s (%s) khỏi tông môn", kickedLabel, targetRank),
@@ -756,7 +756,7 @@ func ClaimSectLeadership(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.claim_leadership", EntityType: "sect",
 		EntityID:       callerSectID,
 		RequestSummary: fmt.Sprintf("Đạo hữu %s (%s) kế vị Chưởng Môn, giáng chức %d Chưởng Môn cũ", callerUsername, callerRank, len(leaders)),

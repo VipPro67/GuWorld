@@ -143,7 +143,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 
 		itemName := GetItemName(itemType, []byte(itemData))
 		auditlog.Log(tx, auditlog.Entry{
-			PlayerID: &buyerID, Action: "marketplace.settle_auction_win", EntityType: "auction",
+			PlayerID: &buyerID, Action: "marketplace.settle_auction_win", EntityType: "auction", RequestID: "auction:" + auctionID + ":completed",
 			EntityID:       auctionID,
 			RequestSummary: fmt.Sprintf("người thắng đấu giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá=%.3f %s | loại=%s", buyer.Username, buyerID, seller.Username, sellerID, itemName, qty, currentPrice, currency, listingType),
 			Success:        true,
@@ -168,7 +168,7 @@ func settleAuction(auctionID string, sellerID uuid.UUID, highestBidderID sql.Nul
 
 		itemName := GetItemName(itemType, []byte(itemData))
 		auditlog.Log(tx, auditlog.Entry{
-			PlayerID: &sellerID, Action: "marketplace.settle_auction_expired", EntityType: "auction",
+			PlayerID: &sellerID, Action: "marketplace.settle_auction_expired", EntityType: "auction", RequestID: "auction:" + auctionID + ":expired",
 			EntityID:       auctionID,
 			RequestSummary: fmt.Sprintf("đấu giá hết hạn không có người mua | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá khởi điểm=%.3f %s | loại=%s", seller.Username, sellerID, itemName, qty, currentPrice, currency, listingType),
 			Success:        true,
@@ -372,7 +372,7 @@ func rescindResourcePointAuction(tx *sql.Tx, auctionID string, bidderID uuid.UUI
 		return err
 	}
 	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID: &bidderID, Action: "marketplace.settle_auction_rescinded", EntityType: "auction",
+		PlayerID: &bidderID, Action: "marketplace.settle_auction_rescinded", EntityType: "auction", RequestID: "auction:" + auctionID + ":rescinded",
 		EntityID:       auctionID,
 		RequestSummary: fmt.Sprintf("đấu giá điểm tài nguyên không thể chuyển giao | hoàn trả=%.3f %s", currentPrice, currency),
 		Success:        true,

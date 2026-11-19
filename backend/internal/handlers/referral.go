@@ -218,7 +218,7 @@ func ClaimReferralReward(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "referral.claim", EntityType: "referral",
 		RequestSummary: fmt.Sprintf("nhận thưởng sư đồ mốc %d từ %s", req.Milestone, refereeUUID.String()),
 		IPAddress:      c.ClientIP(), Success: true,
@@ -319,7 +319,7 @@ func SimulateDeposit(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "deposit.simulate", EntityType: "player",
 		RequestSummary: fmt.Sprintf("nạp %d Nguyên Thạch (admin simulated)", req.Stones),
 		Metadata:       map[string]interface{}{"stones": req.Stones, "new_stones": currentStones},
@@ -503,7 +503,7 @@ func BindReferralCode(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "referral.bind", EntityType: "referral",
 		RequestSummary: fmt.Sprintf("nhập mã giới thiệu %s từ người chơi %s", trimmedRef, referrerID.String()),
 		IPAddress:      clientIP, Success: true,

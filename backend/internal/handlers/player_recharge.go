@@ -101,7 +101,7 @@ func RechargeWithStones(c *gin.Context) {
 	}
 
 	if isImmortal {
-		auditlog.Log(db.DB, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 			PlayerID: &authID, Action: "player.recharge",
 			RequestSummary: fmt.Sprintf("%d Tiên Nguyên Thạch → %d Tiên Nguyên", stonesToUse, int(manaGain)),
 			Metadata: map[string]interface{}{
@@ -117,7 +117,7 @@ func RechargeWithStones(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "player.recharge",
 		RequestSummary: fmt.Sprintf("%d Nguyên Thạch → %.4f%% chân nguyên", stonesToUse, addedMana),
 		Metadata: map[string]interface{}{

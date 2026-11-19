@@ -443,7 +443,7 @@ func UpdateGuStatus(c *gin.Context) {
 		if neededStones < 1 {
 			neededStones = getSealingStoneCostByRank(targetGu.Rank)
 		}
-		auditlog.Log(db.DB, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 			PlayerID:       &authID,
 			Action:         "gu.seal",
 			EntityType:     "gu_instance",

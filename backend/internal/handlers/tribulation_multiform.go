@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -931,6 +932,7 @@ func finalizeTribulationSettlementTx(tx *sql.Tx, eventID uuid.UUID, playerID uui
 				auditlog.Log(tx, auditlog.Entry{
 					PlayerID:       &playerID,
 					Action:         "player.breakthrough_success",
+					RequestID:      "tribulation:" + playerID.String() + ":breakthrough:" + strconv.Itoa(newRank),
 					EntityType:     "player",
 					EntityID:       playerID.String(),
 					RequestSummary: fmt.Sprintf("Thăng rank %d (%s) thành công", newRank, models.GetRankName(newRank)),

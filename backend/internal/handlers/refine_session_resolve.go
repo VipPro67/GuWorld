@@ -444,6 +444,7 @@ func resolveRefineSession(ctx context.Context, sessionID, reason string) (*refin
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &player.ID,
 		Action:         "refine.session.resolve",
+		RequestID:      "refine-session:" + sessionID + ":resolve",
 		EntityType:     "refine_session",
 		EntityID:       sessionID,
 		RequestSummary: fmt.Sprintf("Phiên luyện %s: %s R%d | Outcome: %s | Accuracy %.1f%%", reason, targetName, session.TargetRank, outcome, accuracy),

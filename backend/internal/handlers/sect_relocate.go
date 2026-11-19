@@ -401,7 +401,7 @@ func RelocateSect(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.relocate", EntityType: "sect",
 		EntityID:       m.SectID,
 		RequestSummary: fmt.Sprintf("Di dời sơn môn từ %s (%d, %d) đến %s (%d, %d), tiêu %d Quỹ", sectRegion, sectX, sectY, player.CurrentRegion, player.X, player.Y, totalCost),

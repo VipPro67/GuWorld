@@ -111,6 +111,7 @@ func schemaSocial() error {
 	CREATE TABLE IF NOT EXISTS audit_logs (
 		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 		player_id UUID REFERENCES players(id) ON DELETE SET NULL,
+		affected_player_id UUID,
 		actor_username TEXT NOT NULL DEFAULT '',
 		action TEXT NOT NULL,
 		effective_roles JSONB NOT NULL DEFAULT '[]',
@@ -127,6 +128,20 @@ func schemaSocial() error {
 		error_message TEXT,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("audit_logs_affected_player_column", `
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS affected_player_id UUID;
+	UPDATE audit_logs
+	SET affected_player_id = entity_id::uuid
+	WHERE affected_player_id IS NULL
+	  AND entity_type = 'player'
+	  AND entity_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+	ALTER TABLE audit_logs DROP CONSTRAINT IF EXISTS audit_logs_affected_player_id_fkey;`); err != nil {
+		return err
+	}
+	if err := execSchema("audit_logs_affected_player_created_idx", `
+	CREATE INDEX IF NOT EXISTS idx_audit_logs_affected_player_created ON audit_logs (affected_player_id, created_at DESC);`); err != nil {
 		return err
 	}
 	if err := execSchema("audit_logs_action_idx", `

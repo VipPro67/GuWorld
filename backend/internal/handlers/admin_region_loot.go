@@ -165,7 +165,7 @@ func AdminCreateRegionLootTable(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		EntityType:     "region_loot_tables",
 		EntityID:       fmt.Sprintf("%s:%s:%s", req.RegionID, req.LootTableID, req.MonsterType),
@@ -225,7 +225,7 @@ func AdminUpdateRegionLootTable(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		EntityType:     "region_loot_tables",
 		EntityID:       fmt.Sprintf("%s:%s:%s", regionID, lootTableID, monsterType),
@@ -264,7 +264,7 @@ func AdminDeleteRegionLootTable(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		EntityType:     "region_loot_tables",
 		EntityID:       fmt.Sprintf("%s:%s:%s", regionID, lootTableID, monsterType),

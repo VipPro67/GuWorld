@@ -240,7 +240,7 @@ func UseConsumableGu(c *gin.Context) {
 		transition.PublishPostCommit()
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "gu.use_consumable",
 		EntityType:     "gu_instance",

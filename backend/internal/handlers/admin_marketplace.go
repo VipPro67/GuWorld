@@ -187,7 +187,7 @@ func AdminCancelAuction(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		EntityType:     "auction",
 		EntityID:       auctionID.String(),

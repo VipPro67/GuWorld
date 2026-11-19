@@ -239,7 +239,7 @@ func AdminCreateRegion(c *gin.Context) {
 	}
 	invalidateCachedDictionaryPart("explore_regions_v2")
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.create_region",
 		EntityType: "region", EntityID: req.ID,
 		RequestSummary: fmt.Sprintf("name=%s, type=%s", req.Name, req.ZoneType),
@@ -352,7 +352,7 @@ func AdminUpdateRegion(c *gin.Context) {
 	}
 	invalidateCachedDictionaryPart("explore_regions_v2")
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.update_region",
 		EntityType: "region", EntityID: id,
 		RequestSummary: fmt.Sprintf("name=%s, type=%s", req.Name, req.ZoneType),
@@ -399,7 +399,7 @@ func AdminDeleteRegion(c *gin.Context) {
 	}
 	invalidateCachedDictionaryPart("explore_regions_v2")
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.delete_region",
 		EntityType: "region", EntityID: id,
 		RequestSummary: fmt.Sprintf("id=%s", id),
@@ -572,7 +572,7 @@ func AdminCreateMapCell(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.create_map_cell",
 		EntityType: "map_cell", EntityID: createdID,
 		RequestSummary: fmt.Sprintf("region=%s, coords=(%d,%d), type=%s", req.RegionID, req.X, req.Y, req.CellType),
@@ -646,7 +646,7 @@ func AdminUpdateMapCell(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.update_map_cell",
 		EntityType: "map_cell", EntityID: id,
 		RequestSummary: fmt.Sprintf("region=%s, coords=(%d,%d), type=%s", req.RegionID, req.X, req.Y, req.CellType),
@@ -691,7 +691,7 @@ func AdminDeleteMapCell(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.delete_map_cell",
 		EntityType: "map_cell", EntityID: id,
 		RequestSummary: fmt.Sprintf("id=%s", id),

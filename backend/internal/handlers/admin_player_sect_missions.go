@@ -106,6 +106,6 @@ func AdminUpdatePlayerSectMission(c *gin.Context) {
 		}
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_player_sect_mission", EntityType: "player_sect_missions", EntityID: missionRowID.String(), RequestSummary: "mission=" + missionID + " progress=" + strconv.FormatInt(*req.CurrentProgress, 10) + " status=" + status, IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_player_sect_mission", EntityType: "player_sect_missions", EntityID: missionRowID.String(), RequestSummary: "mission=" + missionID + " progress=" + strconv.FormatInt(*req.CurrentProgress, 10) + " status=" + status, IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật nhiệm vụ tông môn"})
 }

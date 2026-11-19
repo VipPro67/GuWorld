@@ -406,7 +406,7 @@ func FeedGu(c *gin.Context) {
 	}
 	foodStr := strings.Join(foodDetails, ", ")
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "gu.feed",
 		EntityType:     "gu_instance",
@@ -620,7 +620,7 @@ func FeedGroup(c *gin.Context) {
 
 	foodStr := strings.Join(foodDetails, ", ")
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "gu.feed_group",
 		EntityType:     "gu_definition",
@@ -853,7 +853,7 @@ func FeedAll(c *gin.Context) {
 		scopeName = "Cổ trùng trong túi"
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "gu.feed_all",
 		EntityType:     "player",

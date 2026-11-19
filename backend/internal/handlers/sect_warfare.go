@@ -388,7 +388,7 @@ func DefendSect(c *gin.Context) {
 	if req.DefenderType == "beast" {
 		defenderLabel = req.MonsterID
 	}
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.defend", EntityType: "sect",
 		EntityID:       sectID,
 		RequestSummary: fmt.Sprintf("Bố trí %s phòng thủ tông môn (loại %s)", defenderLabel, req.DefenderType),
@@ -456,7 +456,7 @@ func UndefendSect(c *gin.Context) {
 	}
 
 	// No transaction here: audit the successful delete directly against the pool.
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.undefend", EntityType: "sect_defender",
 		EntityID:       did.String(),
 		RequestSummary: fmt.Sprintf("Rút phòng thủ %s khỏi tông môn", did.String()),
@@ -525,7 +525,7 @@ func ToggleDefendSect(c *gin.Context) {
 	if newState {
 		toggleSummary = "Bật trạng thái Trấn Thủ Tông Môn"
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.toggle_defend", EntityType: "sect_member",
 		EntityID:       playerID.String(),
 		RequestSummary: toggleSummary,
@@ -647,7 +647,7 @@ func AttackSect(c *gin.Context) {
 			}
 			rows.Close()
 		}
-		auditlog.Log(tx, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 			PlayerID: &playerID, Action: "sect.attack", EntityType: "sect",
 			EntityID:       req.TargetSectID,
 			RequestSummary: fmt.Sprintf("Tấn công tông môn %s bị Hộ Sơn Đại Trận chặn", targetName),
@@ -746,7 +746,7 @@ func AttackSect(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể lưu trạng thái chiến đấu.", err))
 		return
 	}
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.attack", EntityType: "sect", EntityID: req.TargetSectID,
 		RequestSummary: fmt.Sprintf("Khiêu chiến tông môn %s (Hộ Sơn Thần Thú R%d, %d đệ tử trấn thủ)", targetName, targetLevel, defenderCount),
 		Metadata:       map[string]interface{}{"target_sect_id": req.TargetSectID, "my_sect_id": mySectID, "guardian_rank": targetLevel, "defender_count": defenderCount},

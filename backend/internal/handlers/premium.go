@@ -353,7 +353,7 @@ func PayOSWebhook(c *gin.Context) {
 	}
 
 	if err = applyPaidTopup(orderCode, amount); err != nil {
-		auditlog.Log(db.DB, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 			Action: "topup.webhook_failed", EntityType: "topup_order",
 			EntityID:       fmt.Sprint(orderCode),
 			RequestSummary: fmt.Sprintf("orderCode=%d amount=%d err=%s", orderCode, amount, err.Error()),
@@ -362,7 +362,7 @@ func PayOSWebhook(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		Action: "topup.webhook_applied", EntityType: "topup_order",
 		EntityID:       fmt.Sprint(orderCode),
 		RequestSummary: fmt.Sprintf("orderCode=%d amount=%d", orderCode, amount),
@@ -519,7 +519,7 @@ func BuyPremiumPackage(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "shop.buy_package", EntityType: "premium_package",
 		EntityID:       pkg.ID,
 		RequestSummary: fmt.Sprintf("Gói %s | giá %d Tiên Ngọc | %d phần thưởng", pkg.ID, pkg.PriceJade, len(pkg.Rewards)),
@@ -661,7 +661,7 @@ func ExchangeStones(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "wallet.exchange", EntityType: "currency",
 		RequestSummary: fmt.Sprintf("%s %d -> %s %d", req.Currency, req.Amount, func() string {
 			if req.Currency == CurrencyImmortalEssenceStone {

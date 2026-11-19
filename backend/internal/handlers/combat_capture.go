@@ -14,6 +14,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -228,10 +229,7 @@ func CaptureMonster(c *gin.Context) {
 		}
 
 		// Audit log
-		_, _ = tx.Exec(`
-			INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
-			VALUES ($1, 'pet.capture', 'monster_template', $2, $3, $4, '', true, '', NOW())
-		`, player.ID, monTemplate.ID, fmt.Sprintf("Bắt thành công %s", enemyName), fmt.Sprintf(`{"rank":%d,"sub_rank":%d}`, enemyRank, enemySubRank))
+		auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{PlayerID: &player.ID, Action: "pet.capture", EntityType: "monster_template", EntityID: monTemplate.ID, RequestSummary: fmt.Sprintf("Bắt thành công %s", enemyName), Metadata: map[string]interface{}{"rank": enemyRank, "sub_rank": enemySubRank}, Success: true})
 
 		if errTx := tx.Commit(); errTx != nil {
 			respondCombatTxErr(c, errTx, "Transaction commit failed")

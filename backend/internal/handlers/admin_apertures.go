@@ -42,7 +42,7 @@ func AdminListApertures(c *gin.Context) {
 
 	if search != "" {
 		like := "%" + search + "%"
-		whereClauses = append(whereClauses, fmt.Sprintf("(p.username ILIKE $%d OR p.email ILIKE $%d OR ia.id::text ILIKE $%d OR p.id::text ILIKE $%d)", argIdx, argIdx+1, argIdx+2, argIdx+3))
+		whereClauses = append(whereClauses, fmt.Sprintf("(COALESCE(p.username, 'Tiên Khiếu vô chủ') ILIKE $%d OR COALESCE(p.email, '') ILIKE $%d OR ia.id::text ILIKE $%d OR COALESCE(p.id::text, '') ILIKE $%d)", argIdx, argIdx+1, argIdx+2, argIdx+3))
 		args = append(args, like, like, like, like)
 		argIdx += 4
 	}
@@ -53,7 +53,7 @@ func AdminListApertures(c *gin.Context) {
 	}
 
 	var total int
-	countQuery := `SELECT COUNT(*) FROM immortal_apertures ia JOIN players p ON ia.player_id = p.id` + where
+	countQuery := `SELECT COUNT(*) FROM immortal_apertures ia LEFT JOIN players p ON ia.player_id = p.id` + where
 	if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, args...).Scan(&total); err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể đếm số lượng tiên khiếu: "+err.Error(), err))
 		return
@@ -66,10 +66,10 @@ func AdminListApertures(c *gin.Context) {
 			ia.essence_production_per_year, ia.internal_years_passed, 
 			ia.next_tribulation_year,
 			COALESCE(ia.earth_calamity_count, 0) + COALESCE(ia.heavenly_tribulation_count, 0) + COALESCE(ia.grand_tribulation_count, 0) + COALESCE(ia.myriad_tribulation_count, 0) + COALESCE(ia.chaos_calamity_count, 0) AS tribulation_count,
-			ia.state,
+			ia.state, ia.public_state, ia.aperture_rank,
 			ia.created_at, ia.updated_at
 		FROM immortal_apertures ia
-		JOIN players p ON ia.player_id = p.id
+		LEFT JOIN players p ON ia.player_id = p.id
 	` + where + ` ORDER BY ia.created_at DESC LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
 
 	dataArgs := append(append([]interface{}{}, args...), limit, offset)
@@ -83,7 +83,9 @@ func AdminListApertures(c *gin.Context) {
 
 	apertures := []gin.H{}
 	for rows.Next() {
-		var id, playerID, username, grade, state string
+		var id, grade, state, publicState string
+		var playerID, username sql.NullString
+		var apertureRank int
 		var timeRate, nextTribulationYear, internalYearsPassed, apertureHP, maxApertureHP float64
 		var immortalEssence, areaSize int64
 		var essenceProductionPerYear, tribulationCount int
@@ -93,7 +95,7 @@ func AdminListApertures(c *gin.Context) {
 			&id, &playerID, &username, &grade, &timeRate,
 			&apertureHP, &maxApertureHP, &areaSize, &immortalEssence,
 			&essenceProductionPerYear, &internalYearsPassed,
-			&nextTribulationYear, &tribulationCount, &state,
+			&nextTribulationYear, &tribulationCount, &state, &publicState, &apertureRank,
 			&createdAt, &updatedAt,
 		)
 		if err != nil {
@@ -103,8 +105,8 @@ func AdminListApertures(c *gin.Context) {
 
 		apertures = append(apertures, gin.H{
 			"id":                          id,
-			"player_id":                   playerID,
-			"username":                    username,
+			"player_id":                   playerID.String,
+			"username":                    username.String,
 			"grade":                       grade,
 			"time_rate":                   timeRate,
 			"aperture_hp":                 apertureHP,
@@ -116,6 +118,8 @@ func AdminListApertures(c *gin.Context) {
 			"next_tribulation_year":       nextTribulationYear,
 			"tribulation_count":           tribulationCount,
 			"state":                       state,
+			"public_state":                publicState,
+			"aperture_rank":               apertureRank,
 			"created_at":                  createdAt,
 			"updated_at":                  updatedAt,
 		})
@@ -142,7 +146,8 @@ func AdminGetApertureDetail(c *gin.Context) {
 	}
 
 	var ap models.ImmortalAperture
-	var username string
+	var username sql.NullString
+	var playerID sql.NullString
 	var daoJSON []byte
 
 	query := `
@@ -155,23 +160,23 @@ func AdminGetApertureDetail(c *gin.Context) {
 			ia.rank_start_year,
 			ia.earth_calamity_count, ia.heavenly_tribulation_count, 
 			ia.grand_tribulation_count, ia.myriad_tribulation_count, 
-			ia.chaos_calamity_count, ia.state, ia.dao_marks,
+			ia.chaos_calamity_count, ia.state, ia.dao_marks, ia.public_state, ia.aperture_rank,
 			ia.created_at, ia.updated_at
 		FROM immortal_apertures ia
-		JOIN players p ON ia.player_id = p.id
+		LEFT JOIN players p ON ia.player_id = p.id
 		WHERE ia.id = $1
 	`
 
 	var hp, maxHp float64
 	var immortalEssence int64
 	err = db.DB.QueryRowContext(c.Request.Context(), query, apertureID).Scan(
-		&ap.ID, &ap.PlayerID, &username, &ap.Grade, &ap.TimeRate,
+		&ap.ID, &playerID, &username, &ap.Grade, &ap.TimeRate,
 		&hp, &maxHp, &ap.AreaSize, &immortalEssence,
 		&ap.EssenceProductionPerYear, &ap.InternalYearsPassed,
 		&ap.NextTribulationYear, &ap.TribulationCount, &ap.RankStartYear,
 		&ap.EarthCalamityCount, &ap.HeavenlyTribulationCount,
 		&ap.GrandTribulationCount, &ap.MyriadTribulationCount,
-		&ap.ChaosCalamityCount, &ap.State, &daoJSON,
+		&ap.ChaosCalamityCount, &ap.State, &daoJSON, &ap.PublicState, &ap.ApertureRank,
 		&ap.CreatedAt, &ap.UpdatedAt,
 	)
 	if err != nil {
@@ -180,6 +185,7 @@ func AdminGetApertureDetail(c *gin.Context) {
 	}
 
 	ap.ApertureHP = hp
+	ap.PlayerID = playerID.String
 	ap.MaxApertureHP = maxHp
 	ap.ImmortalEssence = int(immortalEssence)
 
@@ -193,9 +199,41 @@ func AdminGetApertureDetail(c *gin.Context) {
 	}
 	ap.DaoMarks = daoMarks
 
+	resourceRows, err := db.DB.QueryContext(c.Request.Context(), `
+		SELECT id::text, point_type, name, path, grade, point_class, level, vitality,
+		       stock, stock_cap, x, y, state, last_produced_at
+		FROM aperture_resource_points WHERE aperture_id = $1 ORDER BY y, x, name
+	`, apertureID)
+	if err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể tải tài nguyên trong Tiên Khiếu", err))
+		return
+	}
+	resources := make([]gin.H, 0)
+	for resourceRows.Next() {
+		var id, pointType, name, path, grade, pointClass, state string
+		var level, vitality, stockCap, x, y int
+		var stockJSON []byte
+		var lastProducedAt time.Time
+		if err := resourceRows.Scan(&id, &pointType, &name, &path, &grade, &pointClass, &level, &vitality, &stockJSON, &stockCap, &x, &y, &state, &lastProducedAt); err != nil {
+			resourceRows.Close()
+			httperr.Respond(c, httperr.Internal("Không thể đọc tài nguyên trong Tiên Khiếu", err))
+			return
+		}
+		stock := map[string]int64{}
+		_ = json.Unmarshal(stockJSON, &stock)
+		resources = append(resources, gin.H{"id": id, "point_type": pointType, "name": name, "path": path, "grade": grade, "point_class": pointClass, "level": level, "vitality": vitality, "stock": stock, "stock_cap": stockCap, "x": x, "y": y, "state": state, "last_produced_at": lastProducedAt})
+	}
+	if err := resourceRows.Err(); err != nil {
+		resourceRows.Close()
+		httperr.Respond(c, httperr.Internal("Không thể duyệt tài nguyên trong Tiên Khiếu", err))
+		return
+	}
+	resourceRows.Close()
+
 	c.JSON(http.StatusOK, gin.H{
-		"aperture": ap,
-		"username": username,
+		"aperture":  ap,
+		"username":  username.String,
+		"resources": resources,
 	})
 }
 
@@ -409,7 +447,7 @@ func AdminUpdateAperture(c *gin.Context) {
 
 	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã cập nhật Tiên Khiếu của đạo hữu %s: %s", username, formatChangedFields(sysSets, sysArgs)))
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.update_aperture",
 		EntityType:     "aperture",

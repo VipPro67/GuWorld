@@ -99,7 +99,7 @@ func runCaravanSell(c *gin.Context, authID uuid.UUID, lines []merchantSellLine, 
 		return
 	}
 	gainSummary := formatGainSummary(primeval, immortal)
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         action,
 		EntityType:     "shop",

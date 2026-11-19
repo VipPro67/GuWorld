@@ -480,7 +480,7 @@ func CompleteTutorial(c *gin.Context) {
 	// The players trigger bumps state_revision by 1 on the UPDATE above; mirror
 	// it so the client's revision-gated merge accepts rank 0 -> 1 immediately.
 	player.StateRevision++
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "player.tutorial_complete",
 		RequestSummary: "lv0 complete -> rank 1", Success: true,
 	})
@@ -610,7 +610,7 @@ func CompleteOnboarding(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "player.onboarding",
 		RequestSummary: fmt.Sprintf("region=%s attack=%s defense=%s vital=%s", startingRegion, req.AttackGuID, req.DefenseGuID, req.VitalGuChoice),
 		IPAddress:      c.ClientIP(), Success: true,

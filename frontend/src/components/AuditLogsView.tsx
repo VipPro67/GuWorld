@@ -19,6 +19,8 @@ import {
 // Shape của một entry từ GET /player/audit-logs (AuditLogResponse backend).
 interface AuditLogEntry {
   id: string;
+  player_id?: string;
+  affected_player_id?: string;
   action: string;
   entity_type?: string;
   entity_id?: string;
@@ -562,12 +564,14 @@ export const AuditLogsView: React.FC = () => {
                     </div>
 
                     {/* Expanded Details */}
-                    {isExpanded && log.metadata && Object.keys(log.metadata).length > 0 && (
+                    {isExpanded && ((log.metadata && Object.keys(log.metadata).length > 0) || log.player_id || log.affected_player_id) && (
                       <div className="px-4 pb-4 pt-1 border-t border-slate-800/80 space-y-3">
                         <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono">
                           📋 Thuộc tính chi tiết
                         </div>
-                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 font-mono text-[11px] text-slate-350 grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+                        {log.player_id && <div className="text-[11px] text-slate-400 font-mono">actor player_id: {log.player_id}</div>}
+                        {log.affected_player_id && <div className="text-[11px] text-slate-400 font-mono">affected player_id: {log.affected_player_id}</div>}
+                        {log.metadata && Object.keys(log.metadata).length > 0 && <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 font-mono text-[11px] text-slate-350 grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
                           {Object.entries(log.metadata).map(([key, val]) => {
                             const displayVal = formatMetadataValue(key, val, {
                               items: itemDictionary || {},
@@ -583,7 +587,7 @@ export const AuditLogsView: React.FC = () => {
                               </div>
                             );
                           })}
-                        </div>
+                        </div>}
                         {log.error_message && (
                           <div className="bg-rose-950/20 border border-rose-900/40 p-3 rounded-lg text-xs text-rose-350 font-mono">
                             ⚠️ **Chi tiết lỗi:** {log.error_message}

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/monitor"
 	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
@@ -66,14 +67,22 @@ func AdminMutationAudit(action, targetType, permission string, destructive bool)
 			logger.L.Warn("admin_destructive_action", zap.String("action", action), zap.Bool("success", success), zap.Int("status", status), zap.Any("trace_id", traceID), zap.String("player_id", actorID.String()))
 		}
 
+		targetID := auditTargetID(c, before, after)
+		var affectedPlayerID *uuid.UUID
+		if targetType == "player" {
+			if parsed, err := uuid.Parse(targetID); err == nil {
+				affectedPlayerID = &parsed
+			}
+		}
 		auditlog.Log(nil, auditlog.Entry{
 			PlayerID:            actorIDPtr,
+			AffectedPlayerID:    affectedPlayerID,
 			ActorUsername:       fmt.Sprint(username),
 			Action:              action,
 			EffectiveRoles:      roles,
 			EffectivePermission: permission,
 			EntityType:          targetType,
-			EntityID:            auditTargetID(c, before, after),
+			EntityID:            targetID,
 			ChangeData:          change,
 			Reason:              reason,
 			RequestID:           fmt.Sprint(traceID),

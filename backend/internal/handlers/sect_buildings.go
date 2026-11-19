@@ -158,7 +158,7 @@ func UpgradeSectBuilding(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.upgrade_building", EntityType: "sect",
 		EntityID:       sectID,
 		RequestSummary: fmt.Sprintf("Nâng cấp %s lên cấp %d, tiêu %d Quỹ (còn %d)", req.BuildingName, targetLevel, reqFunds, funds-reqFunds),

@@ -438,7 +438,7 @@ func AdminUpdatePlayer(c *gin.Context) {
 	_ = db.DB.QueryRow(`SELECT username FROM players WHERE id = $1`, playerID).Scan(&username)
 	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã cập nhật thông tin của đạo hữu %s: %s", username, formatChangedFields(sets, args)))
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.update_player",
 		EntityType:     "player",

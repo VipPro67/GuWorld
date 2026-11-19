@@ -557,7 +557,7 @@ func CreateRefineSession(c *gin.Context) {
 	view := publicSessionView(session, time.Now().UTC())
 	publishRefineSession(player.ID.String(), view)
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "refine.session.create",
 		EntityType:     "refine_session",
@@ -824,7 +824,7 @@ func SubmitRefineSessionStep(c *gin.Context) {
 	view := publicSessionView(session, time.Now().UTC())
 	publishRefineSession(session.PlayerID, view)
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "refine.session.step",
 		EntityType:     "refine_session",
@@ -1054,7 +1054,7 @@ func AbortRefineSession(c *gin.Context) {
 	refreshActionPlayerState(&player)
 	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, GuInventoryDomain, ItemInventoryDomain, CombatStatsDomain)
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "refine.session.abort",
 		EntityType:     "refine_session",

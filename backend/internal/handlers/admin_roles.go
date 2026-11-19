@@ -2,19 +2,18 @@ package handlers
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 type adminRole struct {
@@ -157,7 +156,7 @@ func AdminUpdatePlayerRoles(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể đồng bộ quyền quản trị", err))
 		return
 	}
-	if err := insertRoleAudit(tx, actorID, targetID, roleKeys(before), roleKeys(after), c.ClientIP()); err != nil {
+	if err := insertRoleAudit(tx, actorID, targetID, roleKeys(before), roleKeys(after), c.GetString("username"), c.ClientIP(), c.GetString("trace_id")); err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể ghi audit vai trò", err))
 		return
 	}
@@ -311,11 +310,6 @@ func roleKeys(roles []adminRole) []string {
 	return keys
 }
 
-func insertRoleAudit(tx *sql.Tx, actorID, targetID uuid.UUID, before, after []string, ip string) error {
-	metadata, err := json.Marshal(gin.H{"before": before, "after": after})
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(`INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)`, actorID, "admin.update_player_roles", "player", targetID.String(), "roles: "+strings.Join(before, ",")+" -> "+strings.Join(after, ","), string(metadata), ip, true, "", time.Now().UTC())
-	return err
+func insertRoleAudit(tx *sql.Tx, actorID, targetID uuid.UUID, before, after []string, actorUsername, ip, requestID string) error {
+	return auditlog.LogChecked(tx, auditlog.Entry{PlayerID: &actorID, AffectedPlayerID: &targetID, ActorUsername: actorUsername, Action: "admin.update_player_roles", EntityType: "player", EntityID: targetID.String(), RequestID: requestID, RequestSummary: "roles: " + strings.Join(before, ",") + " -> " + strings.Join(after, ","), Metadata: map[string]interface{}{"before": before, "after": after}, IPAddress: ip, Success: true})
 }

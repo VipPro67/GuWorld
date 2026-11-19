@@ -504,7 +504,7 @@ func enterInstanceWithRequest(c *gin.Context, req EnterInstanceRequest, required
 	}
 
 	if template.EntryItem != "NONE" {
-		auditlog.Log(db.DB, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 			PlayerID:       &playerID,
 			Action:         "instance.enter",
 			EntityType:     "instance_template",
@@ -827,7 +827,7 @@ func ActionInstance(c *gin.Context) {
 
 		if len(option.Requirements) > 0 {
 			reqBytes, _ := json.Marshal(option.Requirements)
-			auditlog.Log(db.DB, auditlog.Entry{
+			auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 				PlayerID:       &playerID,
 				Action:         "instance.choose_option",
 				EntityType:     "instance_session",

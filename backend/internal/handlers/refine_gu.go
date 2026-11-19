@@ -477,7 +477,7 @@ func RefineGu(c *gin.Context) {
 
 	isSuccess := outcome == OutcomeSuccess
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "refine.gu", EntityType: "refining_recipe",
 		EntityID:       req.RecipeID,
 		RequestSummary: fmt.Sprintf("Luyện Cổ: công thức %s -> %s | Thành công: %v | Outcome: %s", req.RecipeID, targetName, isSuccess, outcome),

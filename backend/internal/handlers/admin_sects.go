@@ -262,7 +262,7 @@ func AdminUpdateSect(c *gin.Context) {
 	_ = db.DB.QueryRow(`SELECT name FROM sects WHERE id = $1`, sectID).Scan(&sectName)
 	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã cập nhật thông tin của tông môn %s: %s", sectName, formatChangedFields(sets, args)))
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.update_sect",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("sets=%d", len(sets)),
@@ -319,7 +319,7 @@ func AdminSetSectLeader(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.set_sect_leader",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("memberId=%s", memberIDStr),
@@ -367,7 +367,7 @@ func AdminKickSectMember(c *gin.Context) {
 	}
 
 	tx.Commit()
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.kick_sect_member",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("memberId=%s", memberIDStr),
@@ -453,7 +453,7 @@ func AdminAddToSect(c *gin.Context) {
 	}
 
 	tx.Commit()
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.add_to_sect",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("player=%s rank=%s", req.PlayerID, req.MemberRank),
@@ -565,7 +565,7 @@ func AdminStockSectVault(c *gin.Context) {
 	}
 
 	tx.Commit()
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.stock_sect_vault",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("type=%s item=%s qty=%d", req.ItemType, req.ItemID, req.Quantity),
@@ -691,7 +691,7 @@ func AdminRemoveSectVaultItem(c *gin.Context) {
 	}
 
 	tx.Commit()
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.remove_sect_vault",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("type=%s item=%s qty=%d", req.ItemType, req.ItemID, req.Quantity),
@@ -788,7 +788,7 @@ func AdminCreateSectMission(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.create_sect_mission",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("title=%s type=%s target=%s qty=%d", req.Title, req.MissionType, req.TargetID, req.TargetAmount),
@@ -811,7 +811,7 @@ func AdminDeleteSectMission(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.delete_sect_mission",
 		EntityType: "sect_mission", EntityID: missionID,
 		RequestSummary: "",
@@ -842,7 +842,7 @@ func AdminDeleteSect(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.delete_sect",
 		EntityType: "sect", EntityID: sectID,
 		RequestSummary: fmt.Sprintf("name=%s", name),

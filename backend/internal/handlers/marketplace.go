@@ -420,7 +420,7 @@ func CreateListing(c *gin.Context) {
 		_ = SendSystemMessage("general", sql.NullString{}, msgContent)
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.create_listing", EntityType: "auction",
 		EntityID:       listingID,
 		RequestSummary: fmt.Sprintf("người bán=%s (%s) | loại vật phẩm=%s | tên=%s | id=%s | sl=%d | giá=%.3f %s | loại=%s", player.Username, authID, req.ItemType, itemName, req.ItemID, req.Quantity, req.Price, req.Currency, req.ListingType),
@@ -674,14 +674,14 @@ func PlaceBid(c *gin.Context) {
 		ClearPendingPlayerQueues(prevBidderID.String())
 		PublishPlayerRealtimeEvent(prevBidderID, PlayerEventUpdated, PlayerDomain)
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.bid", EntityType: "auction",
 		EntityID:       req.ListingID,
 		RequestSummary: fmt.Sprintf("người đặt giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | giá=%.3f %s | giá cũ=%.3f %s", player.Username, authID, sellerName, sellerID, itemName, req.Amount, currency, current, currency),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 	if sellerID != authID {
-		auditlog.Log(db.DB, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 			PlayerID: &sellerID, Action: "marketplace.bid_notify", EntityType: "auction",
 			EntityID:       req.ListingID,
 			RequestSummary: fmt.Sprintf("người đặt giá=%s (%s) | người bán=%s (%s) | vật phẩm=%s | giá=%.3f %s", player.Username, authID, sellerName, sellerID, itemName, req.Amount, currency),
@@ -906,13 +906,13 @@ func BuyListing(c *gin.Context) {
 		PublishPlayerRealtimeEvent(sellerID, PlayerEventUpdated, PlayerDomain)
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.buy", EntityType: "auction",
 		EntityID:       req.ListingID,
 		RequestSummary: fmt.Sprintf("người mua=%s (%s) | người bán=%s (%s) | vật phẩm=%s | sl=%d | giá=%.3f %s | loại=%s", buyer.Username, authID, seller.Username, sellerID, itemName, purchaseQty, totalPrice, currency, listingType),
 		IPAddress:      c.ClientIP(), Success: true,
 	})
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &sellerID, Action: "marketplace.sold", EntityType: "auction",
 		EntityID:       req.ListingID,
 		RequestSummary: fmt.Sprintf("người bán=%s (%s) | người mua=%s (%s) | vật phẩm=%s | sl=%d | nhận=%.3f %s (giá=%.3f, phí=%.3f) | loại=%s", seller.Username, sellerID, buyer.Username, authID, itemName, purchaseQty, payout, currency, totalPrice, commission, listingType),
@@ -1027,7 +1027,7 @@ func CancelListing(c *gin.Context) {
 	}
 	ClearPendingPlayerQueues(player.ID.String())
 	PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated, marketplaceItemDomains(itemType)...)
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "marketplace.cancel_listing", EntityType: "auction",
 		EntityID:       req.ListingID,
 		RequestSummary: fmt.Sprintf("người hủy=%s (%s) | vật phẩm=%s | sl=%d | loại=%s", player.Username, authID, itemName, qty, listingType),

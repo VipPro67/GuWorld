@@ -109,7 +109,7 @@ func AdminAddPlayerAchievement(c *gin.Context) {
 				httperr.Respond(c, httperr.Internal("Không thể lưu cấp thành tựu", err))
 				return
 			}
-			auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.add_player_achievement", EntityType: "player_achievements", EntityID: playerID.String() + ":" + achievementID, RequestSummary: fmt.Sprintf("achievement=%s reason=%s", achievementID, req.Reason), IPAddress: c.ClientIP(), Success: true})
+			auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.add_player_achievement", EntityType: "player_achievements", EntityID: playerID.String() + ":" + achievementID, RequestSummary: fmt.Sprintf("achievement=%s reason=%s", achievementID, req.Reason), IPAddress: c.ClientIP(), Success: true})
 			c.JSON(http.StatusOK, gin.H{"message": "Đã cấp thành tựu"})
 			return
 		}
@@ -128,7 +128,7 @@ func AdminAddPlayerAchievement(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể lưu cấp thành tựu", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.add_player_achievement", EntityType: "player_achievements", EntityID: playerID.String() + ":" + achievementID, RequestSummary: fmt.Sprintf("achievement=%s reason=%s", achievementID, req.Reason), IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.add_player_achievement", EntityType: "player_achievements", EntityID: playerID.String() + ":" + achievementID, RequestSummary: fmt.Sprintf("achievement=%s reason=%s", achievementID, req.Reason), IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cấp thành tựu"})
 }
 
@@ -170,7 +170,7 @@ func AdminUpdatePlayerAchievement(c *gin.Context) {
 		}
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_player_achievement", EntityType: "player_achievements", EntityID: playerID.String() + ":" + storedID, RequestSummary: fmt.Sprintf("title=%q frame=%q unlocked_at=%s", *req.SelectedTitle, *req.SelectedFrame, unlocked.Format(time.RFC3339)), IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_player_achievement", EntityType: "player_achievements", EntityID: playerID.String() + ":" + storedID, RequestSummary: fmt.Sprintf("title=%q frame=%q unlocked_at=%s", *req.SelectedTitle, *req.SelectedFrame, unlocked.Format(time.RFC3339)), IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật thành tựu"})
 }
 
@@ -242,6 +242,6 @@ func AdminDeletePlayerAchievement(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể lưu thu hồi thành tựu", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.delete_player_achievement", EntityType: "player_achievements", EntityID: playerID.String() + ":" + achievementID, RequestSummary: fmt.Sprintf("reason=%s", req.Reason), IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.delete_player_achievement", EntityType: "player_achievements", EntityID: playerID.String() + ":" + achievementID, RequestSummary: fmt.Sprintf("reason=%s", req.Reason), IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thu hồi thành tựu, danh hiệu và hiệu ứng liên quan"})
 }

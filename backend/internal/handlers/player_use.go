@@ -155,7 +155,7 @@ func UseItem(c *gin.Context) {
 		syncSpatialPlayer(authID, player.CurrentRegion, player.X, player.Y, uuid.Nil)
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "item.use",
 		EntityType:     "item",
@@ -385,7 +385,7 @@ func UseItems(c *gin.Context) {
 		finalMessage += "\n" + strings.Join(aggregatedSpecial, "\n")
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "item.use_batch",
 		EntityType:     "item",
@@ -546,7 +546,7 @@ func SetVitalGu(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "gu.set_vital", EntityType: "gu_instance",
 		EntityID:       req.GuInstanceID,
 		RequestSummary: fmt.Sprintf("Thiết lập %s thành Bản Mệnh Cổ | hadVital=%v", targetGu.GuID, hadVital),
@@ -628,7 +628,7 @@ func DropGu(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "gu.drop", EntityType: "gu_instance",
 		EntityID: req.GuInstanceID, RequestSummary: "Vứt bỏ Cổ trùng khỏi túi đồ",
 		IPAddress: c.ClientIP(), Success: true,
@@ -719,7 +719,7 @@ func DropGus(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Transaction commit failed", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "gu.drop_batch", EntityType: "gu_instance",
 		RequestSummary: fmt.Sprintf("Vứt bỏ hàng loạt %d Cổ trùng khỏi túi đồ", len(req.GuInstanceIDs)),
 		IPAddress:      c.ClientIP(), Success: true,

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -50,6 +51,7 @@ func processPetHungerDecay(ctx context.Context, db *sql.DB) {
 
 	// Delete starving pets and write their audit rows in one statement and transaction.
 	var starvedCount int
+	operationID := uuid.NewString()
 	err = tx.QueryRow(`
 		WITH starved AS (
 			DELETE FROM non_player_actors
@@ -57,14 +59,14 @@ func processPetHungerDecay(ctx context.Context, db *sql.DB) {
 			  AND execution_state IN ('STORED', 'RECOVERING')
 			RETURNING id, owner_player_id, name
 		), audit AS (
-			INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
-			SELECT owner_player_id, 'pet.starve_death', 'player_pet', id::text,
+			INSERT INTO audit_logs (player_id, affected_player_id, action, entity_type, entity_id, request_id, request_summary, metadata, ip_address, success, error_message, created_at)
+			SELECT owner_player_id, owner_player_id, 'pet.starve_death', 'player_pet', id::text, $1,
 			       name || ' chết đói', '{}', '', false, 'Pet chết đói', NOW()
 			FROM starved
 			RETURNING 1
 		)
 		SELECT count(*) FROM starved
-	`).Scan(&starvedCount)
+	`, operationID).Scan(&starvedCount)
 	if err != nil {
 		logger.S.Errorf("Pet Hunger Worker: failed to delete and audit starving pets: %v", err)
 		return

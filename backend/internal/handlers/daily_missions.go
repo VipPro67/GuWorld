@@ -293,7 +293,7 @@ func ClaimDailyMission(c *gin.Context) {
 	if rewardType == "immortal_stones" {
 		rewardName = "Tiên Nguyên Thạch"
 	}
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "daily_mission.claim",
 		EntityType:     "daily_mission",

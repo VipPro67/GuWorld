@@ -512,7 +512,7 @@ func runGachaOpen(c *gin.Context, forced int) {
 		return
 	}
 
-	if err := auditlog.LogChecked(tx, auditlog.Entry{
+	if err := auditlog.LogCheckedContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "gacha.open",
 		EntityType:     "gacha_pool",

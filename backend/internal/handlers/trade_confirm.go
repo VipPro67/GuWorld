@@ -637,7 +637,7 @@ func ConfirmTrade(c *gin.Context) {
 		}
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: action, EntityType: "trade",
 		EntityID: tradeID, RequestSummary: summary, Metadata: metadata,
 		IPAddress: c.ClientIP(), Success: true,

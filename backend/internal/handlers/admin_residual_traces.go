@@ -107,7 +107,7 @@ func AdminUpdateResidualTrace(c *gin.Context) {
 		}
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_residual_trace", EntityType: "world_residual_traces", EntityID: storedID, RequestSummary: fmt.Sprintf("region=%s xy=%d,%d player=%s action=%s path=%s power=%g", region, *req.X, *req.Y, playerID, action, path, *req.DaoPulseStrength), IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_residual_trace", EntityType: "world_residual_traces", EntityID: storedID, RequestSummary: fmt.Sprintf("region=%s xy=%d,%d player=%s action=%s path=%s power=%g", region, *req.X, *req.Y, playerID, action, path, *req.DaoPulseStrength), IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật dấu vết thế giới"})
 }
 
@@ -138,6 +138,6 @@ func AdminDeleteResidualTrace(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy dấu vết"})
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.delete_residual_trace", EntityType: "world_residual_traces", EntityID: traceID.String(), RequestSummary: "reason=" + req.Reason, IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.delete_residual_trace", EntityType: "world_residual_traces", EntityID: traceID.String(), RequestSummary: "reason=" + req.Reason, IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa dấu vết"})
 }

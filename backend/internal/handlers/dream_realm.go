@@ -251,7 +251,7 @@ func ExitDreamRealm(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "dream_realm.exit",
 		EntityType:     "instance_template",

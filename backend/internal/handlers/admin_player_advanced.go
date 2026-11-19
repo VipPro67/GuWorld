@@ -120,7 +120,7 @@ func AdminDeletePlayerGuHouse(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		EntityType:     "player_gu_houses",
 		EntityID:       houseID.String(),
@@ -251,7 +251,7 @@ func AdminDeletePlayerKillerMove(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		EntityType:     "player_killer_moves",
 		EntityID:       moveID.String(),

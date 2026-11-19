@@ -94,7 +94,7 @@ func AdminUpdatePlayerTrackingMark(c *gin.Context) {
 		}
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_player_tracking_mark", EntityType: "player_tracking_marks", EntityID: markID.String(), RequestSummary: fmt.Sprintf("tracker=%s target=%s type=%s power=%g", trackerID, targetID, markType, *req.Power), IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_player_tracking_mark", EntityType: "player_tracking_marks", EntityID: markID.String(), RequestSummary: fmt.Sprintf("tracker=%s target=%s type=%s power=%g", trackerID, targetID, markType, *req.Power), IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật ấn ký truy tung"})
 }
 
@@ -130,6 +130,6 @@ func AdminDeletePlayerTrackingMark(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy ấn ký của người chơi"})
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.delete_player_tracking_mark", EntityType: "player_tracking_marks", EntityID: markID.String(), RequestSummary: "reason=" + req.Reason, IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.delete_player_tracking_mark", EntityType: "player_tracking_marks", EntityID: markID.String(), RequestSummary: "reason=" + req.Reason, IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã thu hồi ấn ký"})
 }

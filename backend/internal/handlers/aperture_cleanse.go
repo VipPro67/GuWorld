@@ -177,7 +177,7 @@ func CleanseDaoMarks(c *gin.Context) {
 		}
 	}
 
-	if err := auditlog.LogChecked(tx, auditlog.Entry{
+	if err := auditlog.LogCheckedContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "aperture.cleanse_dao_marks",
 		EntityType:     "immortal_aperture",

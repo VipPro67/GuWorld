@@ -746,7 +746,7 @@ func CreateKillerMove(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể lưu sát chiêu", err))
 		return
 	}
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "killer_move.create",
 		EntityType:     "killer_move",
@@ -1021,7 +1021,7 @@ func EquipKillerMove(c *gin.Context) {
 	if equipped {
 		equipAction = "tháo trang bị"
 	}
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "killer_move.equip",
 		EntityType:     "killer_move",
@@ -1059,7 +1059,7 @@ func DeleteKillerMove(c *gin.Context) {
 		return
 	}
 	// ponytail: handler has no transaction; audit is written via db.DB after the delete.
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "killer_move.delete",
 		EntityType:     "killer_move",
@@ -1483,7 +1483,7 @@ func UseKillerMove(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể lưu trạng thái nhân vật", err))
 		return
 	}
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "killer_move.use",
 		EntityType:     "killer_move",

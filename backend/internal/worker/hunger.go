@@ -580,13 +580,15 @@ func EvaluatePlayerHungerTx(tx *sql.Tx, playerID uuid.UUID) error {
 		}
 		_ = db.LogGuHistory(tx, s.ID, s.GuID, s.Rank, "STARVED_DEATH", &playerID, nil, content, deathMeta)
 		auditlog.Log(tx, auditlog.Entry{
-			PlayerID:       &playerID,
-			Action:         action,
-			EntityType:     "gu_instance",
-			EntityID:       s.ID,
-			RequestSummary: content,
-			Metadata:       deathMeta,
-			Success:        true,
+			PlayerID:         &playerID,
+			AffectedPlayerID: &playerID,
+			Action:           action,
+			RequestID:        "gu-starve:" + s.ID,
+			EntityType:       "gu_instance",
+			EntityID:         s.ID,
+			RequestSummary:   content,
+			Metadata:         deathMeta,
+			Success:          true,
 		})
 	}
 

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -344,7 +343,7 @@ func commitImport(c *gin.Context, table string) {
 		action = "admin.import_data"
 		entityID = "all"
 	}
-	if err := auditlog.LogChecked(tx, auditlog.Entry{PlayerID: &adminID, Action: action, EntityType: "game_data", EntityID: entityID, RequestSummary: strings.TrimSpace(request.Reason), IPAddress: c.ClientIP(), Success: true, Metadata: map[string]interface{}{"preflight_id": request.PreflightID, "source_digest": stage.Digest, "totals": plan.Totals}}); err != nil {
+	if err := auditlog.LogCheckedContext(c.Request.Context(), tx, auditlog.Entry{PlayerID: &adminID, Action: action, EntityType: "game_data", EntityID: entityID, RequestSummary: strings.TrimSpace(request.Reason), IPAddress: c.ClientIP(), Success: true, Metadata: map[string]interface{}{"preflight_id": request.PreflightID, "source_digest": stage.Digest, "totals": plan.Totals}}); err != nil {
 		tx.Rollback()
 		httperr.Respond(c, httperr.Internal("Không thể ghi audit; transaction đã rollback", err))
 		return
@@ -458,7 +457,7 @@ func adminImportDataLegacy(c *gin.Context) {
 
 	applyDatasetRuntimeBehavior(db.Datasets())
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.import_data",
 		EntityType: "system", EntityID: "",
 		RequestSummary: "data import from CSV",
@@ -480,7 +479,7 @@ func AdminExportData(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.export_data",
 		EntityType: "system", EntityID: "",
 		RequestSummary: "data export to CSV",
@@ -515,7 +514,7 @@ func adminImportTableLegacy(c *gin.Context) {
 	dataset, _ := db.DatasetByKey(table)
 	applyDatasetRuntimeBehavior([]db.Dataset{dataset})
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.import_table",
 		EntityType: "table", EntityID: table,
 		RequestSummary: "import table " + table + " from CSV",
@@ -538,7 +537,7 @@ func AdminExportTable(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.export_table",
 		EntityType: "table", EntityID: table,
 		RequestSummary: "export table " + table + " to CSV",
@@ -671,41 +670,18 @@ func AdminGetAuditLogs(c *gin.Context) {
 		"created_at": "created_at", "action": "action", "entity_type": "entity_type", "success": "success",
 	}, "created_at")
 
-	query := `SELECT id, COALESCE(player_id::text, ''), actor_username, action, effective_roles, effective_permission, entity_type, entity_id, change_data, reason, request_id, COALESCE(request_summary, ''), metadata, ip_address, success, error_message, created_at FROM audit_logs WHERE 1=1`
-	args := []interface{}{}
-	argCount := 0
-
-	if action != "" {
-		argCount++
-		query += " AND action = $" + strconv.Itoa(argCount)
-		args = append(args, action)
+	var playerID *uuid.UUID
+	if parsed, err := uuid.Parse(playerIDStr); playerIDStr != "" && err == nil {
+		playerID = &parsed
 	}
-	if entityType != "" {
-		argCount++
-		query += " AND entity_type = $" + strconv.Itoa(argCount)
-		args = append(args, entityType)
+	var success *bool
+	if parsed, err := strconv.ParseBool(successStr); successStr != "" && err == nil {
+		success = &parsed
 	}
-	if playerIDStr != "" {
-		pid, err := uuid.Parse(playerIDStr)
-		if err == nil {
-			argCount++
-			query += " AND player_id = $" + strconv.Itoa(argCount)
-			args = append(args, pid)
-		}
-	}
-	if successStr != "" {
-		success, err := strconv.ParseBool(successStr)
-		if err == nil {
-			argCount++
-			query += " AND success = $" + strconv.Itoa(argCount)
-			args = append(args, success)
-		}
-	}
-	if search != "" {
-		argCount++
-		query += " AND (action ILIKE $" + strconv.Itoa(argCount) + " OR request_summary ILIKE $" + strconv.Itoa(argCount) + " OR entity_id ILIKE $" + strconv.Itoa(argCount) + " OR error_message ILIKE $" + strconv.Itoa(argCount) + ")"
-		args = append(args, "%"+search+"%")
-	}
+	whereClause, filterArgs := buildAuditFilters(action, entityType, playerID, success, search)
+	query := `SELECT id, COALESCE(player_id::text, ''), affected_player_id::text, actor_username, action, effective_roles, effective_permission, entity_type, entity_id, change_data, reason, request_id, COALESCE(request_summary, ''), metadata, ip_address, success, error_message, created_at FROM audit_logs` + whereClause
+	args := append([]interface{}{}, filterArgs...)
+	argCount := len(args)
 
 	query += " ORDER BY " + paging.Sort + " " + paging.Direction + ", id DESC LIMIT $" + strconv.Itoa(argCount+1) + " OFFSET $" + strconv.Itoa(argCount+2)
 	args = append(args, paging.PageSize, paging.Offset)
@@ -717,62 +693,15 @@ func AdminGetAuditLogs(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	logs := []AuditLogResponse{}
-	for rows.Next() {
-		var logRow AuditLogResponse
-		var metaJSON, rolesJSON, changeJSON []byte
-		err := rows.Scan(
-			&logRow.ID, &logRow.PlayerID, &logRow.ActorUsername, &logRow.Action, &rolesJSON, &logRow.Permission, &logRow.EntityType,
-			&logRow.EntityID, &changeJSON, &logRow.Reason, &logRow.RequestID, &logRow.RequestSummary, &metaJSON, &logRow.IPAddress,
-			&logRow.Success, &logRow.ErrorMessage, &logRow.CreatedAt,
-		)
-		if err != nil {
-			httperr.Respond(c, httperr.Internal("Không thể đọc nhật ký: "+err.Error(), err))
-			return
-		}
-		if len(metaJSON) > 0 {
-			_ = json.Unmarshal(metaJSON, &logRow.Metadata)
-		}
-		_ = json.Unmarshal(rolesJSON, &logRow.EffectiveRoles)
-		_ = json.Unmarshal(changeJSON, &logRow.ChangeData)
-		logs = append(logs, logRow)
+	logs, err := scanAuditLogRows(rows)
+	if err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể đọc nhật ký: "+err.Error(), err))
+		return
 	}
 
 	// Get total count for pagination
-	countQuery := `SELECT COUNT(*) FROM audit_logs WHERE 1=1`
-	countArgs := make([]interface{}, 0)
-	ci := 0
-	if action != "" {
-		ci++
-		countQuery += " AND action = $" + strconv.Itoa(ci)
-		countArgs = append(countArgs, action)
-	}
-	if entityType != "" {
-		ci++
-		countQuery += " AND entity_type = $" + strconv.Itoa(ci)
-		countArgs = append(countArgs, entityType)
-	}
-	if playerIDStr != "" {
-		pid, err := uuid.Parse(playerIDStr)
-		if err == nil {
-			ci++
-			countQuery += " AND player_id = $" + strconv.Itoa(ci)
-			countArgs = append(countArgs, pid)
-		}
-	}
-	if successStr != "" {
-		success, err := strconv.ParseBool(successStr)
-		if err == nil {
-			ci++
-			countQuery += " AND success = $" + strconv.Itoa(ci)
-			countArgs = append(countArgs, success)
-		}
-	}
-	if search != "" {
-		ci++
-		countQuery += " AND (action ILIKE $" + strconv.Itoa(ci) + " OR request_summary ILIKE $" + strconv.Itoa(ci) + " OR entity_id ILIKE $" + strconv.Itoa(ci) + " OR error_message ILIKE $" + strconv.Itoa(ci) + ")"
-		countArgs = append(countArgs, "%"+search+"%")
-	}
+	countQuery := `SELECT COUNT(*) FROM audit_logs` + whereClause
+	countArgs := filterArgs
 
 	var total int
 	if len(countArgs) == 0 {

@@ -12,6 +12,7 @@ import (
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/internal/simulator"
+	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -57,6 +58,10 @@ func buildGuHungerBatch(hunger map[string]int, keys []string, skipEmpty bool) ([
 // Shared by all auto-combat paths so post-combat state is
 // identical on both paths.
 func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simulator.CombatState, isVirtual, isTribulation, alliesAlive bool, finalMana float64, before models.GuInventory, logs []simulator.CombatLog) ([]simulator.CombatLog, error) {
+	combatRequestID := ""
+	if player.ActiveCombat != nil {
+		combatRequestID = player.ActiveCombat.CombatID
+	}
 	if alliesAlive && !isVirtual && player.ActiveCombat != nil &&
 		player.ActiveCombat.TargetSectID == "" && isPveMonsterType(player.ActiveCombat.EnemyType) {
 		eventID := player.ActiveCombat.CombatID
@@ -288,10 +293,7 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 					// Pet died in combat — delete permanently
 					_, errPet = tx.Exec(`DELETE FROM non_player_actors WHERE id = $1 AND owner_player_id = $2 AND actor_kind = 'COMPANION_BEAST'`, simAlly.ID, player.ID)
 					if errPet == nil {
-						_, _ = tx.Exec(`
-							INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
-							VALUES ($1, 'pet.died_in_combat', 'player_pet', $2, $3, '{}', '', false, 'Pet chết trong chiến đấu', NOW())
-						`, player.ID, simAlly.ID, fmt.Sprintf("%s chết khi chiến đấu với %s", simAlly.Name, player.ActiveCombat.EnemyName))
+						auditlog.Log(tx, auditlog.Entry{PlayerID: &player.ID, AffectedPlayerID: &player.ID, Action: "pet.died_in_combat", EntityType: "player_pet", EntityID: simAlly.ID, RequestID: combatRequestID, RequestSummary: fmt.Sprintf("%s chết khi chiến đấu với %s", simAlly.Name, player.ActiveCombat.EnemyName), Success: true})
 						logs = append(logs, simulator.CombatLog{
 							Turn:   simState.Turn,
 							Action: "PET_DEATH",
@@ -327,10 +329,9 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 					if simEnemy.HP <= 0 {
 						_, errPet = tx.Exec(`DELETE FROM non_player_actors WHERE id = $1 AND owner_player_id = $2 AND actor_kind = 'COMPANION_BEAST'`, simEnemy.ID, defenderID)
 						if errPet == nil {
-							_, _ = tx.Exec(`
-								INSERT INTO audit_logs (player_id, action, entity_type, entity_id, request_summary, metadata, ip_address, success, error_message, created_at)
-								VALUES ($1, 'pet.died_in_combat', 'player_pet', $2, $3, '{}', '', false, 'Pet chết trong chiến đấu', NOW())
-							`, defenderID, simEnemy.ID, fmt.Sprintf("%s chết khi phòng thủ trước %s", simEnemy.Name, player.ActiveCombat.EnemyName))
+							if defenderUUID, parseErr := uuid.Parse(defenderID); parseErr == nil {
+								auditlog.Log(tx, auditlog.Entry{PlayerID: &defenderUUID, AffectedPlayerID: &defenderUUID, Action: "pet.died_in_combat", EntityType: "player_pet", EntityID: simEnemy.ID, RequestID: combatRequestID, RequestSummary: fmt.Sprintf("%s chết khi phòng thủ trước %s", simEnemy.Name, player.ActiveCombat.EnemyName), Success: true})
+							}
 							logs = append(logs, simulator.CombatLog{
 								Turn:   simState.Turn,
 								Action: "PET_DEATH",

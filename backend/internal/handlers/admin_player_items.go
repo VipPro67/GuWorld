@@ -102,7 +102,7 @@ func AdminUpdatePlayerInventoryItem(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể lưu thay đổi", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_player_inventory_item", EntityType: "player_inventory_items", EntityID: playerID.String() + ":" + itemID + ":" + oldCategory, RequestSummary: fmt.Sprintf("quantity=%d category=%s->%s", req.Quantity, oldCategory, newCategory), IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_player_inventory_item", EntityType: "player_inventory_items", EntityID: playerID.String() + ":" + itemID + ":" + oldCategory, RequestSummary: fmt.Sprintf("quantity=%d category=%s->%s", req.Quantity, oldCategory, newCategory), IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật vật phẩm", "quantity": req.Quantity, "category": newCategory})
 }
 
@@ -215,7 +215,7 @@ func AdminAddPlayerItems(c *gin.Context) {
 	}
 	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã thêm vào túi đồ của đạo hữu %s: %s (SL: %d)", username, itemName, req.Quantity))
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.add_items",
 		EntityType: "player", EntityID: playerID.String(),
 		RequestSummary: fmt.Sprintf("%s=%s category=%s qty=%d", kind, req.ItemID, category, req.Quantity),
@@ -293,7 +293,7 @@ func AdminRemovePlayerItems(c *gin.Context) {
 	}
 	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã thu hồi từ túi đồ của đạo hữu %s: %s (SL: %d)", username, itemName, req.Quantity))
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.remove_items",
 		EntityType: "player", EntityID: playerID.String(),
 		RequestSummary: fmt.Sprintf("%s=%s category=%s qty=%d reason=%s", kind, req.ItemID, category, req.Quantity, req.Reason),
@@ -345,7 +345,7 @@ func AdminUpdatePlayerRecipe(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể lưu tiến độ công thức", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_recipe_progress", EntityType: "player_recipe_progress", EntityID: playerID.String() + ":" + recipeID, RequestSummary: fmt.Sprintf("recipe=%s completion=%.2f unlocked=%t deduce=%d favorite=%t", recipeID, req.CompletionRate, req.IsUnlocked, req.DeduceCount, req.Favorite), IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_recipe_progress", EntityType: "player_recipe_progress", EntityID: playerID.String() + ":" + recipeID, RequestSummary: fmt.Sprintf("recipe=%s completion=%.2f unlocked=%t deduce=%d favorite=%t", recipeID, req.CompletionRate, req.IsUnlocked, req.DeduceCount, req.Favorite), IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật tiến độ công thức", "recipe_id": recipeID, "completion_rate": req.CompletionRate, "is_unlocked": req.IsUnlocked, "deduce_count": req.DeduceCount, "favorite": req.Favorite})
 }
 
@@ -434,7 +434,7 @@ func AdminAddPlayerGus(c *gin.Context) {
 	}
 	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã ban tặng Cổ trùng cho đạo hữu %s: %s%s (SL: %d)", username, guName, rankDesc, req.Quantity))
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.add_gus",
 		EntityType: "player", EntityID: playerID.String(),
 		RequestSummary: fmt.Sprintf("gu=%s rank=%d qty=%d", req.GuID, guSpec.Rank, req.Quantity),
@@ -519,7 +519,7 @@ func AdminRemovePlayerGu(c *gin.Context) {
 	}
 	_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Admin đã thu hồi Cổ trùng khỏi đạo hữu %s: %s", player.Username, guName))
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.remove_gu",
 		EntityType: "player", EntityID: playerID.String(),
 		RequestSummary: fmt.Sprintf("instance=%s reason=%s", instanceID, adminAction.Reason),
@@ -793,7 +793,7 @@ func AdminChangePlayerStones(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể cập nhật tài nguyên", err))
 		return
 	}
-	if err := auditlog.LogChecked(tx, auditlog.Entry{PlayerID: &adminID, Action: "admin.change_stones", EntityType: "player", EntityID: playerID.String(), Reason: strings.TrimSpace(req.Reason), RequestSummary: "absolute balance adjustment", IPAddress: c.ClientIP(), Success: true}); err != nil {
+	if err := auditlog.LogCheckedContext(c.Request.Context(), tx, auditlog.Entry{PlayerID: &adminID, Action: "admin.change_stones", EntityType: "player", EntityID: playerID.String(), Reason: strings.TrimSpace(req.Reason), RequestSummary: "absolute balance adjustment", IPAddress: c.ClientIP(), Success: true}); err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể ghi audit; transaction đã rollback", err))
 		return
 	}

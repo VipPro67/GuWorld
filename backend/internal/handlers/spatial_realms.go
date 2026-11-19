@@ -423,7 +423,7 @@ func EnterSpatialRealm(c *gin.Context) {
 	}
 	syncSpatialPlayer(playerID, regionID, entryX, entryY, instanceID)
 	if neededItem != "" && neededItem != "NONE" {
-		auditlog.Log(db.DB, auditlog.Entry{PlayerID: &playerID, Action: "spatial_realm.enter", EntityType: "instance_template", EntityID: req.TemplateID, RequestSummary: fmt.Sprintf("Vào bí cảnh bản đồ (%s): %dx %s", scope, neededCount, neededItem), IPAddress: c.ClientIP(), Success: true})
+		auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &playerID, Action: "spatial_realm.enter", EntityType: "instance_template", EntityID: req.TemplateID, RequestSummary: fmt.Sprintf("Vào bí cảnh bản đồ (%s): %dx %s", scope, neededCount, neededItem), IPAddress: c.ClientIP(), Success: true})
 	}
 	c.JSON(http.StatusOK, gin.H{"instance_id": instanceID, "region_id": regionID, "zone_id": realmZoneID, "world_instance_id": "realm:" + instanceID.String(), "x": entryX, "y": entryY, "scope": scope, "rules": rules})
 }
@@ -1156,7 +1156,7 @@ func ClaimInheritanceAltar(c *gin.Context) {
 		_ = SendSystemMessage("world", sql.NullString{}, fmt.Sprintf("Chúc mừng đạo hữu %s đã thông qua khảo nghiệm, đắc được Chân Truyền [%s]!", player.Username, meta.AltarName))
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:   &playerID,
 		Action:     "inheritance.claim_altar",
 		EntityType: "altar",

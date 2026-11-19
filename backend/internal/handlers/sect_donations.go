@@ -95,7 +95,7 @@ func DonateStones(c *gin.Context) {
 	// Trigger System Chat Notification on Sect channel
 	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Quyên Góp] Đạo hữu %s đã quyên góp cho môn phái: %d Nguyên Thạch.", player.Username, req.Amount))
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_stones", EntityType: "sect",
 		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%d Nguyên Thạch → %d điểm cống hiến", req.Amount, req.Amount),
 		IPAddress: c.ClientIP(), Success: true,
@@ -302,7 +302,7 @@ func DonateMaterials(c *gin.Context) {
 	// Trigger System Chat Notification on Sect channel
 	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Quyên Góp] Đạo hữu %s đã quyên góp cho môn phái: %s (x%d).", player.Username, materialName, req.Amount))
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_material", EntityType: "sect",
 		EntityID:       m.SectID,
 		RequestSummary: fmt.Sprintf("%s x%d → %d điểm cống hiến", materialName, req.Amount, gainedContribution),
@@ -512,7 +512,7 @@ func DonateGu(c *gin.Context) {
 	// Trigger System Chat Notification on Sect channel
 	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Quyên Góp] Đạo hữu %s đã quyên góp cho môn phái: Cổ trùng %s (x1).", player.Username, guName))
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_gu", EntityType: "sect",
 		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s → %d điểm", guName, gainedContribution),
 		IPAddress: c.ClientIP(), Success: true,
@@ -645,7 +645,7 @@ func DonateRecipe(c *gin.Context) {
 	// Trigger System Chat Notification on Sect channel
 	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Quyên Góp] Đạo hữu %s đã quyên góp cho môn phái: Bí phương %s (x1).", player.Username, itemName))
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_recipe", EntityType: "sect",
 		EntityID: m.SectID, RequestSummary: fmt.Sprintf("%s (%.0f%%) → %d điểm", itemName, progress.CompletionRate, gainedContribution),
 		IPAddress: c.ClientIP(), Success: true,
@@ -1165,7 +1165,7 @@ func DonateBulk(c *gin.Context) {
 	summaryStr := strings.Join(buildSummary(), ", ")
 	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Quyên Góp] Đạo hữu %s đã quyên góp cho môn phái: %s.", player.Username, summaryStr))
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.donate_bulk", EntityType: "sect",
 		EntityID: m.SectID, RequestSummary: fmt.Sprintf("Bulk: %s → %d điểm", summaryStr, totalGainedContribution),
 		IPAddress: c.ClientIP(), Success: true,

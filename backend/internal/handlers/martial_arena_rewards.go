@@ -287,7 +287,7 @@ func ClaimMartialReward(c *gin.Context) {
 		return
 	}
 
-	if err := auditlog.LogChecked(tx, auditlog.Entry{
+	if err := auditlog.LogCheckedContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "arena.martial_claim_reward",
 		EntityType:     "martial_arena_reward",

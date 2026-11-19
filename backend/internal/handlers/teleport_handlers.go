@@ -428,7 +428,7 @@ func BuildTeleportArray(c *gin.Context) {
 			return
 		}
 
-		auditlog.Log(tx, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 			PlayerID:       &player.ID,
 			Action:         "teleport.build",
 			EntityType:     "teleport_array",
@@ -524,7 +524,7 @@ func BuildTeleportArray(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &player.ID,
 		Action:         "teleport.build",
 		EntityType:     "teleport_array",
@@ -1101,7 +1101,7 @@ func TravelTeleport(c *gin.Context) {
 
 	logger.S.Infof("[Pháp Trận] Người chơi %s (ID: %s) truyền tống qua pháp trận từ [%s] (%s: %d, %d) đến [%s] (%s: %d, %d) - Tiêu hao: %d %s", player.Username, player.ID, source.Name, source.RegionID, source.X, source.Y, dest.Name, dest.RegionID, dest.X, dest.Y, feePaid, evaluation.FeeCurrency)
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &player.ID,
 		Action:         "teleport.travel",
 		EntityType:     "teleport_array",
@@ -1216,7 +1216,7 @@ func ManageTeleportArray(c *gin.Context) {
 	}
 
 	// ponytail: handler has no transaction; audit is written via db.DB after the update.
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "teleport.manage",
 		EntityType:     "teleport_array",
@@ -1349,7 +1349,7 @@ func RepairTeleportArray(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &player.ID,
 		Action:         "teleport.repair",
 		EntityType:     "teleport_array",
@@ -1472,7 +1472,7 @@ func WithdrawTeleportVault(c *gin.Context) {
 		return
 	}
 
-	if err := auditlog.LogChecked(tx, auditlog.Entry{
+	if err := auditlog.LogCheckedContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &player.ID,
 		Action:         "teleport.withdraw",
 		EntityType:     "teleport_array",
@@ -1592,7 +1592,7 @@ func DismantleTeleportArray(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &player.ID,
 		Action:         "teleport.dismantle",
 		EntityType:     "teleport_array",

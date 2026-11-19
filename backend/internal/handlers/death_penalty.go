@@ -621,6 +621,7 @@ func persistDeathDrop(tx *sql.Tx, loserID uuid.UUID, winnerID *uuid.UUID, isAggr
 	auditlog.Log(tx, auditlog.Entry{
 		PlayerID:       &loserID,
 		Action:         "combat.death_penalty",
+		RequestID:      "combat-death:" + loserID.String() + ":" + winnerID.String(),
 		EntityType:     "player",
 		EntityID:       loserID.String(),
 		RequestSummary: fmt.Sprintf("Tử đạo đánh rơi tài sản: %s", summary),

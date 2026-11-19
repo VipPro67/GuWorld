@@ -441,6 +441,7 @@ export function AuditLogsAdminTab() {
                   {auditLogExpandId === log.id && (
                     <div className="mx-3 mb-1 px-4 py-2 bg-zinc-900/60 border border-zinc-800/60 rounded-lg text-[11px] text-zinc-400 font-mono space-y-1">
                       {log.player_id && <div>player_id: {log.player_id}</div>}
+                      {log.affected_player_id && <div>affected_player_id: {log.affected_player_id}</div>}
                       {log.entity_type && (
                         <div>entity_type: {log.entity_type}</div>
                       )}

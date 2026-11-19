@@ -229,14 +229,15 @@ func AdminBanPlayer(c *gin.Context) {
 	}
 	notifyPlayerBanned(playerID, req.Reason)
 
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID:       &adminID,
-		Action:         "admin.ban_player",
-		EntityType:     "player",
-		EntityID:       playerID.String(),
-		RequestSummary: "ban: " + req.Reason,
-		IPAddress:      c.ClientIP(),
-		Success:        true,
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
+		PlayerID:         &adminID,
+		Action:           "admin.ban_player",
+		AffectedPlayerID: &playerID,
+		EntityType:       "player",
+		EntityID:         playerID.String(),
+		RequestSummary:   "ban: " + req.Reason,
+		IPAddress:        c.ClientIP(),
+		Success:          true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã khóa tài khoản người chơi"})
 }
@@ -278,13 +279,14 @@ func AdminUnbanPlayer(c *gin.Context) {
 			fingerprint, ip)
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID:   &adminID,
-		Action:     "admin.unban_player",
-		EntityType: "player",
-		EntityID:   playerID.String(),
-		IPAddress:  c.ClientIP(),
-		Success:    true,
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
+		PlayerID:         &adminID,
+		Action:           "admin.unban_player",
+		AffectedPlayerID: &playerID,
+		EntityType:       "player",
+		EntityID:         playerID.String(),
+		IPAddress:        c.ClientIP(),
+		Success:          true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã mở khóa tài khoản người chơi"})
 }
@@ -321,13 +323,14 @@ func AdminMutePlayer(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể hạn chế chat", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID:   &adminID,
-		Action:     "admin.mute_player",
-		EntityType: "player",
-		EntityID:   playerID.String(),
-		IPAddress:  c.ClientIP(),
-		Success:    true,
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
+		PlayerID:         &adminID,
+		Action:           "admin.mute_player",
+		AffectedPlayerID: &playerID,
+		EntityType:       "player",
+		EntityID:         playerID.String(),
+		IPAddress:        c.ClientIP(),
+		Success:          true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã hạn chế chat người chơi"})
 }
@@ -347,13 +350,14 @@ func AdminUnmutePlayer(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể bỏ hạn chế chat", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
-		PlayerID:   &adminID,
-		Action:     "admin.unmute_player",
-		EntityType: "player",
-		EntityID:   playerID.String(),
-		IPAddress:  c.ClientIP(),
-		Success:    true,
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
+		PlayerID:         &adminID,
+		Action:           "admin.unmute_player",
+		AffectedPlayerID: &playerID,
+		EntityType:       "player",
+		EntityID:         playerID.String(),
+		IPAddress:        c.ClientIP(),
+		Success:          true,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã bỏ hạn chế chat người chơi"})
 }
@@ -405,6 +409,7 @@ func autoBanForFingerprint(ctx context.Context, playerID uuid.UUID, username, fi
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "system.auto_ban_fingerprint",
+		RequestID:      "security:auto-ban:fingerprint:" + playerID.String() + ":" + fingerprint,
 		EntityType:     "player",
 		EntityID:       playerID.String(),
 		RequestSummary: "auto-ban fingerprint limit: " + username + " accounts=" + strconv.Itoa(otherAccounts),
@@ -431,6 +436,7 @@ func autoBanForReferral(ctx context.Context, referrerID uuid.UUID, suspiciousCou
 	auditlog.Log(db.DB, auditlog.Entry{
 		PlayerID:       &referrerID,
 		Action:         "system.auto_ban_referral",
+		RequestID:      "security:auto-ban:referral:" + referrerID.String(),
 		EntityType:     "player",
 		EntityID:       referrerID.String(),
 		RequestSummary: "auto-ban referral abuse: suspicious=" + strconv.Itoa(suspiciousCount),

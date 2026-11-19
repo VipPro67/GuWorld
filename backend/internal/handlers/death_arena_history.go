@@ -171,7 +171,7 @@ func ClaimReward(c *gin.Context) {
 		return
 	}
 
-	if err := auditlog.LogChecked(tx, auditlog.Entry{
+	if err := auditlog.LogCheckedContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "tournament.claim_reward",
 		EntityType:     "death_arena_reward",

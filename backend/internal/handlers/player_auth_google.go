@@ -433,7 +433,7 @@ func GoogleCallback(c *gin.Context) {
 		_ = tx.Rollback()
 
 		// Log to Audit Log for Admin
-		auditlog.Log(db.DB, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 			PlayerID:       &player.ID,
 			Action:         "security.multi_login_blocked",
 			RequestSummary: fmt.Sprintf("Blocked Google login for %s due to multi-login fingerprint limit. Fingerprint=%s IP=%s", player.Username, fingerprint, c.ClientIP()),

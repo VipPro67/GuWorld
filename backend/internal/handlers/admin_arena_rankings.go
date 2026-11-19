@@ -97,7 +97,7 @@ func AdminUpdateArenaRanking(c *gin.Context) {
 		}
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_arena_ranking", EntityType: "arena_rankings", EntityID: playerID.String(), RequestSummary: fmt.Sprintf("rank=%d points=%d daily_challenges=%d last_challenge_at=%s reason=%s", rank, *req.Points, *req.DailyChallenges, lastChallengeAt.Format(time.RFC3339), strings.TrimSpace(req.Reason)), IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_arena_ranking", EntityType: "arena_rankings", EntityID: playerID.String(), RequestSummary: fmt.Sprintf("rank=%d points=%d daily_challenges=%d last_challenge_at=%s reason=%s", rank, *req.Points, *req.DailyChallenges, lastChallengeAt.Format(time.RFC3339), strings.TrimSpace(req.Reason)), IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật dữ liệu đấu trường", "rank": rank})
 }
 

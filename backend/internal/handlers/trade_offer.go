@@ -248,7 +248,7 @@ func DeclineTrade(c *gin.Context) {
 	}
 
 	notifyTradeParticipants(senderID, receiverID)
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "trade.decline", EntityType: "trade",
 		EntityID:       tradeID,
 		RequestSummary: fmt.Sprintf("người nhận=%s (%s) đã từ chối giao dịch từ người gửi=%s (%s)", receiverName, receiverID, senderName, senderID),
@@ -288,7 +288,7 @@ func CancelTrade(c *gin.Context) {
 	} else {
 		cancellerName = receiverName
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "trade.cancel", EntityType: "trade",
 		EntityID:       tradeID,
 		RequestSummary: fmt.Sprintf("người hủy=%s (%s) đã hủy giao dịch giữa người gửi=%s (%s) và người nhận=%s (%s)", cancellerName, authID, senderName, senderID, receiverName, receiverID),

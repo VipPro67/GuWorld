@@ -285,7 +285,7 @@ func ClaimAchievement(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "achievement.claim",
 		EntityType:     "achievement",

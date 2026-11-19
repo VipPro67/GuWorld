@@ -451,7 +451,7 @@ func CompleteQuest(c *gin.Context) {
 
 	// Removed automatic referral milestone check
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "quest.complete",
 		EntityType:     "quest",

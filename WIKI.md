@@ -170,7 +170,7 @@ Ví hiển thị số dư và giao dịch. Top-up tạo order và chờ kết qu
 - **Chat và mail:** thư riêng có inbox/thread; chat Bảo Hoàng là kênh công khai riêng. Rate limit và bộ lọc nội dung áp dụng ở server.
 - **Leaderboard:** xem bảng theo hạng mục và cài đặt hiển thị của tài khoản.
 - **Feedback:** gửi phản hồi, bình chọn, bình luận và cập nhật trạng thái khi có quyền.
-- **Lịch sử chiến đấu/Ký sự tu hành:** xem replay/trận đấu và audit log cá nhân.
+- **Lịch sử chiến đấu/Ký sự tu hành:** xem replay/trận đấu và audit log cá nhân, gồm các sự kiện do player thực hiện hoặc tác động tới player.
 - **Referral, gift code, notification:** liên kết/nhận thưởng referral, đổi mã quà và quản lý thông báo.
 
 ## Dữ liệu và thuật ngữ

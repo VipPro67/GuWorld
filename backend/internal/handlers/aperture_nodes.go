@@ -481,7 +481,7 @@ func PlaceApertureNode(c *gin.Context) {
 			if spec, ok := models.GetGu(requiredGuID, guRank); ok {
 				consumedGuName = spec.Name
 			}
-			auditlog.Log(tx, auditlog.Entry{
+			auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 				PlayerID:       &playerID,
 				Action:         "aperture.consume_gu",
 				EntityType:     "gu_instance",
@@ -597,7 +597,7 @@ func PlaceApertureNode(c *gin.Context) {
 	buildMsg := fmt.Sprintf("Xây dựng thành công %s! Tiêu hao: %s.", template.Name, costDesc)
 	notify.SendBestEffort(db.DB, playerID, "aperture_build", "Xây Dựng Tiên Khiếu", buildMsg, c.Request.Context())
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "aperture.build_node",
 		EntityType:     "immortal_aperture_node",

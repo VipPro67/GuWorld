@@ -823,7 +823,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
       const res = await authFetch(`${BACKEND_URL}/api/admin/apertures/${id}`);
       if (res.ok) {
         const data = await res.json();
-        setApertureDetail(data.aperture);
+        setApertureDetail({ ...data.aperture, resources: data.resources || [] });
         setApertureForm({
           ...data.aperture,
           dao_marks_array: Object.entries(data.aperture.dao_marks || {}).map(([path, amount]) => ({ path, amount })),
@@ -4872,7 +4872,8 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                     {apertures.map((ap: ApiResponseData) => (
                       <tr key={ap.id} className="border-t border-zinc-800/40 hover:bg-zinc-900/30 transition-colors">
                         <td className="px-3 py-2.5 whitespace-nowrap">
-                          <span className="font-semibold text-zinc-200 block">{ap.username}</span>
+                          <span className={`font-semibold block ${ap.player_id ? "text-zinc-200" : "text-sky-300"}`}>{ap.player_id ? ap.username : "Tiên Khiếu vô chủ"}</span>
+                          {!ap.player_id && <span className="text-[10px] text-sky-500">{ap.public_state || "PUBLIC"} · Rank {ap.aperture_rank}</span>}
                           <span className="text-[10px] text-zinc-500 font-mono block max-w-[140px] truncate" title={ap.id}>{ap.id}</span>
                         </td>
                         <td className="px-3 py-2.5 font-bold text-zinc-300 whitespace-nowrap">
@@ -4896,7 +4897,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                         <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{ap.tribulation_count}</td>
                         <td className="px-3 py-2.5 text-center whitespace-nowrap">
                           <button onClick={() => setSelectedApertureId(ap.id)} className="px-2 py-1 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/20 hover:border-amber-500/40 text-amber-400 rounded text-[10px] font-bold cursor-pointer transition-colors">
-                            Sửa
+                            {ap.player_id ? "Sửa" : "Xem"}
                           </button>
                         </td>
                       </tr>
@@ -4945,6 +4946,36 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <div className="flex flex-col items-center justify-center py-20 space-y-3">
                 <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
                 <span className="text-xs text-zinc-500 font-mono">Đang tải chi tiết tiên khiếu...</span>
+              </div>
+            ) : !apertureDetail?.player_id ? (
+              <div className="space-y-4">
+                <section className="rounded-xl border border-sky-900/50 bg-sky-950/20 p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-sky-300">Tiên Khiếu vô chủ · {apertureDetail?.public_state || "PUBLIC"}</h4>
+                      <p className="mt-1 text-[10px] font-mono text-zinc-500">Rank {apertureDetail?.aperture_rank} · {apertureDetail?.grade} · Diện tích {Number(apertureDetail?.area_size || 0).toLocaleString()} mẫu · HP {Number(apertureDetail?.aperture_hp || 0).toLocaleString()}/{Number(apertureDetail?.max_aperture_hp || 0).toLocaleString()}</p>
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-500">{String(apertureDetail?.id || "")}</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="text-[10px] uppercase text-zinc-500"><tr><th className="px-2 py-2">Tài nguyên</th><th className="px-2 py-2">Loại / phẩm</th><th className="px-2 py-2 text-center">Ô</th><th className="px-2 py-2 text-center">Sinh khí</th><th className="px-2 py-2">Tồn kho</th><th className="px-2 py-2">Trạng thái</th></tr></thead>
+                      <tbody>
+                        {((apertureDetail?.resources as ApiResponseData[]) || []).map((resource) => (
+                          <tr key={String(resource.id)} className="border-t border-zinc-800/60 align-top">
+                            <td className="px-2 py-2 text-zinc-200">{String(resource.name)}{resource.path ? <span className="block text-[10px] text-zinc-500">{String(resource.path)}</span> : null}</td>
+                            <td className="px-2 py-2 text-zinc-400">{String(resource.point_type)} · {String(resource.grade)}{resource.point_class === "FAMOUS" ? " · Danh mỏ" : ""}</td>
+                            <td className="px-2 py-2 text-center font-mono text-zinc-400">({String(resource.x)}, {String(resource.y)})</td>
+                            <td className="px-2 py-2 text-center font-mono text-zinc-400">{String(resource.vitality)}</td>
+                            <td className="px-2 py-2 text-zinc-400">{Object.entries((resource.stock as Record<string, number>) || {}).filter(([, amount]) => amount > 0).map(([item, amount]) => `${item}: ${Number(amount).toLocaleString()}`).join(", ") || "Trống"}</td>
+                            <td className="px-2 py-2 text-zinc-400">{String(resource.state)}</td>
+                          </tr>
+                        ))}
+                        {((apertureDetail?.resources as ApiResponseData[]) || []).length === 0 && <tr><td colSpan={6} className="px-2 py-8 text-center text-zinc-500">Tiên Khiếu này chưa có mỏ tài nguyên.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
               </div>
             ) : (
               <div className="space-y-4">

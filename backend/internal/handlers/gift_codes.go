@@ -119,7 +119,7 @@ func AdminCreateGiftCode(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &adminID, Action: "admin.create_gift_code",
 		EntityType: "gift_code", EntityID: id.String(),
 		RequestSummary: fmt.Sprintf("code=%s uses=%d rewards=%s", req.Code, req.MaxUses, string(rewardsJSON)),
@@ -273,7 +273,7 @@ func AdminUpdateGiftCode(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.update_gift_code",
 		EntityType:     "gift_code",
@@ -312,7 +312,7 @@ func AdminDeleteGiftCode(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.delete_gift_code",
 		EntityType:     "gift_code",
@@ -472,7 +472,7 @@ func RedeemGiftCode(c *gin.Context) {
 
 	rewardStr := buildGiftCodeRewardLabel(gc.Rewards)
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "gift_code.redeem",
 		EntityType:     "gift_code",

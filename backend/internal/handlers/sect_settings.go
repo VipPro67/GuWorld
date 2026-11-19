@@ -63,7 +63,7 @@ func UpgradeSect(c *gin.Context) {
 	funds := newFunds
 
 	upgradeSpend := int64(newLevel-1) * int64(newLevel-1) * 5000
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.upgrade", EntityType: "sect",
 		EntityID:       sectID,
 		RequestSummary: fmt.Sprintf("Nâng cấp tông môn lên Cấp %d, tiêu %d Quỹ (còn %d)", newLevel, upgradeSpend, newFunds),
@@ -146,7 +146,7 @@ func ToggleSectApproval(c *gin.Context) {
 	if !req.RequireApproval {
 		toggleWord = "tắt"
 	}
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.toggle_approval", EntityType: "sect",
 		EntityID:       sectID,
 		RequestSummary: fmt.Sprintf("%s duyệt thành viên gia nhập", toggleWord),
@@ -217,7 +217,7 @@ func ToggleSectPromotionApproval(c *gin.Context) {
 	if !req.RequirePromotionApproval {
 		toggleWord = "tắt"
 	}
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.toggle_promotion_approval", EntityType: "sect",
 		EntityID:       sectID,
 		RequestSummary: fmt.Sprintf("%s duyệt lên cấp cho đệ tử", toggleWord),

@@ -423,7 +423,7 @@ func CreateTradeOffer(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &creator.ID, Action: "marketplace.create_trade_offer",
 		EntityType: "trade_offer", EntityID: offerID.String(),
 		RequestSummary: "Đăng đơn trao đổi tự động mới",
@@ -825,7 +825,7 @@ func AcceptTradeOffer(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &acceptor.ID, Action: "marketplace.accept_trade_offer",
 		EntityType: "trade_offer", EntityID: offerUUID.String(),
 		RequestSummary: fmt.Sprintf("Chấp nhận đơn trao đổi của %s", creatorID.String()),
@@ -918,7 +918,7 @@ func CancelTradeOffer(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &creator.ID, Action: "marketplace.cancel_trade_offer",
 		EntityType: "trade_offer", EntityID: offerUUID.String(),
 		RequestSummary: "Hủy đơn trao đổi tự động",

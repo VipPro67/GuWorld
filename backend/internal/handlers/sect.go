@@ -405,7 +405,7 @@ func JoinSect(c *gin.Context) {
 			return
 		}
 
-		auditlog.Log(tx, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 			PlayerID: &playerID, Action: "sect.join", EntityType: "sect",
 			EntityID:       sectID,
 			RequestSummary: "Gửi yêu cầu gia nhập tông môn " + sectID + " (chờ duyệt)",
@@ -432,7 +432,7 @@ func JoinSect(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.join", EntityType: "sect",
 		EntityID:       sectID,
 		RequestSummary: fmt.Sprintf("Gia nhập tông môn %s với chức vụ NGOAI_MON", sectID),
@@ -472,7 +472,7 @@ func CancelSectJoinRequest(c *gin.Context) {
 	}
 
 	// No transaction here: audit the successful delete directly against the pool.
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.cancel_join_request", EntityType: "sect_join_request",
 		EntityID:       pendingSectID,
 		RequestSummary: fmt.Sprintf("Hủy đơn xin gia nhập tông môn %s", pendingSectID),
@@ -524,7 +524,7 @@ func LeaveSect(c *gin.Context) {
 	// Delete pending promotion requests
 	_, _ = tx.Exec(`DELETE FROM sect_promotion_requests WHERE player_id = $1 AND sect_id = $2`, playerID, sectID)
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.leave", EntityType: "sect",
 		EntityID:       sectID,
 		RequestSummary: fmt.Sprintf("Đạo hữu %s rời tông môn", username),
@@ -794,7 +794,7 @@ func PromoteSectRank(c *gin.Context) {
 			return
 		}
 
-		auditlog.Log(tx, auditlog.Entry{
+		auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 			PlayerID: &playerID, Action: "sect.promote_rank", EntityType: "sect_member",
 			EntityID:       m.ID.String(),
 			RequestSummary: fmt.Sprintf("Gửi yêu cầu thăng cấp %s → %s, tiêu %d điểm cống hiến (còn %d)", m.MemberRank, nextRank, costPoints, m.ContributionPoints),
@@ -833,7 +833,7 @@ func PromoteSectRank(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.promote_rank", EntityType: "sect_member",
 		EntityID:       m.ID.String(),
 		RequestSummary: fmt.Sprintf("Thăng cấp lên %s, tiêu %d điểm cống hiến (còn %d)", m.MemberRank, costPoints, m.ContributionPoints),

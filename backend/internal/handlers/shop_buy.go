@@ -272,7 +272,7 @@ func BuyShopItem(c *gin.Context) {
 	}
 	invalidateShopCatalogCache()
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "shop.buy_item",
 		EntityType:     selectedItem.Type,

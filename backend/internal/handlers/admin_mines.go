@@ -234,7 +234,7 @@ func AdminCreatePrimevalVein(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.create_primeval_vein",
 		EntityType:     "primeval_vein",
@@ -347,7 +347,7 @@ func AdminUpdatePrimevalVein(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.update_primeval_vein",
 		EntityType:     "primeval_vein",
@@ -389,7 +389,7 @@ func AdminDeletePrimevalVein(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.delete_primeval_vein",
 		EntityType:     "primeval_vein",
@@ -423,7 +423,7 @@ func AdminSpawnRandomPrimevalVein(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.spawn_random_primeval_vein",
 		EntityType:     "primeval_vein",
@@ -683,7 +683,7 @@ func AdminCreateWorldResourcePoint(c *gin.Context) {
 
 	publishWorldPointsChanged(req.RegionID, req.X, req.Y)
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.create_world_resource_point",
 		EntityType:     "aperture_resource_point",
@@ -832,7 +832,7 @@ func AdminUpdateWorldResourcePoint(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.update_world_resource_point",
 		EntityType:     "aperture_resource_point",
@@ -884,7 +884,7 @@ func AdminDeleteWorldResourcePoint(c *gin.Context) {
 		publishWorldPointsChanged(regionID, x, y)
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.delete_world_resource_point",
 		EntityType:     "aperture_resource_point",
@@ -926,7 +926,7 @@ func AdminSweepWorldResourcePoints(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "Đã kích hoạt quét và bù đắp toàn bộ mỏ tài nguyên thế giới"})
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &adminID,
 		Action:         "admin.sweep_world_resource_points",
 		EntityType:     "aperture_resource_point",

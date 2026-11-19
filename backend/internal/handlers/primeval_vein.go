@@ -377,7 +377,7 @@ func HarvestVein(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "vein.harvest",
 		EntityType:     "primeval_vein",

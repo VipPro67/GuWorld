@@ -17,6 +17,7 @@ Mở profile/leaderboard để xem dữ liệu công khai; chat/mail/notificatio
 - Server là nguồn quyết định quyền xem, rate limit và trạng thái nhận thưởng.
 - Referral/gift code chỉ settle một lần theo điều kiện của chương trình.
 - Admin audit và moderation không phải công cụ người chơi thông thường.
+- Nhật ký cá nhân tại `/api/player/audit-logs` trả sự kiện mà player thực hiện hoặc là đối tượng bị tác động; sự kiện admin nhắm tới player được ghi riêng bằng `affected_player_id`.
 - SSE thông báo thay đổi; thao tác ghi vẫn cần API xác nhận.
 
 ## Kết quả và trường hợp thất bại

@@ -337,7 +337,7 @@ func CompleteSectMission(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &playerID,
 		Action:         "sect.mission_complete",
 		EntityType:     "sect_mission",
@@ -457,7 +457,7 @@ func AbandonSectMission(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.abandon_mission", EntityType: "sect_mission",
 		EntityID:       missionID.String(),
 		RequestSummary: "Hủy nhiệm vụ tông môn đang thực hiện",

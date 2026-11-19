@@ -643,7 +643,7 @@ func CreateGuHouse(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:   &playerID,
 		Action:     "gu_house.create",
 		EntityType: "gu_house",

@@ -430,7 +430,7 @@ func AscensionShatter(c *gin.Context) {
 	if shattered {
 		msg = fmt.Sprintf("Không khiếu vỡ nát! 2 khí thiên địa trào dâng. Đạo hữu có %s để Dẫn Khí, đấu Địa Tai và Thả Cổ — thất bại sẽ mất hết chuẩn bị!", AscensionDeadline.String())
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "ascension.shatter",
 		EntityType:     "player",
@@ -588,7 +588,7 @@ func AscensionTemper(c *gin.Context) {
 		grade := AscensionGradeForHumanQi(session.AscensionQi)
 		msg = fmt.Sprintf("2 khí thiên địa đã thuận theo Nhân Khí! Phúc Địa định phẩm: %s. ĐỊA TAI BẢN YẾU giáng lâm — chuẩn bị nghênh chiến!", AscensionGradeName(grade))
 	}
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "ascension.temper",
 		EntityType:     "player",
@@ -1101,7 +1101,7 @@ func AscensionRelease(c *gin.Context) {
 	ClearPendingPlayerQueues(player.ID.String())
 	PublishPlayerSnapshot(&player, PlayerEventUpdated, PlayerDomain, AscensionDomain)
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "ascension.release",
 		EntityType:     "player",

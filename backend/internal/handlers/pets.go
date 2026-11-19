@@ -151,7 +151,7 @@ func FeedPet(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "pet.feed",
 		EntityType:     "player_pet",
@@ -325,7 +325,7 @@ func ReleasePet(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "pet.release",
 		EntityType:     "player_pet",
@@ -455,7 +455,7 @@ func MergePets(c *gin.Context) {
 		_, _ = tx.Exec(`DELETE FROM non_player_actors WHERE id = $1 AND owner_player_id = $2`, srcID, authID)
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &authID,
 		Action:         "pet.merge",
 		EntityType:     "player_pet",

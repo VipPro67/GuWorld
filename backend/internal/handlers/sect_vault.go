@@ -385,7 +385,7 @@ func StockSectVault(c *gin.Context) {
 		_ = SendSystemMessage("sect", sql.NullString{String: sectID, Valid: true}, fmt.Sprintf("%s %s đã mua thêm %d %s vào bảo khố tông môn. Tiêu hao %d Quỹ, còn lại %d Quỹ.", rankName, username, req.Quantity, itemName, totalCost, s.Funds))
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.stock_vault", EntityType: "sect",
 		EntityID:       sectID,
 		RequestSummary: fmt.Sprintf("%s | %s x%d | tổng giá %d quỹ tông môn", req.ItemType, req.ItemID, req.Quantity, totalCost),
@@ -490,7 +490,7 @@ func DestroySectVaultItem(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.destroy_vault_item", EntityType: "sect",
 		EntityID:       sectID,
 		RequestSummary: fmt.Sprintf("%s | %s rank=%d", req.ItemType, req.ItemID, req.Rank),
@@ -787,7 +787,7 @@ func StockSectVaultBulk(c *gin.Context) {
 	for _, line := range lines {
 		itemSummaries = append(itemSummaries, fmt.Sprintf("%s:%s x%d", line.itemType, line.itemID, line.quantity))
 	}
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.stock_vault_bulk", EntityType: "sect",
 		EntityID:       sectID,
 		RequestSummary: fmt.Sprintf("%d mặt hàng | tổng giá %d quỹ tông môn | %s", len(lines), totalCost, strings.Join(itemSummaries, ", ")),
@@ -1119,7 +1119,7 @@ func BuyFromSectVault(c *gin.Context) {
 		itemName = req.ItemID
 	}
 	_ = SendSystemMessage("sect", sql.NullString{String: m.SectID, Valid: true}, fmt.Sprintf("[Bảo Khố] Đạo hữu %s đã đổi %s (x%d) từ Bảo khố (tiêu hao %d Điểm cống hiến).", player.Username, itemName, quantity, cost))
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &playerID, Action: "sect.buy_vault", EntityType: "sect",
 		EntityID:       m.SectID,
 		RequestSummary: fmt.Sprintf("%s | %s x%d | giá %d điểm cống hiến", req.ItemType, itemName, quantity, cost),

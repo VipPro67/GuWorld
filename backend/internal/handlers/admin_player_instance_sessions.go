@@ -116,7 +116,7 @@ func AdminUpdatePlayerInstanceSession(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể lưu phiên mộng cảnh", err))
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_instance_session", EntityType: "player_instance_sessions", EntityID: sessionID.String(), RequestSummary: fmt.Sprintf("player=%s instance=%s stage=%d status=%s", playerID, instanceID, req.CurrentStage, req.Status), IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.update_instance_session", EntityType: "player_instance_sessions", EntityID: sessionID.String(), RequestSummary: fmt.Sprintf("player=%s instance=%s stage=%d status=%s", playerID, instanceID, req.CurrentStage, req.Status), IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật phiên mộng cảnh", "id": sessionID, "instance_id": instanceID, "current_stage": req.CurrentStage, "status": req.Status, "temp_inventory": req.TempInventory})
 }
 
@@ -145,6 +145,6 @@ func AdminDeletePlayerInstanceSession(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phiên mộng cảnh"})
 		return
 	}
-	auditlog.Log(db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.delete_instance_session", EntityType: "player_instance_sessions", EntityID: sessionID.String(), RequestSummary: strings.TrimSpace(playerID.String()), IPAddress: c.ClientIP(), Success: true})
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{PlayerID: &adminID, Action: "admin.delete_instance_session", EntityType: "player_instance_sessions", EntityID: sessionID.String(), RequestSummary: strings.TrimSpace(playerID.String()), IPAddress: c.ClientIP(), Success: true})
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa phiên mộng cảnh"})
 }

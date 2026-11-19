@@ -99,7 +99,7 @@ func RefineSoul(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(tx, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), tx, auditlog.Entry{
 		PlayerID:       &player.ID,
 		Action:         "soul.refine",
 		EntityType:     "player_soul",

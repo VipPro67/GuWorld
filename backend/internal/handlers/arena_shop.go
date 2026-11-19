@@ -216,13 +216,6 @@ func BuyArenaShopItem(c *gin.Context) {
 		return
 	}
 
-	// Check stock
-	if targetStock > 0 {
-		var soldCount int
-		_ = tx.QueryRow("SELECT COALESCE(SUM((il->>'qty')::int), 0) FROM audit_logs, jsonb_array_elements(details->'items') il WHERE action='arena_shop_purchase' AND details->>'item_id'=$1 AND player_id=$2", req.ItemID, authID).Scan(&soldCount)
-		_ = soldCount // placeholder for future per-player stock tracking
-	}
-
 	// Give item
 	var giveErr error
 	if req.ItemID == "primeval_stone" {
@@ -241,7 +234,7 @@ func BuyArenaShopItem(c *gin.Context) {
 		return
 	}
 
-	auditlog.Log(db.DB, auditlog.Entry{
+	auditlog.LogContext(c.Request.Context(), db.DB, auditlog.Entry{
 		PlayerID: &authID, Action: "arena_shop_purchase", EntityType: "arena_shop_item",
 		EntityID:       req.ItemID,
 		RequestSummary: fmt.Sprintf("%s | qty=%d | giá=%d Xu Đấu Trường", targetName, totalQty, totalCost),
