@@ -5,6 +5,7 @@ import { Gem, RefreshCw, Sprout, TrendingUp, Users } from "lucide-react";
 import { GameButton, GamePanel, GameProgressBar } from "@/components/ui";
 import { translatePath } from "@/lib/translate";
 import { formatNumber } from "@/lib/utils";
+import { getResourcePointIconUrl } from "@/lib/worldResourceAssets";
 import { useGameStore } from "@/store/useGameStore";
 import type { ApertureResourcePoint } from "@/store/useGameStore";
 
@@ -231,7 +232,11 @@ function PointCard({ point, itemDictionary, immortalStones, actionLoading, publi
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="text-base leading-none">{pointGlyph(point)}</span>
+            {getResourcePointIconUrl(point.point_type) ? (
+              <img src={getResourcePointIconUrl(point.point_type)} alt="" className="h-5 w-5 object-contain" />
+            ) : (
+              <span className="text-base leading-none">{pointGlyph(point)}</span>
+            )}
             <span className="truncate text-xs font-bold text-zinc-100">{point.name}</span>
             {point.point_class === "FAMOUS" && (
               <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">

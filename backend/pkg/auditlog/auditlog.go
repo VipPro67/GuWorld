@@ -116,7 +116,7 @@ func LogChecked(q Querier, entry Entry) error {
 		return err
 	}
 
-	const insertSQL = `INSERT INTO audit_logs (player_id, affected_player_id, actor_username, action, effective_roles, effective_permission, entity_type, entity_id, change_data, reason, request_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13::jsonb,$14,$15,$16,$17)`
+	const insertSQL = `INSERT INTO audit_logs (player_id, affected_player_id, actor_username, action, effective_roles, effective_permission, entity_type, entity_id, change_data, reason, request_id, request_summary, metadata, ip_address, success, error_message, created_at) VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9::jsonb,$10,$11,$12,$13::jsonb,$14,$15,$16,$17)`
 
 	if tx, ok := execDB.(*sql.Tx); ok {
 		if _, err := tx.Exec("SAVEPOINT auditlog_insert"); err != nil {

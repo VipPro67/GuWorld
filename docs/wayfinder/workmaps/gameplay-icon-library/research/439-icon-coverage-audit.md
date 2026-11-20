@@ -88,3 +88,7 @@ All 897 catalog item IDs currently resolve through these shared icon keys; examp
 | `potion` | 1 | `ITEM_IMMORTAL_SPRING_WATER` |
 | `primordial-core` | 1 | `XUAN_RANK5` |
 | `salve` | 1 | `ITEM_MEDICINAL_PASTE` |
+
+## First rollout batch records
+
+The exact first-batch IDs, CSV provenance, and per-record prompt seeds are recorded in [`first-rollout-batch-plan.json`](./first-rollout-batch-plan.json): 47 resource-point types, 44 unique production resource identities, and the 35 Gu IDs that miss custom, family, and direct icon coverage. All 126 are delivered. The batch validator confirms source CSV IDs, manifest paths, PNG masters, transparent WebP runtime files, dimensions, and prompt metadata. Grouped generation provenance is recorded in `art/game-icons/sources/manifest.json`.

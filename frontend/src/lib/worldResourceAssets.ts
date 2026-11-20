@@ -1,3 +1,5 @@
+import { getManifestIconUrl, isValidGameImageUrl } from "./game-icon-manifest.ts";
+
 export const WORLD_RESOURCE_ASSETS = {
   herb: "/assets/world/spirit-herb.webp",
   crystal: "/assets/items/icons/crystal.webp",
@@ -13,4 +15,13 @@ export function getWorldResourceGroup(itemId: string, itemType = ""): keyof type
   if (/meat|food/.test(id) || type === "food") return "food";
   if (/stone|ore|crystal|jade|gem/.test(id) || type === "material") return "crystal";
   return "herb";
+}
+
+export function getWorldResourceIconUrl(itemId: string, itemType = "", imageUrl?: string): string {
+  if (isValidGameImageUrl(imageUrl)) return imageUrl.trim();
+  return getManifestIconUrl("item", itemId) ?? WORLD_RESOURCE_ASSETS[getWorldResourceGroup(itemId, itemType)];
+}
+
+export function getResourcePointIconUrl(pointType?: string): string | undefined {
+  return getManifestIconUrl("resourcePoint", pointType);
 }

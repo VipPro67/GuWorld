@@ -287,3 +287,47 @@ export function getRegionDetailsFromCache(
     monster_count: monstersList.length,
   };
 }
+
+export function findNeighborRegion(
+  current: Region | undefined,
+  dirX: number,
+  dirY: number,
+  allRegions: Region[]
+): Region | undefined {
+  if (!current || (dirX === 0 && dirY === 0)) return undefined;
+  const stepX = current.width || 1000;
+  const stepY = current.height || 1000;
+  const targetAtlasX = (current.atlas_x ?? 0) + dirX * stepX;
+  const targetAtlasY = (current.atlas_y ?? 0) + dirY * stepY;
+  const currLayer = current.world_map_id || "world_map";
+
+  // 1. Direct match (both X and Y)
+  const exact = allRegions.find((r) => {
+    if (!["KHU_VUC", "SAFE_ZONE", "HUB"].includes(r.zone_type || "")) return false;
+    const rLayer = r.world_map_id || "world_map";
+    if (rLayer !== currLayer) return false;
+    return r.atlas_x === targetAtlasX && r.atlas_y === targetAtlasY;
+  });
+  if (exact) return exact;
+
+  // 2. Fallbacks for diagonal steps
+  if (dirX !== 0 && dirY !== 0) {
+    const matchX = allRegions.find((r) => {
+      if (!["KHU_VUC", "SAFE_ZONE", "HUB"].includes(r.zone_type || "")) return false;
+      const rLayer = r.world_map_id || "world_map";
+      if (rLayer !== currLayer) return false;
+      return r.atlas_x === targetAtlasX && r.atlas_y === (current.atlas_y ?? 0);
+    });
+    if (matchX) return matchX;
+
+    const matchY = allRegions.find((r) => {
+      if (!["KHU_VUC", "SAFE_ZONE", "HUB"].includes(r.zone_type || "")) return false;
+      const rLayer = r.world_map_id || "world_map";
+      if (rLayer !== currLayer) return false;
+      return r.atlas_x === (current.atlas_x ?? 0) && r.atlas_y === targetAtlasY;
+    });
+    if (matchY) return matchY;
+  }
+
+  return undefined;
+}

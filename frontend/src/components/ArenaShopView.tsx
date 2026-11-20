@@ -50,7 +50,7 @@ export const ArenaShopView: React.FC = () => {
         typeName: "Cổ Trùng",
         name: guSpec.name || item.name,
         rank,
-        iconUrl: getGuIconUrl(guSpec.id, guSpec.name),
+        iconUrl: getGuIconUrl(guSpec.id, guSpec.name, guSpec.image_url),
         description: guSpec.description || "Cổ trùng kỳ dị trong thiên địa.",
         rankColor: getGuRankColor(rank),
       };

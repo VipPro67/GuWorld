@@ -3,6 +3,7 @@
  */
 
 import { GU_FAMILY_ICON_SPRITES } from "./gu-family-icons.ts";
+import { getManifestIconUrl, isValidGameImageUrl } from "./game-icon-manifest.ts";
 
 export const AVAILABLE_GU_ICONS: Set<string> = new Set([
   "gu_a_thi",
@@ -534,8 +535,11 @@ export function normalizeGuSlug(name: string): string {
   return text;
 }
 
-export function getGuIconUrl(guId?: string | null, guName?: string | null): string {
+export function getGuIconUrl(guId?: string | null, guName?: string | null, imageUrl?: string | null): string {
+  if (isValidGameImageUrl(imageUrl)) return imageUrl.trim();
   if (guId) {
+    const manifestUrl = getManifestIconUrl("gu", guId);
+    if (manifestUrl) return manifestUrl;
     if (CUSTOM_GU_ICONS[guId]) return CUSTOM_GU_ICONS[guId];
     const directId = guId.toLowerCase().trim();
     if (CUSTOM_GU_ICONS[directId]) return CUSTOM_GU_ICONS[directId];

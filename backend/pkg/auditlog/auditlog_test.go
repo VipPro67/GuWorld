@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -66,6 +67,9 @@ func TestLog_UsesPassedQuerier(t *testing.T) {
 	}
 	if mock.lastArgs[3] != "gu.starve_death" {
 		t.Errorf("expected action gu.starve_death, got %v", mock.lastArgs[3])
+	}
+	if strings.Contains(mock.lastQuery, "$4::jsonb") || !strings.Contains(mock.lastQuery, "$5::jsonb") {
+		t.Errorf("expected JSONB cast on effective_roles ($5), not action ($4): %s", mock.lastQuery)
 	}
 }
 

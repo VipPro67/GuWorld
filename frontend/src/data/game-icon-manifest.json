@@ -1,0 +1,805 @@
+{
+  "schema_version": 1,
+  "gu": {
+    "GU_ALL_PEOPLE_UNITED_I": {
+      "master": "art/game-icons/masters/gu/GU_ALL_PEOPLE_UNITED_I.png",
+      "runtime": "/assets/game-icons/gu/GU_ALL_PEOPLE_UNITED_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-immortal-insects-group-01.png, visual slot row 1 column 1; style refs: frontend/public/assets/gu_icons/families/gu_blood_tide.png and gu_nghich_huyet.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-immortal-insects-group-01, slot row 1 column 1; ID GU_ALL_PEOPLE_UNITED_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_BLOOD_STAINED_ROBE_I": {
+      "master": "art/game-icons/masters/gu/GU_BLOOD_STAINED_ROBE_I.png",
+      "runtime": "/assets/game-icons/gu/GU_BLOOD_STAINED_ROBE_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-immortal-insects-group-01.png, visual slot row 1 column 2; style refs: frontend/public/assets/gu_icons/families/gu_blood_tide.png and gu_nghich_huyet.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-immortal-insects-group-01, slot row 1 column 2; ID GU_BLOOD_STAINED_ROBE_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_CHAOS_CAVE_DRILL_I": {
+      "master": "art/game-icons/masters/gu/GU_CHAOS_CAVE_DRILL_I.png",
+      "runtime": "/assets/game-icons/gu/GU_CHAOS_CAVE_DRILL_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-immortal-insects-group-01.png, visual slot row 1 column 3; style refs: frontend/public/assets/gu_icons/families/gu_blood_tide.png and gu_nghich_huyet.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-immortal-insects-group-01, slot row 1 column 3; ID GU_CHAOS_CAVE_DRILL_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_CHARM_GHOST_I": {
+      "master": "art/game-icons/masters/gu/GU_CHARM_GHOST_I.png",
+      "runtime": "/assets/game-icons/gu/GU_CHARM_GHOST_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-immortal-insects-group-01.png, visual slot row 2 column 1; style refs: frontend/public/assets/gu_icons/families/gu_blood_tide.png and gu_nghich_huyet.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-immortal-insects-group-01, slot row 2 column 1; ID GU_CHARM_GHOST_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_DANG_HUN_EXPLOSION_I": {
+      "master": "art/game-icons/masters/gu/GU_DANG_HUN_EXPLOSION_I.png",
+      "runtime": "/assets/game-icons/gu/GU_DANG_HUN_EXPLOSION_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-immortal-insects-group-01.png, visual slot row 2 column 2; style refs: frontend/public/assets/gu_icons/families/gu_blood_tide.png and gu_nghich_huyet.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-immortal-insects-group-01, slot row 2 column 2; ID GU_DANG_HUN_EXPLOSION_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_DESTINY_SONG_I": {
+      "master": "art/game-icons/masters/gu/GU_DESTINY_SONG_I.png",
+      "runtime": "/assets/game-icons/gu/GU_DESTINY_SONG_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-immortal-insects-group-01.png, visual slot row 2 column 3; style refs: frontend/public/assets/gu_icons/families/gu_blood_tide.png and gu_nghich_huyet.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-immortal-insects-group-01, slot row 2 column 3; ID GU_DESTINY_SONG_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_DRY_WOOD_SPRING_I": {
+      "master": "art/game-icons/masters/gu/GU_DRY_WOOD_SPRING_I.png",
+      "runtime": "/assets/game-icons/gu/GU_DRY_WOOD_SPRING_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-immortal-insects-group-01.png, visual slot row 3 column 1; style refs: frontend/public/assets/gu_icons/families/gu_blood_tide.png and gu_nghich_huyet.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-immortal-insects-group-01, slot row 3 column 1; ID GU_DRY_WOOD_SPRING_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_EATING_LOSS_BLESSING_I": {
+      "master": "art/game-icons/masters/gu/GU_EATING_LOSS_BLESSING_I.png",
+      "runtime": "/assets/game-icons/gu/GU_EATING_LOSS_BLESSING_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-immortal-insects-group-01.png, visual slot row 3 column 2; style refs: frontend/public/assets/gu_icons/families/gu_blood_tide.png and gu_nghich_huyet.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-immortal-insects-group-01, slot row 3 column 2; ID GU_EATING_LOSS_BLESSING_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_FAREWELL_FRIEND_WIND_I": {
+      "master": "art/game-icons/masters/gu/GU_FAREWELL_FRIEND_WIND_I.png",
+      "runtime": "/assets/game-icons/gu/GU_FAREWELL_FRIEND_WIND_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-immortal-insects-group-01.png, visual slot row 3 column 3; style refs: frontend/public/assets/gu_icons/families/gu_blood_tide.png and gu_nghich_huyet.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-immortal-insects-group-01, slot row 3 column 3; ID GU_FAREWELL_FRIEND_WIND_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_FATE_VANQUISHED_I": {
+      "master": "art/game-icons/masters/gu/GU_FATE_VANQUISHED_I.png",
+      "runtime": "/assets/game-icons/gu/GU_FATE_VANQUISHED_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-destiny-insects-group-02.png, visual slot row 1 column 1; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-destiny-insects-group-02, slot row 1 column 1; ID GU_FATE_VANQUISHED_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_FIVE_RESTRICTION_LIGHT_I": {
+      "master": "art/game-icons/masters/gu/GU_FIVE_RESTRICTION_LIGHT_I.png",
+      "runtime": "/assets/game-icons/gu/GU_FIVE_RESTRICTION_LIGHT_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-destiny-insects-group-02.png, visual slot row 1 column 2; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-destiny-insects-group-02, slot row 1 column 2; ID GU_FIVE_RESTRICTION_LIGHT_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_FUTURE_SELF_I": {
+      "master": "art/game-icons/masters/gu/GU_FUTURE_SELF_I.png",
+      "runtime": "/assets/game-icons/gu/GU_FUTURE_SELF_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-destiny-insects-group-02.png, visual slot row 1 column 3; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-destiny-insects-group-02, slot row 1 column 3; ID GU_FUTURE_SELF_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_GREAT_NIGHT_I": {
+      "master": "art/game-icons/masters/gu/GU_GREAT_NIGHT_I.png",
+      "runtime": "/assets/game-icons/gu/GU_GREAT_NIGHT_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-destiny-insects-group-02.png, visual slot row 2 column 1; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-destiny-insects-group-02, slot row 2 column 1; ID GU_GREAT_NIGHT_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_HERO_AMONG_MEN_I": {
+      "master": "art/game-icons/masters/gu/GU_HERO_AMONG_MEN_I.png",
+      "runtime": "/assets/game-icons/gu/GU_HERO_AMONG_MEN_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-destiny-insects-group-02.png, visual slot row 2 column 2; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-destiny-insects-group-02, slot row 2 column 2; ID GU_HERO_AMONG_MEN_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_ICE_CRYSTAL_COFFIN_I": {
+      "master": "art/game-icons/masters/gu/GU_ICE_CRYSTAL_COFFIN_I.png",
+      "runtime": "/assets/game-icons/gu/GU_ICE_CRYSTAL_COFFIN_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-destiny-insects-group-02.png, visual slot row 2 column 3; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-destiny-insects-group-02, slot row 2 column 3; ID GU_ICE_CRYSTAL_COFFIN_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_IMMORTAL_BINDING_VINE_I": {
+      "master": "art/game-icons/masters/gu/GU_IMMORTAL_BINDING_VINE_I.png",
+      "runtime": "/assets/game-icons/gu/GU_IMMORTAL_BINDING_VINE_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-destiny-insects-group-02.png, visual slot row 3 column 1; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-destiny-insects-group-02, slot row 3 column 1; ID GU_IMMORTAL_BINDING_VINE_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_INFINITE_WIND_I": {
+      "master": "art/game-icons/masters/gu/GU_INFINITE_WIND_I.png",
+      "runtime": "/assets/game-icons/gu/GU_INFINITE_WIND_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-destiny-insects-group-02.png, visual slot row 3 column 2; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-destiny-insects-group-02, slot row 3 column 2; ID GU_INFINITE_WIND_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_KUN_PENG_TOTEM_I": {
+      "master": "art/game-icons/masters/gu/GU_KUN_PENG_TOTEM_I.png",
+      "runtime": "/assets/game-icons/gu/GU_KUN_PENG_TOTEM_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-destiny-insects-group-02.png, visual slot row 3 column 3; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-destiny-insects-group-02, slot row 3 column 3; ID GU_KUN_PENG_TOTEM_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_LIGHT_TIME_BLADE_I": {
+      "master": "art/game-icons/masters/gu/GU_LIGHT_TIME_BLADE_I.png",
+      "runtime": "/assets/game-icons/gu/GU_LIGHT_TIME_BLADE_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-life-elements-group-03.png, visual slot row 1 column 1; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_xich_thiet_xa_loi.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-life-elements-group-03, slot row 1 column 1; ID GU_LIGHT_TIME_BLADE_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_MYRIAD_DISMANTLE_I": {
+      "master": "art/game-icons/masters/gu/GU_MYRIAD_DISMANTLE_I.png",
+      "runtime": "/assets/game-icons/gu/GU_MYRIAD_DISMANTLE_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-life-elements-group-03.png, visual slot row 1 column 2; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_xich_thiet_xa_loi.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-life-elements-group-03, slot row 1 column 2; ID GU_MYRIAD_DISMANTLE_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_MYRIAD_STAR_FIREFLY_I": {
+      "master": "art/game-icons/masters/gu/GU_MYRIAD_STAR_FIREFLY_I.png",
+      "runtime": "/assets/game-icons/gu/GU_MYRIAD_STAR_FIREFLY_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-life-elements-group-03.png, visual slot row 1 column 3; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_xich_thiet_xa_loi.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-life-elements-group-03, slot row 1 column 3; ID GU_MYRIAD_STAR_FIREFLY_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_NIRVANA_FIRE_I": {
+      "master": "art/game-icons/masters/gu/GU_NIRVANA_FIRE_I.png",
+      "runtime": "/assets/game-icons/gu/GU_NIRVANA_FIRE_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-life-elements-group-03.png, visual slot row 2 column 1; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_xich_thiet_xa_loi.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-life-elements-group-03, slot row 2 column 1; ID GU_NIRVANA_FIRE_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_QI_JUE_LIFE_I": {
+      "master": "art/game-icons/masters/gu/GU_QI_JUE_LIFE_I.png",
+      "runtime": "/assets/game-icons/gu/GU_QI_JUE_LIFE_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-life-elements-group-03.png, visual slot row 2 column 2; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_xich_thiet_xa_loi.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-life-elements-group-03, slot row 2 column 2; ID GU_QI_JUE_LIFE_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_QI_SEA_I": {
+      "master": "art/game-icons/masters/gu/GU_QI_SEA_I.png",
+      "runtime": "/assets/game-icons/gu/GU_QI_SEA_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-life-elements-group-03.png, visual slot row 2 column 3; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_xich_thiet_xa_loi.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-life-elements-group-03, slot row 2 column 3; ID GU_QI_SEA_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_RAGING_BIRD_I": {
+      "master": "art/game-icons/masters/gu/GU_RAGING_BIRD_I.png",
+      "runtime": "/assets/game-icons/gu/GU_RAGING_BIRD_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-life-elements-group-03.png, visual slot row 3 column 1; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_xich_thiet_xa_loi.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-life-elements-group-03, slot row 3 column 1; ID GU_RAGING_BIRD_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_REFINE_SELF_I": {
+      "master": "art/game-icons/masters/gu/GU_REFINE_SELF_I.png",
+      "runtime": "/assets/game-icons/gu/GU_REFINE_SELF_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-life-elements-group-03.png, visual slot row 3 column 2; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_xich_thiet_xa_loi.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-life-elements-group-03, slot row 3 column 2; ID GU_REFINE_SELF_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_SEPARATION_SONG_I": {
+      "master": "art/game-icons/masters/gu/GU_SEPARATION_SONG_I.png",
+      "runtime": "/assets/game-icons/gu/GU_SEPARATION_SONG_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-life-elements-group-03.png, visual slot row 3 column 3; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_xich_thiet_xa_loi.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-life-elements-group-03, slot row 3 column 3; ID GU_SEPARATION_SONG_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_SOUL_BEAST_SUMMON_I": {
+      "master": "art/game-icons/masters/gu/GU_SOUL_BEAST_SUMMON_I.png",
+      "runtime": "/assets/game-icons/gu/GU_SOUL_BEAST_SUMMON_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-final-eight-group-04.png, visual slot row 1 column 1; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-final-eight-group-04, slot row 1 column 1; ID GU_SOUL_BEAST_SUMMON_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_THIRTY_THREE_HEAVEN_LIGHT_I": {
+      "master": "art/game-icons/masters/gu/GU_THIRTY_THREE_HEAVEN_LIGHT_I.png",
+      "runtime": "/assets/game-icons/gu/GU_THIRTY_THREE_HEAVEN_LIGHT_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-final-eight-group-04.png, visual slot row 1 column 2; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-final-eight-group-04, slot row 1 column 2; ID GU_THIRTY_THREE_HEAVEN_LIGHT_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_THREE_MEN_TIGER_I": {
+      "master": "art/game-icons/masters/gu/GU_THREE_MEN_TIGER_I.png",
+      "runtime": "/assets/game-icons/gu/GU_THREE_MEN_TIGER_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-final-eight-group-04.png, visual slot row 1 column 3; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-final-eight-group-04, slot row 1 column 3; ID GU_THREE_MEN_TIGER_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_THREE_QI_RETURN_I": {
+      "master": "art/game-icons/masters/gu/GU_THREE_QI_RETURN_I.png",
+      "runtime": "/assets/game-icons/gu/GU_THREE_QI_RETURN_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-final-eight-group-04.png, visual slot row 2 column 1; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-final-eight-group-04, slot row 2 column 1; ID GU_THREE_QI_RETURN_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_TRIPLE_SWORD_WAVE_I": {
+      "master": "art/game-icons/masters/gu/GU_TRIPLE_SWORD_WAVE_I.png",
+      "runtime": "/assets/game-icons/gu/GU_TRIPLE_SWORD_WAVE_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-final-eight-group-04.png, visual slot row 2 column 2; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-final-eight-group-04, slot row 2 column 2; ID GU_TRIPLE_SWORD_WAVE_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_WORDS_FRIGHTENING_I": {
+      "master": "art/game-icons/masters/gu/GU_WORDS_FRIGHTENING_I.png",
+      "runtime": "/assets/game-icons/gu/GU_WORDS_FRIGHTENING_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-final-eight-group-04.png, visual slot row 2 column 3; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-final-eight-group-04, slot row 2 column 3; ID GU_WORDS_FRIGHTENING_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_YAMA_EMPEROR_I": {
+      "master": "art/game-icons/masters/gu/GU_YAMA_EMPEROR_I.png",
+      "runtime": "/assets/game-icons/gu/GU_YAMA_EMPEROR_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-final-eight-group-04.png, visual slot row 3 column 1; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-final-eight-group-04, slot row 3 column 1; ID GU_YAMA_EMPEROR_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    },
+    "GU_YOU_DU_TIGER_I": {
+      "master": "art/game-icons/masters/gu/GU_YOU_DU_TIGER_I.png",
+      "runtime": "/assets/game-icons/gu/GU_YOU_DU_TIGER_I.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/gu-final-eight-group-04.png, visual slot row 3 column 2; style refs: frontend/public/assets/gu_icons/families/gu_shadow.png and gu_spring_return.png",
+      "prompt": "GuWorld original Gu insect in hybrid pixel art; source batch gu-final-eight-group-04, slot row 3 column 2; ID GU_YOU_DU_TIGER_I. Distinct compact creature, clear dark outline, transparent alpha, readable at 24px; original design, no frame, text, badge, or watermark."
+    }
+  },
+  "item": {
+    "blade_stone": {
+      "master": "art/game-icons/masters/item/blade_stone.png",
+      "runtime": "/assets/game-icons/item/blade_stone.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-mineral-group-01.png, cell row 1 column 1; style refs: frontend/public/assets/items/icons/ore.webp and crystal.webp",
+      "prompt": "GuWorld original hybrid pixel-art resource icon; source group batch item-mineral-group-01 cell row 1, column 1. Subject: blade_stone, distinct physical mineral silhouette, centered, transparent background, dark outline, restrained facets, readable at 24px. Generated as one cell of a strict 3x3 sheet; no text, frame, badge, or watermark."
+    },
+    "blood_crystal": {
+      "master": "art/game-icons/masters/item/blood_crystal.png",
+      "runtime": "/assets/game-icons/item/blood_crystal.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-mineral-group-01.png, cell row 1 column 2; style refs: frontend/public/assets/items/icons/ore.webp and crystal.webp",
+      "prompt": "GuWorld original hybrid pixel-art resource icon; source group batch item-mineral-group-01 cell row 1, column 2. Subject: blood_crystal, distinct physical mineral silhouette, centered, transparent background, dark outline, restrained facets, readable at 24px. Generated as one cell of a strict 3x3 sheet; no text, frame, badge, or watermark."
+    },
+    "cloud_crystal": {
+      "master": "art/game-icons/masters/item/cloud_crystal.png",
+      "runtime": "/assets/game-icons/item/cloud_crystal.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-mineral-group-01.png, cell row 1 column 3; style refs: frontend/public/assets/items/icons/ore.webp and crystal.webp",
+      "prompt": "GuWorld original hybrid pixel-art resource icon; source group batch item-mineral-group-01 cell row 1, column 3. Subject: cloud_crystal, distinct physical mineral silhouette, centered, transparent background, dark outline, restrained facets, readable at 24px. Generated as one cell of a strict 3x3 sheet; no text, frame, badge, or watermark."
+    },
+    "creation_stone": {
+      "master": "art/game-icons/masters/item/creation_stone.png",
+      "runtime": "/assets/game-icons/item/creation_stone.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-mineral-group-01.png, cell row 2 column 1; style refs: frontend/public/assets/items/icons/ore.webp and crystal.webp",
+      "prompt": "GuWorld original hybrid pixel-art resource icon; source group batch item-mineral-group-01 cell row 2, column 1. Subject: creation_stone, distinct physical mineral silhouette, centered, transparent background, dark outline, restrained facets, readable at 24px. Generated as one cell of a strict 3x3 sheet; no text, frame, badge, or watermark."
+    },
+    "dark_crystal": {
+      "master": "art/game-icons/masters/item/dark_crystal.png",
+      "runtime": "/assets/game-icons/item/dark_crystal.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-mineral-group-01.png, cell row 2 column 2; style refs: frontend/public/assets/items/icons/ore.webp and crystal.webp",
+      "prompt": "GuWorld original hybrid pixel-art resource icon; source group batch item-mineral-group-01 cell row 2, column 2. Subject: dark_crystal, distinct physical mineral silhouette, centered, transparent background, dark outline, restrained facets, readable at 24px. Generated as one cell of a strict 3x3 sheet; no text, frame, badge, or watermark."
+    },
+    "destruction_iron": {
+      "master": "art/game-icons/masters/item/destruction_iron.png",
+      "runtime": "/assets/game-icons/item/destruction_iron.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-mineral-group-01.png, cell row 2 column 3; style refs: frontend/public/assets/items/icons/ore.webp and crystal.webp",
+      "prompt": "GuWorld original hybrid pixel-art resource icon; source group batch item-mineral-group-01 cell row 2, column 3. Subject: destruction_iron, distinct physical mineral silhouette, centered, transparent background, dark outline, restrained facets, readable at 24px. Generated as one cell of a strict 3x3 sheet; no text, frame, badge, or watermark."
+    },
+    "fire_crystal": {
+      "master": "art/game-icons/masters/item/fire_crystal.png",
+      "runtime": "/assets/game-icons/item/fire_crystal.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-mineral-group-01.png, cell row 3 column 1; style refs: frontend/public/assets/items/icons/ore.webp and crystal.webp",
+      "prompt": "GuWorld original hybrid pixel-art resource icon; source group batch item-mineral-group-01 cell row 3, column 1. Subject: fire_crystal, distinct physical mineral silhouette, centered, transparent background, dark outline, restrained facets, readable at 24px. Generated as one cell of a strict 3x3 sheet; no text, frame, badge, or watermark."
+    },
+    "ice_crystal": {
+      "master": "art/game-icons/masters/item/ice_crystal.png",
+      "runtime": "/assets/game-icons/item/ice_crystal.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-mineral-group-01.png, cell row 3 column 2; style refs: frontend/public/assets/items/icons/ore.webp and crystal.webp",
+      "prompt": "GuWorld original hybrid pixel-art resource icon; source group batch item-mineral-group-01 cell row 3, column 2. Subject: ice_crystal, distinct physical mineral silhouette, centered, transparent background, dark outline, restrained facets, readable at 24px. Generated as one cell of a strict 3x3 sheet; no text, frame, badge, or watermark."
+    },
+    "light_crystal": {
+      "master": "art/game-icons/masters/item/light_crystal.png",
+      "runtime": "/assets/game-icons/item/light_crystal.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-mineral-group-01.png, cell row 3 column 3; style refs: frontend/public/assets/items/icons/ore.webp and crystal.webp",
+      "prompt": "GuWorld original hybrid pixel-art resource icon; source group batch item-mineral-group-01 cell row 3, column 3. Subject: light_crystal, distinct physical mineral silhouette, centered, transparent background, dark outline, restrained facets, readable at 24px. Generated as one cell of a strict 3x3 sheet; no text, frame, badge, or watermark."
+    },
+    "bone_splinter": {
+      "master": "art/game-icons/masters/item/bone_splinter.png",
+      "runtime": "/assets/game-icons/item/bone_splinter.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-materials-group-02.png, visual slot row 1 column 1; style refs: frontend/public/assets/items/icons/bone.webp and sand.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-materials-group-02, slot row 1 column 1; ID bone_splinter. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "death_sand": {
+      "master": "art/game-icons/masters/item/death_sand.png",
+      "runtime": "/assets/game-icons/item/death_sand.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-materials-group-02.png, visual slot row 1 column 2; style refs: frontend/public/assets/items/icons/bone.webp and sand.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-materials-group-02, slot row 1 column 2; ID death_sand. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "dream_pearl": {
+      "master": "art/game-icons/masters/item/dream_pearl.png",
+      "runtime": "/assets/game-icons/item/dream_pearl.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-materials-group-02.png, visual slot row 1 column 3; style refs: frontend/public/assets/items/icons/bone.webp and sand.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-materials-group-02, slot row 1 column 3; ID dream_pearl. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "earth_soil": {
+      "master": "art/game-icons/masters/item/earth_soil.png",
+      "runtime": "/assets/game-icons/item/earth_soil.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-materials-group-02.png, visual slot row 2 column 1; style refs: frontend/public/assets/items/icons/bone.webp and sand.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-materials-group-02, slot row 2 column 1; ID earth_soil. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "emotion_silk": {
+      "master": "art/game-icons/masters/item/emotion_silk.png",
+      "runtime": "/assets/game-icons/item/emotion_silk.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-materials-group-02.png, visual slot row 2 column 2; style refs: frontend/public/assets/items/icons/bone.webp and sand.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-materials-group-02, slot row 2 column 2; ID emotion_silk. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "enslavement_stone": {
+      "master": "art/game-icons/masters/item/enslavement_stone.png",
+      "runtime": "/assets/game-icons/item/enslavement_stone.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-materials-group-02.png, visual slot row 2 column 3; style refs: frontend/public/assets/items/icons/bone.webp and sand.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-materials-group-02, slot row 2 column 3; ID enslavement_stone. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "food_essence": {
+      "master": "art/game-icons/masters/item/food_essence.png",
+      "runtime": "/assets/game-icons/item/food_essence.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-materials-group-02.png, visual slot row 3 column 1; style refs: frontend/public/assets/items/icons/bone.webp and sand.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-materials-group-02, slot row 3 column 1; ID food_essence. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "formation_stone": {
+      "master": "art/game-icons/masters/item/formation_stone.png",
+      "runtime": "/assets/game-icons/item/formation_stone.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-materials-group-02.png, visual slot row 3 column 2; style refs: frontend/public/assets/items/icons/bone.webp and sand.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-materials-group-02, slot row 3 column 2; ID formation_stone. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "heaven_sand": {
+      "master": "art/game-icons/masters/item/heaven_sand.png",
+      "runtime": "/assets/game-icons/item/heaven_sand.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-materials-group-02.png, visual slot row 3 column 3; style refs: frontend/public/assets/items/icons/bone.webp and sand.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-materials-group-02, slot row 3 column 3; ID heaven_sand. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "information_stone": {
+      "master": "art/game-icons/masters/item/information_stone.png",
+      "runtime": "/assets/game-icons/item/information_stone.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-arcane-metals-group-03.png, visual slot row 1 column 1; style refs: frontend/public/assets/items/icons/pearl.webp and lightning.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-arcane-metals-group-03, slot row 1 column 1; ID information_stone. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "investigation_pearl": {
+      "master": "art/game-icons/masters/item/investigation_pearl.png",
+      "runtime": "/assets/game-icons/item/investigation_pearl.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-arcane-metals-group-03.png, visual slot row 1 column 2; style refs: frontend/public/assets/items/icons/pearl.webp and lightning.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-arcane-metals-group-03, slot row 1 column 2; ID investigation_pearl. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "killing_iron": {
+      "master": "art/game-icons/masters/item/killing_iron.png",
+      "runtime": "/assets/game-icons/item/killing_iron.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-arcane-metals-group-03.png, visual slot row 1 column 3; style refs: frontend/public/assets/items/icons/pearl.webp and lightning.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-arcane-metals-group-03, slot row 1 column 3; ID killing_iron. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "langya_refinement_shard": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "lightning_crystal": {
+      "master": "art/game-icons/masters/item/lightning_crystal.png",
+      "runtime": "/assets/game-icons/item/lightning_crystal.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-arcane-metals-group-03.png, visual slot row 2 column 2; style refs: frontend/public/assets/items/icons/pearl.webp and lightning.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-arcane-metals-group-03, slot row 2 column 2; ID lightning_crystal. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "luck_pearl": {
+      "master": "art/game-icons/masters/item/luck_pearl.png",
+      "runtime": "/assets/game-icons/item/luck_pearl.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-arcane-metals-group-03.png, visual slot row 2 column 3; style refs: frontend/public/assets/items/icons/pearl.webp and lightning.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-arcane-metals-group-03, slot row 2 column 3; ID luck_pearl. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "metal_ore": {
+      "master": "art/game-icons/masters/item/metal_ore.png",
+      "runtime": "/assets/game-icons/item/metal_ore.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/item-arcane-metals-group-03.png, visual slot row 3 column 1; style refs: frontend/public/assets/items/icons/pearl.webp and lightning.webp",
+      "prompt": "Original GuWorld resource item in hybrid pixel art; source batch item-arcane-metals-group-03, slot row 3 column 1; ID metal_ore. Single distinct material silhouette, crisp dark outline, transparent alpha, readable at 24px, no frame, text, or watermark."
+    },
+    "painting_ink": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "phantom_crystal": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "poison_sand": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "qi_stone": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "refinement_iron": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "rule_stone": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "soul_sand": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "sound_resonance": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "space_crystal": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "star_sand": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "strength_crystal": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "sword_stone": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "theft_crystal": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "time_sand": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "transformation_essence": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "water_pearl": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "wind_stone": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "wisdom_pearl": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    },
+    "wood_crystal": {
+      "master": "art/game-icons/masters/item/beast_material_fragment.png",
+      "runtime": "/assets/game-icons/item/beast_material_fragment.webp",
+      "source": "OpenAI ImageGen original archetype artwork: art/game-icons/masters/item/beast_material_fragment.png; assigned to rank-1 creature materials whose CSV names end in “Phàm Chi”.",
+      "prompt": "Shared common beast-material fragment archetype: a neutral layered hide/scale/mineral shard representing ordinary crafting drops from different magical beasts. Original GuWorld hybrid pixel art, transparent background, dark crisp outline, readable at 24px; one compact subject, no frame, text, badge, or watermark.",
+      "artwork_id": "beast_material_fragment",
+      "archetype": "common-beast-material"
+    }
+  },
+  "resourcePoint": {
+    "HERB_VALLEY": {
+      "master": "art/game-icons/masters/resource-point/HERB_VALLEY.png",
+      "runtime": "/assets/game-icons/resource-point/HERB_VALLEY.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-natural-group-01.png, visual slot row 1 column 1; style refs: frontend/public/assets/items/icons/herb.webp and ore.webp",
+      "prompt": "Original GuWorld resource point icon from the natural location marker batch, slot row 1 column 1; subject HERB_VALLEY. Isolated compact silhouette, hybrid pixel art, crisp outline, transparent alpha, no frame or text; at 24px."
+    },
+    "BEAST_PASTURE": {
+      "master": "art/game-icons/masters/resource-point/BEAST_PASTURE.png",
+      "runtime": "/assets/game-icons/resource-point/BEAST_PASTURE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-natural-group-01.png, visual slot row 1 column 2; style refs: frontend/public/assets/items/icons/herb.webp and ore.webp",
+      "prompt": "Original GuWorld resource point icon from the natural location marker batch, slot row 1 column 2; subject BEAST_PASTURE. Isolated compact silhouette, hybrid pixel art, crisp outline, transparent alpha, no frame or text; at 24px."
+    },
+    "ORE_VEIN": {
+      "master": "art/game-icons/masters/resource-point/ORE_VEIN.png",
+      "runtime": "/assets/game-icons/resource-point/ORE_VEIN.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-natural-group-01.png, visual slot row 1 column 3; style refs: frontend/public/assets/items/icons/herb.webp and ore.webp",
+      "prompt": "Original GuWorld resource point icon from the natural location marker batch, slot row 1 column 3; subject ORE_VEIN. Isolated compact silhouette, hybrid pixel art, crisp outline, transparent alpha, no frame or text; at 24px."
+    },
+    "SPIRIT_SPRING": {
+      "master": "art/game-icons/masters/resource-point/SPIRIT_SPRING.png",
+      "runtime": "/assets/game-icons/resource-point/SPIRIT_SPRING.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-natural-group-01.png, visual slot row 2 column 1; style refs: frontend/public/assets/items/icons/herb.webp and ore.webp",
+      "prompt": "Original GuWorld resource point icon from the natural location marker batch, slot row 2 column 1; subject SPIRIT_SPRING. Isolated compact silhouette, hybrid pixel art, crisp outline, transparent alpha, no frame or text; at 24px."
+    },
+    "GOLD_SAND_SHOAL": {
+      "master": "art/game-icons/masters/resource-point/GOLD_SAND_SHOAL.png",
+      "runtime": "/assets/game-icons/resource-point/GOLD_SAND_SHOAL.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-natural-group-01.png, visual slot row 2 column 2; style refs: frontend/public/assets/items/icons/herb.webp and ore.webp",
+      "prompt": "Original GuWorld resource point icon from the natural location marker batch, slot row 2 column 2; subject GOLD_SAND_SHOAL. Isolated compact silhouette, hybrid pixel art, crisp outline, transparent alpha, no frame or text; at 24px."
+    },
+    "MOON_BOWL": {
+      "master": "art/game-icons/masters/resource-point/MOON_BOWL.png",
+      "runtime": "/assets/game-icons/resource-point/MOON_BOWL.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-natural-group-01.png, visual slot row 2 column 3; style refs: frontend/public/assets/items/icons/herb.webp and ore.webp",
+      "prompt": "Original GuWorld resource point icon from the natural location marker batch, slot row 2 column 3; subject MOON_BOWL. Isolated compact silhouette, hybrid pixel art, crisp outline, transparent alpha, no frame or text; at 24px."
+    },
+    "YEAR_ESSENCE_POOL": {
+      "master": "art/game-icons/masters/resource-point/YEAR_ESSENCE_POOL.png",
+      "runtime": "/assets/game-icons/resource-point/YEAR_ESSENCE_POOL.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-natural-group-01.png, visual slot row 3 column 1; style refs: frontend/public/assets/items/icons/herb.webp and ore.webp",
+      "prompt": "Original GuWorld resource point icon from the natural location marker batch, slot row 3 column 1; subject YEAR_ESSENCE_POOL. Isolated compact silhouette, hybrid pixel art, crisp outline, transparent alpha, no frame or text; at 24px."
+    },
+    "DANG_HON_PEAK": {
+      "master": "art/game-icons/masters/resource-point/DANG_HON_PEAK.png",
+      "runtime": "/assets/game-icons/resource-point/DANG_HON_PEAK.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-natural-group-01.png, visual slot row 3 column 2; style refs: frontend/public/assets/items/icons/herb.webp and ore.webp",
+      "prompt": "Original GuWorld resource point icon from the natural location marker batch, slot row 3 column 2; subject DANG_HON_PEAK. Isolated compact silhouette, hybrid pixel art, crisp outline, transparent alpha, no frame or text; at 24px."
+    },
+    "JADE_SNAKE_CAVE": {
+      "master": "art/game-icons/masters/resource-point/JADE_SNAKE_CAVE.png",
+      "runtime": "/assets/game-icons/resource-point/JADE_SNAKE_CAVE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-natural-group-01.png, visual slot row 3 column 3; style refs: frontend/public/assets/items/icons/herb.webp and ore.webp",
+      "prompt": "Original GuWorld resource point icon from the natural location marker batch, slot row 3 column 3; subject JADE_SNAKE_CAVE. Isolated compact silhouette, hybrid pixel art, crisp outline, transparent alpha, no frame or text; at 24px."
+    },
+    "PHOENIX_PEAK": {
+      "master": "art/game-icons/masters/resource-point/PHOENIX_PEAK.png",
+      "runtime": "/assets/game-icons/resource-point/PHOENIX_PEAK.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-geology-group-02.png, slot row 1 column 1; style refs: frontend/public/assets/items/icons/ore.webp and stone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 1 column 1; subject PHOENIX_PEAK. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "FROSTY_PEAK": {
+      "master": "art/game-icons/masters/resource-point/FROSTY_PEAK.png",
+      "runtime": "/assets/game-icons/resource-point/FROSTY_PEAK.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-geology-group-02.png, slot row 1 column 2; style refs: frontend/public/assets/items/icons/ore.webp and stone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 1 column 2; subject FROSTY_PEAK. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "CORPSE_RIDGE": {
+      "master": "art/game-icons/masters/resource-point/CORPSE_RIDGE.png",
+      "runtime": "/assets/game-icons/resource-point/CORPSE_RIDGE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-geology-group-02.png, slot row 1 column 3; style refs: frontend/public/assets/items/icons/ore.webp and stone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 1 column 3; subject CORPSE_RIDGE. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "QI_STONE_VEIN": {
+      "master": "art/game-icons/masters/resource-point/QI_STONE_VEIN.png",
+      "runtime": "/assets/game-icons/resource-point/QI_STONE_VEIN.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-geology-group-02.png, slot row 2 column 1; style refs: frontend/public/assets/items/icons/ore.webp and stone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 2 column 1; subject QI_STONE_VEIN. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "REFINEMENT_IRON_MINE": {
+      "master": "art/game-icons/masters/resource-point/REFINEMENT_IRON_MINE.png",
+      "runtime": "/assets/game-icons/resource-point/REFINEMENT_IRON_MINE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-geology-group-02.png, slot row 2 column 2; style refs: frontend/public/assets/items/icons/ore.webp and stone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 2 column 2; subject REFINEMENT_IRON_MINE. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "FORMATION_STONE_VALLEY": {
+      "master": "art/game-icons/masters/resource-point/FORMATION_STONE_VALLEY.png",
+      "runtime": "/assets/game-icons/resource-point/FORMATION_STONE_VALLEY.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-geology-group-02.png, slot row 2 column 3; style refs: frontend/public/assets/items/icons/ore.webp and stone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 2 column 3; subject FORMATION_STONE_VALLEY. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "RULE_STONE_FOREST": {
+      "master": "art/game-icons/masters/resource-point/RULE_STONE_FOREST.png",
+      "runtime": "/assets/game-icons/resource-point/RULE_STONE_FOREST.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-geology-group-02.png, slot row 3 column 1; style refs: frontend/public/assets/items/icons/ore.webp and stone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 3 column 1; subject RULE_STONE_FOREST. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "KILLING_IRON_MINE": {
+      "master": "art/game-icons/masters/resource-point/KILLING_IRON_MINE.png",
+      "runtime": "/assets/game-icons/resource-point/KILLING_IRON_MINE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-geology-group-02.png, slot row 3 column 2; style refs: frontend/public/assets/items/icons/ore.webp and stone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 3 column 2; subject KILLING_IRON_MINE. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "WIND_STONE_CANYON": {
+      "master": "art/game-icons/masters/resource-point/WIND_STONE_CANYON.png",
+      "runtime": "/assets/game-icons/resource-point/WIND_STONE_CANYON.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-geology-group-02.png, slot row 3 column 3; style refs: frontend/public/assets/items/icons/ore.webp and stone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 3 column 3; subject WIND_STONE_CANYON. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "SPACE_CRYSTAL_RIFT": {
+      "master": "art/game-icons/masters/resource-point/SPACE_CRYSTAL_RIFT.png",
+      "runtime": "/assets/game-icons/resource-point/SPACE_CRYSTAL_RIFT.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-sites-group-03.png, slot row 1 column 1; style refs: frontend/public/assets/items/icons/blade.webp and blood.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 1 column 1; subject SPACE_CRYSTAL_RIFT. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "BLADE_STONE_QUARRY": {
+      "master": "art/game-icons/masters/resource-point/BLADE_STONE_QUARRY.png",
+      "runtime": "/assets/game-icons/resource-point/BLADE_STONE_QUARRY.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-sites-group-03.png, slot row 1 column 2; style refs: frontend/public/assets/items/icons/blade.webp and blood.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 1 column 2; subject BLADE_STONE_QUARRY. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "SWORD_STONE_CLIFF": {
+      "master": "art/game-icons/masters/resource-point/SWORD_STONE_CLIFF.png",
+      "runtime": "/assets/game-icons/resource-point/SWORD_STONE_CLIFF.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-sites-group-03.png, slot row 1 column 3; style refs: frontend/public/assets/items/icons/blade.webp and blood.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 1 column 3; subject SWORD_STONE_CLIFF. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "CREATION_STONE_FIELD": {
+      "master": "art/game-icons/masters/resource-point/CREATION_STONE_FIELD.png",
+      "runtime": "/assets/game-icons/resource-point/CREATION_STONE_FIELD.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-sites-group-03.png, slot row 2 column 1; style refs: frontend/public/assets/items/icons/blade.webp and blood.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 2 column 1; subject CREATION_STONE_FIELD. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "DESTRUCTION_IRON_MINE": {
+      "master": "art/game-icons/masters/resource-point/DESTRUCTION_IRON_MINE.png",
+      "runtime": "/assets/game-icons/resource-point/DESTRUCTION_IRON_MINE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-sites-group-03.png, slot row 2 column 2; style refs: frontend/public/assets/items/icons/blade.webp and blood.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 2 column 2; subject DESTRUCTION_IRON_MINE. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "BLOOD_CRYSTAL_POOL": {
+      "master": "art/game-icons/masters/resource-point/BLOOD_CRYSTAL_POOL.png",
+      "runtime": "/assets/game-icons/resource-point/BLOOD_CRYSTAL_POOL.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-sites-group-03.png, slot row 2 column 3; style refs: frontend/public/assets/items/icons/blade.webp and blood.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 2 column 3; subject BLOOD_CRYSTAL_POOL. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "LIGHTNING_CRYSTAL_CLIFF": {
+      "master": "art/game-icons/masters/resource-point/LIGHTNING_CRYSTAL_CLIFF.png",
+      "runtime": "/assets/game-icons/resource-point/LIGHTNING_CRYSTAL_CLIFF.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-sites-group-03.png, slot row 3 column 1; style refs: frontend/public/assets/items/icons/blade.webp and blood.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 3 column 1; subject LIGHTNING_CRYSTAL_CLIFF. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "THEFT_CRYSTAL_CAVE": {
+      "master": "art/game-icons/masters/resource-point/THEFT_CRYSTAL_CAVE.png",
+      "runtime": "/assets/game-icons/resource-point/THEFT_CRYSTAL_CAVE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-sites-group-03.png, slot row 3 column 2; style refs: frontend/public/assets/items/icons/blade.webp and blood.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 3 column 2; subject THEFT_CRYSTAL_CAVE. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "DARK_CRYSTAL_ABYSS": {
+      "master": "art/game-icons/masters/resource-point/DARK_CRYSTAL_ABYSS.png",
+      "runtime": "/assets/game-icons/resource-point/DARK_CRYSTAL_ABYSS.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-sites-group-03.png, slot row 3 column 3; style refs: frontend/public/assets/items/icons/blade.webp and blood.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 3 column 3; subject DARK_CRYSTAL_ABYSS. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "TIME_SAND_DUNE": {
+      "master": "art/game-icons/masters/resource-point/TIME_SAND_DUNE.png",
+      "runtime": "/assets/game-icons/resource-point/TIME_SAND_DUNE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-sand-pools-group-04.png, slot row 1 column 1; style refs: frontend/public/assets/items/icons/sand.webp and pearl.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 1 column 1; subject TIME_SAND_DUNE. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "HEAVEN_SAND_SEA": {
+      "master": "art/game-icons/masters/resource-point/HEAVEN_SAND_SEA.png",
+      "runtime": "/assets/game-icons/resource-point/HEAVEN_SAND_SEA.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-sand-pools-group-04.png, slot row 1 column 2; style refs: frontend/public/assets/items/icons/sand.webp and pearl.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 1 column 2; subject HEAVEN_SAND_SEA. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "DEATH_SAND_DUNE": {
+      "master": "art/game-icons/masters/resource-point/DEATH_SAND_DUNE.png",
+      "runtime": "/assets/game-icons/resource-point/DEATH_SAND_DUNE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-sand-pools-group-04.png, slot row 1 column 3; style refs: frontend/public/assets/items/icons/sand.webp and pearl.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 1 column 3; subject DEATH_SAND_DUNE. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "STAR_SAND_DESERT": {
+      "master": "art/game-icons/masters/resource-point/STAR_SAND_DESERT.png",
+      "runtime": "/assets/game-icons/resource-point/STAR_SAND_DESERT.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-sand-pools-group-04.png, slot row 2 column 1; style refs: frontend/public/assets/items/icons/sand.webp and pearl.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 2 column 1; subject STAR_SAND_DESERT. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "DREAM_PEARL_POOL": {
+      "master": "art/game-icons/masters/resource-point/DREAM_PEARL_POOL.png",
+      "runtime": "/assets/game-icons/resource-point/DREAM_PEARL_POOL.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-sand-pools-group-04.png, slot row 2 column 2; style refs: frontend/public/assets/items/icons/sand.webp and pearl.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 2 column 2; subject DREAM_PEARL_POOL. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "WISDOM_PEARL_POOL": {
+      "master": "art/game-icons/masters/resource-point/WISDOM_PEARL_POOL.png",
+      "runtime": "/assets/game-icons/resource-point/WISDOM_PEARL_POOL.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-sand-pools-group-04.png, slot row 2 column 3; style refs: frontend/public/assets/items/icons/sand.webp and pearl.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 2 column 3; subject WISDOM_PEARL_POOL. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "LUCK_PEARL_POOL": {
+      "master": "art/game-icons/masters/resource-point/LUCK_PEARL_POOL.png",
+      "runtime": "/assets/game-icons/resource-point/LUCK_PEARL_POOL.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-sand-pools-group-04.png, slot row 3 column 1; style refs: frontend/public/assets/items/icons/sand.webp and pearl.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 3 column 1; subject LUCK_PEARL_POOL. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "INVESTIGATION_PEARL_POOL": {
+      "master": "art/game-icons/masters/resource-point/INVESTIGATION_PEARL_POOL.png",
+      "runtime": "/assets/game-icons/resource-point/INVESTIGATION_PEARL_POOL.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-sand-pools-group-04.png, slot row 3 column 2; style refs: frontend/public/assets/items/icons/sand.webp and pearl.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 3 column 2; subject INVESTIGATION_PEARL_POOL. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "SOUND_RESONANCE_CAVE": {
+      "master": "art/game-icons/masters/resource-point/SOUND_RESONANCE_CAVE.png",
+      "runtime": "/assets/game-icons/resource-point/SOUND_RESONANCE_CAVE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-sand-pools-group-04.png, slot row 3 column 3; style refs: frontend/public/assets/items/icons/sand.webp and pearl.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 3 column 3; subject SOUND_RESONANCE_CAVE. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "CLOUD_CRYSTAL_TERRACE": {
+      "master": "art/game-icons/masters/resource-point/CLOUD_CRYSTAL_TERRACE.png",
+      "runtime": "/assets/game-icons/resource-point/CLOUD_CRYSTAL_TERRACE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-landmarks-group-05.png, slot row 1 column 1; style refs: frontend/public/assets/items/icons/crystal.webp and bone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 1 column 1; subject CLOUD_CRYSTAL_TERRACE. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "LIGHT_CRYSTAL_CAVE": {
+      "master": "art/game-icons/masters/resource-point/LIGHT_CRYSTAL_CAVE.png",
+      "runtime": "/assets/game-icons/resource-point/LIGHT_CRYSTAL_CAVE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-landmarks-group-05.png, slot row 1 column 2; style refs: frontend/public/assets/items/icons/crystal.webp and bone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 1 column 2; subject LIGHT_CRYSTAL_CAVE. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "PHANTOM_CRYSTAL_VALLEY": {
+      "master": "art/game-icons/masters/resource-point/PHANTOM_CRYSTAL_VALLEY.png",
+      "runtime": "/assets/game-icons/resource-point/PHANTOM_CRYSTAL_VALLEY.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-landmarks-group-05.png, slot row 1 column 3; style refs: frontend/public/assets/items/icons/crystal.webp and bone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 1 column 3; subject PHANTOM_CRYSTAL_VALLEY. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "STRENGTH_CRYSTAL_PEAK": {
+      "master": "art/game-icons/masters/resource-point/STRENGTH_CRYSTAL_PEAK.png",
+      "runtime": "/assets/game-icons/resource-point/STRENGTH_CRYSTAL_PEAK.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-landmarks-group-05.png, slot row 2 column 1; style refs: frontend/public/assets/items/icons/crystal.webp and bone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 2 column 1; subject STRENGTH_CRYSTAL_PEAK. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "BONE_SPLINTER_FIELD": {
+      "master": "art/game-icons/masters/resource-point/BONE_SPLINTER_FIELD.png",
+      "runtime": "/assets/game-icons/resource-point/BONE_SPLINTER_FIELD.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-landmarks-group-05.png, slot row 2 column 2; style refs: frontend/public/assets/items/icons/crystal.webp and bone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 2 column 2; subject BONE_SPLINTER_FIELD. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "EMOTION_SILK_GROVE": {
+      "master": "art/game-icons/masters/resource-point/EMOTION_SILK_GROVE.png",
+      "runtime": "/assets/game-icons/resource-point/EMOTION_SILK_GROVE.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-landmarks-group-05.png, slot row 2 column 3; style refs: frontend/public/assets/items/icons/crystal.webp and bone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 2 column 3; subject EMOTION_SILK_GROVE. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "INFORMATION_STONE_LIBRARY": {
+      "master": "art/game-icons/masters/resource-point/INFORMATION_STONE_LIBRARY.png",
+      "runtime": "/assets/game-icons/resource-point/INFORMATION_STONE_LIBRARY.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-landmarks-group-05.png, slot row 3 column 1; style refs: frontend/public/assets/items/icons/crystal.webp and bone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 3 column 1; subject INFORMATION_STONE_LIBRARY. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "PAINTING_INK_POOL": {
+      "master": "art/game-icons/masters/resource-point/PAINTING_INK_POOL.png",
+      "runtime": "/assets/game-icons/resource-point/PAINTING_INK_POOL.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-landmarks-group-05.png, slot row 3 column 2; style refs: frontend/public/assets/items/icons/crystal.webp and bone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 3 column 2; subject PAINTING_INK_POOL. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "TRANSFORMATION_ESSENCE_POOL": {
+      "master": "art/game-icons/masters/resource-point/TRANSFORMATION_ESSENCE_POOL.png",
+      "runtime": "/assets/game-icons/resource-point/TRANSFORMATION_ESSENCE_POOL.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-crystal-landmarks-group-05.png, slot row 3 column 3; style refs: frontend/public/assets/items/icons/crystal.webp and bone.webp",
+      "prompt": "Original GuWorld resource point icon, geological markers group sheet slot row 3 column 3; subject TRANSFORMATION_ESSENCE_POOL. Hybrid pixel art, dark outline, transparent alpha, broad 24px silhouette. No terrain backdrop, status badge, frame or text."
+    },
+    "LANGYA_REFINEMENT_PEAK": {
+      "master": "art/game-icons/masters/resource-point/LANGYA_REFINEMENT_PEAK.png",
+      "runtime": "/assets/game-icons/resource-point/LANGYA_REFINEMENT_PEAK.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-final-pair-group-06.png, slot 1; references: frontend/public/assets/items/icons/ore.webp and blood.webp",
+      "prompt": "Original GuWorld resource-point icon from the two-marker final group; slot 1, ID LANGYA_REFINEMENT_PEAK. Pixel-art map symbol with compact silhouette, transparent alpha and dark outline; readable at 24px, no text or frame."
+    },
+    "BLOOD_CRYSTAL_SEA": {
+      "master": "art/game-icons/masters/resource-point/BLOOD_CRYSTAL_SEA.png",
+      "runtime": "/assets/game-icons/resource-point/BLOOD_CRYSTAL_SEA.webp",
+      "source": "OpenAI ImageGen group sheet art/game-icons/sources/resource-point-final-pair-group-06.png, slot 2; references: frontend/public/assets/items/icons/ore.webp and blood.webp",
+      "prompt": "Original GuWorld resource-point icon from the two-marker final group; slot 2, ID BLOOD_CRYSTAL_SEA. Pixel-art map symbol with compact silhouette, transparent alpha and dark outline; readable at 24px, no text or frame."
+    }
+  }
+}

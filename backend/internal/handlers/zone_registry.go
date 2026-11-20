@@ -366,6 +366,89 @@ func ZoneByID(id string) *models.Region {
 	return zoneReg.byID[id]
 }
 
+func zoneLayerID(zone *models.Region) string {
+	if zone == nil {
+		return "world_map"
+	}
+	id := zone.ID
+	switch {
+	case id == "bai_thien" || strings.Contains(id, "bai_thien") || strings.Contains(id, "bach_thien") || strings.HasPrefix(id, "bt_"):
+		return "bai_thien"
+	case id == "hac_thien" || strings.Contains(id, "hac_thien") || strings.HasPrefix(id, "ht_"):
+		return "hac_thien"
+	case id == "dia_uyen" || strings.Contains(id, "dia_uyen") || strings.HasPrefix(id, "du_"):
+		return "dia_uyen"
+	default:
+		return "world_map"
+	}
+}
+
+// FindNeighborZoneOnAtlas resolves the adjacent zone on the world atlas grid
+// in the given direction (dirX, dirY in {-1, 0, 1}).
+func FindNeighborZoneOnAtlas(currentZone *models.Region, dirX, dirY int) *models.Region {
+	if currentZone == nil || (dirX == 0 && dirY == 0) {
+		return nil
+	}
+	ensureZonesLoaded()
+	zoneReg.mu.RLock()
+	defer zoneReg.mu.RUnlock()
+
+	stepX := currentZone.Width
+	if stepX <= 0 {
+		stepX = 1000
+	}
+	stepY := currentZone.Height
+	if stepY <= 0 {
+		stepY = 1000
+	}
+
+	targetAtlasX := currentZone.AtlasX + dirX*stepX
+	targetAtlasY := currentZone.AtlasY + dirY*stepY
+	currLayer := zoneLayerID(currentZone)
+
+	for i := range zoneReg.zones {
+		z := &zoneReg.zones[i]
+		if z.ZoneType != ZoneTypeNamed && z.ZoneType != ZoneTypeSafe && z.ZoneType != ZoneTypeHub {
+			continue
+		}
+		if zoneLayerID(z) != currLayer {
+			continue
+		}
+		if z.AtlasX == targetAtlasX && z.AtlasY == targetAtlasY {
+			return z
+		}
+	}
+
+	if dirX != 0 && dirY != 0 {
+		for i := range zoneReg.zones {
+			z := &zoneReg.zones[i]
+			if z.ZoneType != ZoneTypeNamed && z.ZoneType != ZoneTypeSafe && z.ZoneType != ZoneTypeHub {
+				continue
+			}
+			if zoneLayerID(z) != currLayer {
+				continue
+			}
+			if z.AtlasX == targetAtlasX && z.AtlasY == currentZone.AtlasY {
+				return z
+			}
+		}
+		for i := range zoneReg.zones {
+			z := &zoneReg.zones[i]
+			if z.ZoneType != ZoneTypeNamed && z.ZoneType != ZoneTypeSafe && z.ZoneType != ZoneTypeHub {
+				continue
+			}
+			if zoneLayerID(z) != currLayer {
+				continue
+			}
+			if z.AtlasX == currentZone.AtlasX && z.AtlasY == targetAtlasY {
+				return z
+			}
+		}
+	}
+
+	return nil
+}
+
 // greatRegionID returns the NGU_VUC ancestor of a region. Regions without a
 // known large zone (tests, legacy ids) fall back to themselves.
 func greatRegionID(regionID string) string {

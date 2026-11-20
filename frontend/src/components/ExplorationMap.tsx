@@ -2,12 +2,13 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compass, Sparkles, DoorOpen, Droplets, Footprints, Landmark, ShieldAlert, Map as MapIcon, Package, Eye, Mountain, Swords, Waypoints, Store, UserRound, LogOut, ArrowDownToLine, Flame, Sun, Moon } from "lucide-react";
-import { useGameStore, Player, GroundDrop, ApertureResourcePoint } from "@/store/useGameStore";
+import { useGameStore, Player, GroundDrop, ApertureResourcePoint, Region } from "@/store/useGameStore";
+import { findNeighborRegion } from "@/lib/atlas";
 import { useWorldStore, type WorldMonsterActor } from "@/store/useWorldStore";
 import { usePolling } from "@/lib/usePolling";
 import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 import { applyWorldPosition, type WorldPositionEvent } from "@/lib/realtime/worldPositions";
-import { getWorldResourceGroup, WORLD_RESOURCE_ASSETS } from "@/lib/worldResourceAssets";
+import { getResourcePointIconUrl, getWorldResourceIconUrl } from "@/lib/worldResourceAssets";
 import { GameModal } from "@/components/ui/GameModal";
 import { WorldAtlasModal } from "@/components/WorldAtlasModal";
 import { TeleportBuildModal } from "@/components/Teleport/TeleportBuildModal";
@@ -524,8 +525,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     switch (type) {
       case "Resource": {
         const item = itemDictionary[content];
-        const group = getWorldResourceGroup(content, item?.item_type || item?.type);
-        return <img src={WORLD_RESOURCE_ASSETS[group]} alt="" className="h-6 w-6 object-contain" />;
+        return <img src={getWorldResourceIconUrl(content, item?.item_type || item?.type, item?.image_url)} alt="" className="h-6 w-6 object-contain" />;
       }
       case "Monster":
       case "Boss":
@@ -574,7 +574,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   }, [gridData?.cells]);
 
   const markersByCell = useMemo(() => {
-    const map = new Map<string, { kind: string; id: string; name: string; isMine?: boolean }[]>();
+    const map = new Map<string, { kind: string; id: string; name: string; isMine?: boolean; pointType?: string }[]>();
     if (mapMarkersRegion === player.current_region) {
       for (const marker of mapMarkers) {
         const key = `${marker.x},${marker.y}`;
@@ -593,24 +593,49 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
         if (point.region_id && point.region_id !== player.current_region) continue;
         if (point.state === "GONE") continue;
         const key = `${Math.round(point.x)},${Math.round(point.y)}`;
-        map.set(key, [...(map.get(key) || []), { kind: "resource_point", id: point.id, name: point.name }]);
+        map.set(key, [...(map.get(key) || []), { kind: "resource_point", id: point.id, name: point.name, pointType: point.point_type }]);
     }
     return map;
   }, [aperturePoints, mapMarkers, mapMarkersRegion, player.current_region, player.id, resourcePoints, resourcePointsRegion]);
 
   const gridArray = useMemo(() => {
-    const arr = [];
+    const arr: Array<{ x: number; y: number; isOutOfBounds: boolean; transitionRegion?: Region }> = [];
+    const zoneMinX = currentRegion?.min_x ?? 0;
+    const zoneMaxX = currentRegion?.max_x ?? currentRegion?.width ?? 1000;
+    const zoneMinY = currentRegion?.min_y ?? 0;
+    const zoneMaxY = currentRegion?.max_y ?? currentRegion?.height ?? 1000;
+
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
         const x = player.x + dx;
         const y = player.y + dy;
-        const isOutOfBounds =
-          x < 0 || y < 0 || (gridData?.world_width && x >= gridData.world_width) || (gridData?.world_height && y >= gridData.world_height);
-        arr.push({ x, y, isOutOfBounds });
+
+        if (isApertureMap) {
+          const isOutOfBounds = x < 0 || y < 0 || x >= 20 || y >= 20;
+          arr.push({ x, y, isOutOfBounds, transitionRegion: undefined });
+          continue;
+        }
+
+        const isInsideZone = x >= zoneMinX && x <= zoneMaxX && y >= zoneMinY && y <= zoneMaxY;
+        if (isInsideZone) {
+          arr.push({ x, y, isOutOfBounds: false, transitionRegion: undefined });
+          continue;
+        }
+
+        // Cell is beyond zone bounds. Check for adjacent sibling region on Atlas!
+        const dirX = x > zoneMaxX ? 1 : x < zoneMinX ? -1 : 0;
+        const dirY = y > zoneMaxY ? 1 : y < zoneMinY ? -1 : 0;
+        const neighbor = findNeighborRegion(currentRegion, dirX, dirY, regions);
+
+        if (neighbor) {
+          arr.push({ x, y, isOutOfBounds: false, transitionRegion: neighbor });
+        } else {
+          arr.push({ x, y, isOutOfBounds: true, transitionRegion: undefined });
+        }
       }
     }
     return arr;
-  }, [isApertureMap, player.x, player.y, radius, gridData?.world_width, gridData?.world_height]);
+  }, [isApertureMap, player.x, player.y, radius, currentRegion, regions]);
 
   return (
     <div className="w-full flex flex-col gap-4 max-w-5xl mx-auto p-2 sm:p-4">
@@ -957,10 +982,10 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
               gridTemplateRows: `repeat(${diameter}, minmax(0, 1fr))`,
             }}
           >
-            {gridArray.map(({ x, y, isOutOfBounds }) => {
+            {gridArray.map(({ x, y, isOutOfBounds, transitionRegion }) => {
               const cellData = cellMap.get(`${x},${y}`) || { x, y, cell_type: "Empty", content: "" };
               const isPlayerCell = x === player.x && y === player.y;
-              const isMovable = !isOutOfBounds && !isPlayerCell && !isMemberNotLeader;
+              const isMovable = (!isOutOfBounds || Boolean(transitionRegion)) && !isPlayerCell && !isMemberNotLeader;
               const otherPlayersOnCell = isOutOfBounds
                 ? []
                 : gridData.players_on_map?.filter((p) => p.x === x && p.y === y) || [];
@@ -973,7 +998,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                 || markersOnCell.find((marker) => marker.kind === "sect")
                 || markersOnCell.find((marker) => marker.kind === "merchant")
                 || markersOnCell[0];
-              const cellTint = cellData.cell_type === "ENTRY_PORTAL" || cellData.cell_type === "EXIT_PORTAL" || cellData.cell_type === "PORTAL_EXIT"
+              const cellTint = transitionRegion
+                ? "bg-emerald-950/40 border-dashed border-emerald-400/60 ring-1 ring-inset ring-emerald-400/25 shadow-sm"
+                : cellData.cell_type === "ENTRY_PORTAL" || cellData.cell_type === "EXIT_PORTAL" || cellData.cell_type === "PORTAL_EXIT"
                 ? "bg-emerald-950/80 border-emerald-300/75 ring-1 ring-inset ring-emerald-300/25"
                 : cellData.cell_type === "INHERITANCE_ALTAR"
                   ? "bg-purple-950/80 border-purple-300/75 ring-1 ring-inset ring-purple-300/25"
@@ -997,7 +1024,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
               const merchantMarker = markersOnCell.find((marker) => marker.kind === "merchant");
               const resourcePoint = markersOnCell.find((marker) => marker.kind === "resource_point");
               const markerTitle = markersOnCell.map((marker) => marker.name).join(", ");
-              const cellLabel = cellData.cell_type === "PrimevalVein"
+              const cellLabel = transitionRegion
+                ? transitionRegion.name
+                : cellData.cell_type === "PrimevalVein"
                 ? "Nguyên Tuyền"
                 : cellData.cell_type === "ENTRY_PORTAL" || cellData.cell_type === "EXIT_PORTAL" || cellData.cell_type === "PORTAL_EXIT"
                   ? "Cổng Bí Cảnh"
@@ -1012,11 +1041,15 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                           : cellData.cell_type !== "Empty"
                             ? getEntityName(cellData.cell_type, cellData.content)
                             : primaryMarker?.name;
-              const isCellInteractive = !isOutOfBounds && (
+              const isCellInteractive = Boolean(transitionRegion) || (!isOutOfBounds && (
                 isMovable || isPlayerCell || otherPlayersOnCell.length > 0 || dropsOnCell.length > 0 || markersOnCell.length > 0 || Boolean(monsterActorOnCell) || cellData.cell_type !== "Empty"
-              );
-              const cellAccessibleName = isOutOfBounds
-                ? "Hư vô (Ngoại biên bản đồ)"
+              ));
+              const cellAccessibleName = transitionRegion
+                ? `Tọa độ: (${x}, ${y}) | Sang ${transitionRegion.name} (Nhấp để sang)`
+                : isOutOfBounds
+                ? isApertureMap
+                  ? "Khiếu Bích (Ranh giới không gian Tiên Khiếu)"
+                  : "Ranh giới cùng cực của thế giới"
                 : `Tọa độ: (${x}, ${y})${isPlayerCell ? " [Vị trí của bạn]" : ""}${
                     cellData.cell_type !== "Empty" ? ` | ${getEntityName(cellData.cell_type, cellData.content)}` : ""
                   }${markerTitle ? ` | ${markerTitle}` : ""}${monsterActorOnCell ? ` | Quái: ${getEntityName("Monster", monsterActorOnCell.monster_template_id)}` : ""}${otherPlayersOnCell.length > 0 ? ` | Cổ sư: ${otherPlayersOnCell.map((p) => p.username).join(", ")}` : ""}${dropOnCell ? " | Chiến lợi phẩm" : ""}`;
@@ -1063,11 +1096,15 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                         )}
                       </div>
                     )}
-                    {!isOutOfBounds && !isPlayerCell && (getCellIcon(cellData.cell_type, cellData.content) || (
-                      primaryMarker?.kind === "merchant" ? (
-                        <Store className="w-6 h-6 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)] animate-pulse" />
-                      ) : null
-                    ))}
+                    {!isOutOfBounds && !isPlayerCell && (
+                      transitionRegion ? (
+                        <Compass className="w-5 h-5 text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.6)] animate-pulse" />
+                      ) : (getCellIcon(cellData.cell_type, cellData.content) || (
+                        primaryMarker?.kind === "merchant" ? (
+                          <Store className="w-6 h-6 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)] animate-pulse" />
+                        ) : null
+                      ))
+                    )}
                     {markersOnCell.length > 0 && (
                       <span className={`absolute right-1 top-1 flex max-w-[75%] flex-wrap justify-end gap-1 rounded-md border border-zinc-500/80 bg-zinc-950/95 shadow-lg ${markerBadgePaddingClass}`} title={markerTitle}>
                         {markersOnCell.map((marker) => (
@@ -1076,7 +1113,9 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                               : marker.kind === "teleport" ? <Waypoints className={`${markerIconSizeClass} text-sky-300`} />
                                 : marker.kind === "aperture_portal" ? <DoorOpen className={`${markerIconSizeClass} text-violet-300`} />
                                   : marker.kind === "merchant" ? <Store className={`${markerIconSizeClass} text-amber-300`} />
-                                    : <Mountain className={`${markerIconSizeClass} text-lime-300`} />}
+                                    : marker.kind === "resource_point" && getResourcePointIconUrl(marker.pointType) ? (
+                                      <img src={getResourcePointIconUrl(marker.pointType)} alt="" className={`${markerIconSizeClass} object-contain`} />
+                                    ) : <Mountain className={`${markerIconSizeClass} text-lime-300`} />}
                           </span>
                         ))}
                       </span>
@@ -1100,7 +1139,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                   </div>
 
                   {cellLabel && !isOutOfBounds && !isPlayerCell && (
-                    <span className={`absolute bottom-0.5 left-1/2 z-20 max-w-[calc(100%-0.5rem)] -translate-x-1/2 truncate rounded border border-white/15 bg-zinc-950/95 px-1 py-0.5 text-center font-mono font-semibold leading-tight text-zinc-100 shadow ${cellLabelSizeClass}`}>
+                    <span className={`absolute bottom-0.5 left-1/2 z-20 max-w-[calc(100%-0.5rem)] -translate-x-1/2 truncate rounded border ${transitionRegion ? "border-emerald-400/50 bg-emerald-950/95 text-emerald-300 font-bold" : "border-white/15 bg-zinc-950/95 text-zinc-100 font-semibold"} px-1 py-0.5 text-center font-mono leading-tight shadow ${cellLabelSizeClass}`}>
                       {cellLabel}
                     </span>
                   )}

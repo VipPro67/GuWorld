@@ -12,7 +12,8 @@ How should the approved assets be mapped into Gu and item records and into minin
 
 ## Resolution
 
-- Thứ tự nguồn ảnh: `image_url` hợp lệ khai báo trên record là override ưu tiên cao nhất; nếu không có thì tra manifest asset theo ID ổn định; nếu manifest cũng chưa có thì giữ fallback hiện tại. Với item, resolver đã hỗ trợ URL hợp lệ và sẽ đặt manifest-ID sau URL đó; với Gu, tích hợp cần đưa `image_url` hợp lệ vào cùng quy tắc ưu tiên mà vẫn giữ custom/family/legacy/hash fallback.
+- Thứ tự nguồn ảnh: `image_url` hợp lệ khai báo trên record là override ưu tiên cao nhất; nếu không có thì tra manifest asset theo ID ổn định; nếu manifest cũng chưa có thì giữ fallback hiện tại. Resolver item và Gu cùng áp dụng thứ tự này; item ID có hậu tố `_rankN` dùng chung artwork của ID gốc.
+- Shared resolvers are wired to Gu inventory, utilities, combat, shops, sect vault, trade, world resource cells, and aperture resource-point cards. Old custom/family/category/emoji fallbacks remain active when no manifest image exists.
 - Tích hợp qua resolver dùng chung, không gắn đường dẫn ad-hoc vào từng component. Các điểm nối hiện tại là `frontend/src/lib/gu-icons.ts`, `frontend/src/lib/item-icons.ts`, `frontend/src/lib/worldResourceAssets.ts` và marker render trong `frontend/src/components/ExplorationMap.tsx`.
 - Giữ nguyên các URL và ảnh cũ trong quá trình chuyển đổi; asset mới được thêm theo ID vào manifest và resolver. Không cần sửa dữ liệu người chơi. Nếu sau này chỉnh CSV `image_url`, import dataset bằng Admin và khởi động lại backend theo quy tắc registry hiện tại.
 - Đường đi dữ liệu hiện tại: `backend/data/Gu.csv` và `backend/data/Item.csv` chứa `image_url`; item UI gọi `getItemIconUrl`, còn Gu UI gọi `getGuIconUrl`. Tài nguyên trên bản đồ hiện gom bốn nhóm qua `getWorldResourceGroup`.

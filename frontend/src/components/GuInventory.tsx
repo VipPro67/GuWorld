@@ -1240,7 +1240,7 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
                 const totalCount = instances.length;
                 const isSelected = inspectedGroupKey === group.groupKey;
                 const rankColors = getGuRankColor(spec.rank);
-                const iconUrl = getGuIconUrl(spec.id, spec.name);
+                const iconUrl = getGuIconUrl(spec.id, spec.name, spec.image_url);
 
                 const hasHunger = spec.gu_type !== "Consumable" || (spec.max_hunger && spec.max_hunger > 0);
                 const minHunger = Math.min(...instances.map((i) => i.hunger));
@@ -1545,7 +1545,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                                   style={guImageStyle}
                                 >
                                   <img
-                                    src={getGuIconUrl(spec.id, spec.name)}
+                                    src={getGuIconUrl(spec.id, spec.name, spec.image_url)}
                                     alt={spec.name}
                                     className="h-9 w-9 object-contain z-10 drop-shadow"
                                   />
@@ -2373,7 +2373,7 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
         const { spec, instances, hasVital, equippedCount } = inspectedGroup;
         const totalCount = instances.length;
         const singleGu = totalCount === 1 ? instances[0] : undefined;
-        const iconUrl = getGuIconUrl(spec.id, spec.name);
+        const iconUrl = getGuIconUrl(spec.id, spec.name, spec.image_url);
 
         const preferredFoodId = spec.food_types[0] || "unknown";
         const preferredResource = feedResourceInfo(preferredFoodId, player, spec.rank);

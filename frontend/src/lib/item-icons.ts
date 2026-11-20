@@ -1,3 +1,5 @@
+import { getManifestIconUrl, isValidGameImageUrl } from "./game-icon-manifest.ts";
+
 export interface ItemIconSource {
   id: string;
   name: string;
@@ -87,8 +89,10 @@ export function resolveItemIconKey(item: ItemIconSource): string {
 
 export function getItemIconUrl(item: ItemIconSource): string {
   const customUrl = item.image_url?.trim();
-  if (customUrl && (/^https?:\/\//i.test(customUrl) || (customUrl.startsWith("/") && !customUrl.startsWith("//")))) {
+  if (isValidGameImageUrl(customUrl)) {
     return customUrl;
   }
+  const manifestUrl = getManifestIconUrl("item", item.id);
+  if (manifestUrl) return manifestUrl;
   return iconUrl(resolveItemIconKey(item));
 }

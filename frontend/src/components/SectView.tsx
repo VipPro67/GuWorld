@@ -2094,7 +2094,7 @@ export const SectView: React.FC = () => {
                       const outOfStock = vg.quantity !== undefined && vg.quantity <= 0;
                       const displayRank = vg.rank || spec?.rank || 1;
                       const rankColors = getGuRankColor(displayRank);
-                      const iconUrl = getGuIconUrl(vg.id, spec?.name);
+                      const iconUrl = getGuIconUrl(vg.id, spec?.name, spec?.image_url);
                       const memberPts = member?.contribution_points || 0;
                       const canAfford = memberPts >= vg.cost;
                       const ownedCount = player?.gu_inventory?.filter((g: ApiResponseData) => g.gu_id === vg.id && g.rank === displayRank && g.status !== "DEAD").length || 0;
@@ -2198,7 +2198,7 @@ export const SectView: React.FC = () => {
                       const rankColors = getGuRankColor(displayRank);
                       const ownedCount = player?.gu_inventory?.filter((g: ApiResponseData) => g.gu_id === vg.id && g.rank === displayRank && g.status !== "DEAD").length || 0;
                       const vgMaxHunger = spec?.max_hunger || 100;
-                      const iconUrl = getGuIconUrl(vg.id, spec?.name);
+                      const iconUrl = getGuIconUrl(vg.id, spec?.name, spec?.image_url);
 
                       return (
                         <div
@@ -2470,7 +2470,7 @@ export const SectView: React.FC = () => {
                       const isUnlocked = player?.unlocked_recipes?.some(ur => ur.recipe_id === recipeId) || false;
                       const rankColors = getGuRankColor(targetGuRank);
                       const iconUrl = recipeInfo?.target_gu_id
-                        ? getGuIconUrl(recipeInfo.target_gu_id, targetGuSpec?.name)
+                        ? getGuIconUrl(recipeInfo.target_gu_id, targetGuSpec?.name, targetGuSpec?.image_url)
                         : getItemIconUrl({ id: "recipe", name: "Bí Phương", item_type: "Recipe" });
 
                       return (
@@ -2556,7 +2556,7 @@ export const SectView: React.FC = () => {
                       const isUnlocked = player?.unlocked_recipes?.some(ur => ur.recipe_id === recipeId) || false;
                       const rankColors = getGuRankColor(targetGuRank);
                       const iconUrl = recipeInfo?.target_gu_id
-                        ? getGuIconUrl(recipeInfo.target_gu_id, targetGuSpec?.name)
+                        ? getGuIconUrl(recipeInfo.target_gu_id, targetGuSpec?.name, targetGuSpec?.image_url)
                         : getItemIconUrl({ id: "recipe", name: "Bí Phương", item_type: "Recipe" });
 
                       return (

@@ -293,7 +293,7 @@ export const UtilitiesView: React.FC = () => {
                   const rankColors = getGuRankColor(gu.rank);
                   const isProcessing = processingId === gu.instance_id;
                   const neededStones = getSealingStoneCost(gu.rank);
-                  const iconUrl = getGuIconUrl(gu.gu_id, name);
+                  const iconUrl = getGuIconUrl(gu.gu_id, name, spec?.image_url);
                   const canAfford = activeTab === "seal" ? sealingStoneQty >= neededStones : true;
 
                   return (
@@ -387,7 +387,7 @@ export const UtilitiesView: React.FC = () => {
                   const rankColors = getGuRankColor(gu.rank);
                   const isProcessing = processingId === gu.instance_id;
                   const neededStones = getSealingStoneCost(gu.rank);
-                  const iconUrl = getGuIconUrl(gu.gu_id, name);
+                  const iconUrl = getGuIconUrl(gu.gu_id, name, spec?.image_url);
                   const canAfford = activeTab === "seal" ? sealingStoneQty >= neededStones : true;
 
                   return (
@@ -527,7 +527,7 @@ export const UtilitiesView: React.FC = () => {
               <div className="flex items-center gap-3 pt-1">
                 <div className={`w-16 h-16 rounded-2xl bg-black/60 border ${inspectedRankColor.border} flex items-center justify-center p-2 shrink-0 relative shadow-inner`}>
                   <img
-                    src={getGuIconUrl(inspectedGu.gu_id, inspectedName)}
+                    src={getGuIconUrl(inspectedGu.gu_id, inspectedName, guSpecFor(inspectedGu.gu_id, inspectedGu.rank)?.image_url)}
                     alt={inspectedName}
                     className="w-12 h-12 object-contain"
                   />

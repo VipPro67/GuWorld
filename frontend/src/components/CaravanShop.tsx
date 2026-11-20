@@ -841,7 +841,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                   : (player.materials_inventory?.[item.id] || 0);
                 const rankColors = getGuRankColor(item.rank || 1);
                 const iconUrl = item.type === "Gu"
-                  ? getGuIconUrl(item.id, item.name)
+                  ? getGuIconUrl(item.id, item.name, guSpecFor(item.id, item.rank)?.image_url)
                   : getItemIconUrl(itemDictionary[item.id] ?? { id: item.id, name: item.name, item_type: item.type });
 
                 return (
@@ -916,7 +916,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                   : (player.materials_inventory?.[item.id] || 0);
                 const rankColors = getGuRankColor(item.rank || 1);
                 const iconUrl = item.type === "Gu"
-                  ? getGuIconUrl(item.id, item.name)
+                  ? getGuIconUrl(item.id, item.name, guSpecFor(item.id, item.rank)?.image_url)
                   : getItemIconUrl(itemDictionary[item.id] ?? { id: item.id, name: item.name, item_type: item.type });
 
                 return (
@@ -1013,7 +1013,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
               const selectedItem = selectedSellItems[key];
               const rankColors = getGuRankColor(item.rank || 1);
               const iconUrl = item.type === "Gu"
-                ? getGuIconUrl(item.id, item.name)
+                ? getGuIconUrl(item.id, item.name, guSpecFor(item.id, item.rank)?.image_url)
                 : item.type === "Recipe"
                 ? getItemIconUrl({ id: "recipe", name: "Bí Phương", item_type: "Recipe" })
                 : getItemIconUrl(itemDictionary[item.id] ?? { id: item.id, name: item.name, item_type: item.type });
@@ -1094,7 +1094,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
               const selectedItem = selectedSellItems[key];
               const rankColors = getGuRankColor(item.rank || 1);
               const iconUrl = item.type === "Gu"
-                ? getGuIconUrl(item.id, item.name)
+                ? getGuIconUrl(item.id, item.name, guSpecFor(item.id, item.rank)?.image_url)
                 : item.type === "Recipe"
                 ? getItemIconUrl({ id: "recipe", name: "Bí Phương", item_type: "Recipe" })
                 : getItemIconUrl(itemDictionary[item.id] ?? { id: item.id, name: item.name, item_type: item.type });
@@ -1235,7 +1235,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                 <img
                   src={
                     selectedBuyItem.type === "Gu"
-                      ? getGuIconUrl(selectedBuyItem.id, selectedBuyItem.name)
+                      ? getGuIconUrl(selectedBuyItem.id, selectedBuyItem.name, guSpecFor(selectedBuyItem.id, selectedBuyItem.rank)?.image_url)
                       : getItemIconUrl(itemDictionary[selectedBuyItem.id] ?? { id: selectedBuyItem.id, name: selectedBuyItem.name, item_type: selectedBuyItem.type })
                   }
                   alt={selectedBuyItem.name}

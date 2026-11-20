@@ -387,7 +387,7 @@ export const TradeRoomModal: React.FC = () => {
                       const guId = activeTrade.gu_details?.[instId] || player.gu_inventory?.find((g) => g.instance_id === instId)?.gu_id || instId;
                       return (
                         <span key={instId} className="text-xs px-2.5 py-1 rounded-xl bg-emerald-950/30 border border-emerald-900/40 text-emerald-400 flex items-center gap-1.5">
-                          <img src={getGuIconUrl(guId, guName)} alt="" className="h-6 w-6 rounded-md bg-zinc-950 object-contain p-0.5" />
+                          <img src={getGuIconUrl(guId, guName, guDictionary[guId]?.image_url)} alt="" className="h-6 w-6 rounded-md bg-zinc-950 object-contain p-0.5" />
                           <span className="max-w-full truncate">{guName}</span>
                           <span className="text-[9px] font-mono opacity-80 px-1 bg-emerald-900/20 border border-emerald-800/35 rounded text-emerald-300">
                             Rank {guRank}
@@ -740,7 +740,7 @@ export const TradeRoomModal: React.FC = () => {
                                     className="p-3 flex justify-between items-center cursor-pointer hover:bg-zinc-950/80 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] select-none font-serif text-xs"
                                   >
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <img src={getGuIconUrl(guId, name)} alt="" className="h-9 w-9 rounded-lg border border-emerald-500/15 bg-zinc-900 object-contain p-1" />
+                                      <img src={getGuIconUrl(guId, name, guDictionary[guId]?.image_url)} alt="" className="h-9 w-9 rounded-lg border border-emerald-500/15 bg-zinc-900 object-contain p-1" />
                                       <span className="font-bold text-zinc-200">{name}</span>
                                       <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-zinc-900 border border-zinc-850 text-zinc-400">
                                         x{list.length}
@@ -1070,7 +1070,7 @@ export const TradeRoomModal: React.FC = () => {
                       const guId = activeTrade.gu_details?.[instId] || instId;
                       return (
                         <span key={index} className="text-xs px-2.5 py-1 rounded-xl bg-emerald-950/20 border border-emerald-900/20 text-emerald-400 select-none flex items-center gap-1.5">
-                          <img src={getGuIconUrl(guId, guName)} alt="" className="h-6 w-6 rounded-md bg-zinc-950 object-contain p-0.5" />
+                          <img src={getGuIconUrl(guId, guName, guDictionary[guId]?.image_url)} alt="" className="h-6 w-6 rounded-md bg-zinc-950 object-contain p-0.5" />
                           <span>{guName}</span>
                           <span className="text-[9px] font-mono opacity-80 px-1 bg-emerald-900/20 border border-emerald-800/35 rounded text-emerald-300">
                             Rank {guRank}

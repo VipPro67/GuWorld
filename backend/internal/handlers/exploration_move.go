@@ -229,33 +229,103 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 	var instanceID sql.NullString
 	if loadedInstanceID != nil {
 		instanceID = *loadedInstanceID
-	} else if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&instanceID); err != nil {
-		return "", false, err
+	} else if tx != nil {
+		if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&instanceID); err != nil {
+			return "", false, err
+		}
+	} else if db.DB != nil && player.ID != uuid.Nil {
+		if err := db.DB.QueryRowContext(ctx, `SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&instanceID); err != nil && err != sql.ErrNoRows {
+			return "", false, err
+		}
 	}
 	if instanceID.Valid {
 		region := ZoneByID(player.CurrentRegion)
 		insideInstance := region != nil && (region.ZoneType == ZoneTypeSecret || region.ZoneType == ZoneTypeAperture) && zoneContains(region, x, y)
 		if region == nil && player.CurrentRegion == "aperture_interior" {
-			var zoneType string
-			var minX, minY, maxX, maxY int
-			if err := tx.QueryRow(`SELECT zone_type, min_x, min_y, max_x, max_y FROM regions WHERE id = $1`, player.CurrentRegion).Scan(&zoneType, &minX, &minY, &maxX, &maxY); err != nil {
-				return "", false, fmt.Errorf("load aperture bounds: %w", err)
+			insideInstance = x >= 0 && x < 20 && y >= 0 && y < 20
+			if tx != nil {
+				var zoneType string
+				var minX, minY, maxX, maxY int
+				if err := tx.QueryRow(`SELECT zone_type, min_x, min_y, max_x, max_y FROM regions WHERE id = $1`, player.CurrentRegion).Scan(&zoneType, &minX, &minY, &maxX, &maxY); err == nil {
+					insideInstance = strings.EqualFold(zoneType, ZoneTypeAperture) && x >= minX && x <= maxX && y >= minY && y <= maxY && x >= 0 && x < 20 && y >= 0 && y < 20
+				}
 			}
-			insideInstance = strings.EqualFold(zoneType, ZoneTypeAperture) && x >= minX && x <= maxX && y >= minY && y <= maxY
 		}
 		if player.CurrentRegion == "aperture_interior" && insideInstance {
 			insideInstance = x >= 0 && x < 20 && y >= 0 && y < 20
 		}
 		if !insideInstance {
+			if player.CurrentRegion == "aperture_interior" {
+				return "Đã chạm đến Khiếu Bích (ranh giới không gian Tiên Khiếu), không thể đi xa hơn. Vui lòng sử dụng Môn Hộ để ra ngoại giới.", false, nil
+			}
 			return "Ranh giới khu vực hiện tại không cho phép di chuyển tới tọa độ này.", false, nil
 		}
 	}
 
 	destinationRegion := player.CurrentRegion
+	newX := x
+	newY := y
+	boundaryCrossed := false
+	var transitionNeighborName string
+
 	if !instanceID.Valid {
 		currentZone := ZoneByID(player.CurrentRegion)
 		if currentZone != nil && zoneContains(currentZone, x, y) {
 			destinationRegion = player.CurrentRegion
+		} else if currentZone != nil {
+			dirX, dirY := 0, 0
+			if x > currentZone.MaxX {
+				dirX = 1
+			} else if x < currentZone.MinX {
+				dirX = -1
+			}
+			if y > currentZone.MaxY {
+				dirY = 1
+			} else if y < currentZone.MinY {
+				dirY = -1
+			}
+
+			neighbor := FindNeighborZoneOnAtlas(currentZone, dirX, dirY)
+			if neighbor != nil {
+				if err := checkRegionEntry(neighbor.ID, player.Rank, player.GuInventory); err != nil {
+					return fmt.Sprintf("Không thể tiến vào %s: %s", neighbor.Name, err.Error()), false, nil
+				}
+				destinationRegion = neighbor.ID
+				boundaryCrossed = true
+				transitionNeighborName = neighbor.Name
+
+				const edgeMargin = 4
+				if dirX > 0 {
+					newX = edgeMargin
+				} else if dirX < 0 {
+					newX = neighbor.MaxX - edgeMargin
+					if newX < 0 {
+						newX = 0
+					}
+				} else {
+					if newX < neighbor.MinX {
+						newX = neighbor.MinX
+					} else if newX > neighbor.MaxX {
+						newX = neighbor.MaxX
+					}
+				}
+				if dirY > 0 {
+					newY = edgeMargin
+				} else if dirY < 0 {
+					newY = neighbor.MaxY - edgeMargin
+					if newY < 0 {
+						newY = 0
+					}
+				} else {
+					if newY < neighbor.MinY {
+						newY = neighbor.MinY
+					} else if newY > neighbor.MaxY {
+						newY = neighbor.MaxY
+					}
+				}
+			} else {
+				return "Đã tới ranh giới cùng cực của thế giới, không thể đi xa hơn.", false, nil
+			}
 		} else {
 			derived := DeriveRegionAtOnMap(x, y, mapID)
 			if derived != "" && derived != HubRegionID {
@@ -268,13 +338,15 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 			return err.Error(), false, nil
 		}
 	}
-	player.X = x
-	player.Y = y
+	player.X = newX
+	player.Y = newY
 	player.CurrentRegion = destinationRegion
 	visitedSubZone := SubZoneKey(player.X, player.Y)
 	recordVisitedSubZone(player, visitedSubZone)
-	if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, "explore:"+player.CurrentRegion+":"+visitedSubZone, "explore", "", 1); err != nil {
-		return "", false, err
+	if tx != nil {
+		if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, "explore:"+player.CurrentRegion+":"+visitedSubZone, "explore", "", 1); err != nil {
+			return "", false, err
+		}
 	}
 
 	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)
@@ -313,6 +385,13 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 		}
 	}
 	logMsg := fmt.Sprintf("Di chuyển thành công đến (%d, %d).", player.X, player.Y)
+	if boundaryCrossed {
+		targetName := destinationRegion
+		if nz := ZoneByID(destinationRegion); nz != nil && nz.Name != "" {
+			targetName = nz.Name
+		}
+		logMsg = fmt.Sprintf("🌀 Vượt qua ranh giới, tiến vào %s (%d, %d).", targetName, player.X, player.Y)
+	}
 	if oldRegion != "" && destinationRegion != "" {
 		regionWarning = applyRegionalWallDebuff(ctx, player, largeZoneForRegion(oldRegion), largeZoneForRegion(destinationRegion), tx)
 	} else if oldRegion == "" && (oldX != 0 || oldY != 0) {
@@ -321,7 +400,12 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 	combatTriggered := false
 	pvpTriggered := false
 
-	playerTerritory := CheckPlayerSectTerritory(tx, player.ID, player.CurrentRegion, player.X, player.Y)
+	var playerTerritory SectTerritoryInfo
+	if tx != nil {
+		playerTerritory = CheckPlayerSectTerritory(tx, player.ID, player.CurrentRegion, player.X, player.Y)
+	} else if db.DB != nil {
+		playerTerritory = CheckPlayerSectTerritory(db.DB, player.ID, player.CurrentRegion, player.X, player.Y)
+	}
 
 	// Player-initiated PVP: attack target player within attack range (default <= 2 tiles, plus stats bonus)
 	if attackTargetID != "" {
@@ -831,6 +915,9 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 	if exploreEventMsg != "" {
 		logMsg += " " + exploreEventMsg
 	}
+	if transitionNeighborName != "" {
+		logMsg = fmt.Sprintf("Tiến vào khu vực %s! ", transitionNeighborName) + logMsg
+	}
 
 	return logMsg, combatTriggered, nil
 }
@@ -1003,12 +1090,35 @@ func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveReques
 	if err := tx.QueryRow(`SELECT map_instance_id::text FROM players WHERE id=$1`, player.ID).Scan(&mapInstanceID); err != nil {
 		return http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"}
 	}
+
+	// Defensive clamp: If an open-world player was stranded out-of-bounds (e.g. from previous bugs),
+	// clamp their position back to the current zone bounds before calculating the path.
+	if !mapInstanceID.Valid {
+		if z := ZoneByID(player.CurrentRegion); z != nil {
+			if player.X > z.MaxX {
+				player.X = z.MaxX
+			} else if player.X < z.MinX {
+				player.X = z.MinX
+			}
+			if player.Y > z.MaxY {
+				player.Y = z.MaxY
+			} else if player.Y < z.MinY {
+				player.Y = z.MinY
+			}
+		}
+	}
+	startPlayerX := player.X
+	startPlayerY := player.Y
+
 	reached := false
 	var pendingWorldChanges []worldfeed.Event
 	var eventLogs []string
 	combatTriggered := false
 	var lastStepLog string
 	for _, step := range path {
+		regionBeforeStep := player.CurrentRegion
+		oldStepX := player.X
+		oldStepY := player.Y
 		stepLog, triggered, errArrival := resolveCellArrivalWithInstance(ctx, tx, &player, step[0], step[1], req.AttackTargetID, true, &mapInstanceID, &pendingWorldChanges)
 		if errArrival != nil {
 			return http.StatusInternalServerError, gin.H{"error": "Không thể tải định nghĩa quái vật từ cơ sở dữ liệu"}
@@ -1020,6 +1130,14 @@ func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveReques
 		}
 		if triggered {
 			combatTriggered = true
+			break
+		}
+		if player.CurrentRegion != regionBeforeStep {
+			// Crossed boundary into an adjacent zone! Stop old coordinate path.
+			break
+		}
+		if player.X == oldStepX && player.Y == oldStepY {
+			// Movement was blocked by boundary or barrier.
 			break
 		}
 	}
@@ -1135,7 +1253,7 @@ func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveReques
 	var finalLog string
 	if len(eventLogs) > 0 {
 		finalLog = strings.Join(eventLogs, "\n")
-		if !combatTriggered {
+		if !combatTriggered && (player.X != startPlayerX || player.Y != startPlayerY) {
 			finalLog += fmt.Sprintf("\nĐã di chuyển đến (%d, %d).", player.X, player.Y)
 		}
 	} else {

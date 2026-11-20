@@ -1,0 +1,2217 @@
+{
+  "schema_version": 1,
+  "status": "delivered",
+  "sample_review_ids": {
+    "gu": "GU_DANG_HUN_EXPLOSION_I",
+    "item": "blood_crystal",
+    "resourcePoint": "ORE_VEIN"
+  },
+  "batch": {
+    "resourcePoint": [
+      {
+        "id": "HERB_VALLEY",
+        "name": "Thung Lũng Linh Thảo",
+        "category": "HERB_GARDEN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Wood Path",
+        "produce_key": "wood_crystal",
+        "secondary_produce_key": "wood_crystal",
+        "visual_brief": "Depict the static resource site Thung Lũng Linh Thảo (HERB_VALLEY), category HERB_GARDEN, Wood Path; show its produced material wood_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Thung Lũng Linh Thảo (HERB_VALLEY), category HERB_GARDEN, Wood Path; show its produced material wood_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "BEAST_PASTURE",
+        "name": "Đồng Cỏ Dạ Thú",
+        "category": "BEAST_PASTURE",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Food Path",
+        "produce_key": "food_essence",
+        "secondary_produce_key": "food_essence",
+        "visual_brief": "Depict the static resource site Đồng Cỏ Dạ Thú (BEAST_PASTURE), category BEAST_PASTURE, Food Path; show its produced material food_essence with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Đồng Cỏ Dạ Thú (BEAST_PASTURE), category BEAST_PASTURE, Food Path; show its produced material food_essence with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "ORE_VEIN",
+        "name": "Mạch Quặng Địa Mạch",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Earth Path",
+        "produce_key": "earth_soil",
+        "secondary_produce_key": "earth_soil",
+        "visual_brief": "Depict the static resource site Mạch Quặng Địa Mạch (ORE_VEIN), category MINERAL_VEIN, Earth Path; show its produced material earth_soil with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Mạch Quặng Địa Mạch (ORE_VEIN), category MINERAL_VEIN, Earth Path; show its produced material earth_soil with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "SPIRIT_SPRING",
+        "name": "Ao Linh Tuyền",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Water Path",
+        "produce_key": "water_pearl",
+        "secondary_produce_key": "water_pearl",
+        "visual_brief": "Depict the static resource site Ao Linh Tuyền (SPIRIT_SPRING), category MINERAL_VEIN, Water Path; show its produced material water_pearl with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Ao Linh Tuyền (SPIRIT_SPRING), category MINERAL_VEIN, Water Path; show its produced material water_pearl with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "GOLD_SAND_SHOAL",
+        "name": "Bãi Cát Kim Sa",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Metal Path",
+        "produce_key": "metal_ore",
+        "secondary_produce_key": "metal_ore",
+        "visual_brief": "Depict the static resource site Bãi Cát Kim Sa (GOLD_SAND_SHOAL), category MINERAL_VEIN, Metal Path; show its produced material metal_ore with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Bãi Cát Kim Sa (GOLD_SAND_SHOAL), category MINERAL_VEIN, Metal Path; show its produced material metal_ore with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "MOON_BOWL",
+        "name": "Bát Nguyệt Cốc",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Water Path",
+        "produce_key": "water_pearl",
+        "secondary_produce_key": "water_pearl",
+        "visual_brief": "Depict the static resource site Bát Nguyệt Cốc (MOON_BOWL), category MINERAL_VEIN, Water Path; show its produced material water_pearl with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Bát Nguyệt Cốc (MOON_BOWL), category MINERAL_VEIN, Water Path; show its produced material water_pearl with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "YEAR_ESSENCE_POOL",
+        "name": "Dòng Năm Thú",
+        "category": "BEAST_PASTURE",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Food Path",
+        "produce_key": "food_essence",
+        "secondary_produce_key": "food_essence",
+        "visual_brief": "Depict the static resource site Dòng Năm Thú (YEAR_ESSENCE_POOL), category BEAST_PASTURE, Food Path; show its produced material food_essence with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Dòng Năm Thú (YEAR_ESSENCE_POOL), category BEAST_PASTURE, Food Path; show its produced material food_essence with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "DANG_HON_PEAK",
+        "name": "Núi Đãng Hồn",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Soul Path",
+        "produce_key": "soul_sand",
+        "secondary_produce_key": "soul_sand",
+        "visual_brief": "Depict the static resource site Núi Đãng Hồn (DANG_HON_PEAK), category MINERAL_VEIN, Soul Path; show its produced material soul_sand with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Núi Đãng Hồn (DANG_HON_PEAK), category MINERAL_VEIN, Soul Path; show its produced material soul_sand with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "JADE_SNAKE_CAVE",
+        "name": "Hẻm Ngọc Huyền Xà",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Poison Path",
+        "produce_key": "poison_sand",
+        "secondary_produce_key": "poison_sand",
+        "visual_brief": "Depict the static resource site Hẻm Ngọc Huyền Xà (JADE_SNAKE_CAVE), category MINERAL_VEIN, Poison Path; show its produced material poison_sand with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Hẻm Ngọc Huyền Xà (JADE_SNAKE_CAVE), category MINERAL_VEIN, Poison Path; show its produced material poison_sand with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "PHOENIX_PEAK",
+        "name": "Núi Phượng Vũ",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Fire Path",
+        "produce_key": "fire_crystal",
+        "secondary_produce_key": "fire_crystal",
+        "visual_brief": "Depict the static resource site Núi Phượng Vũ (PHOENIX_PEAK), category MINERAL_VEIN, Fire Path; show its produced material fire_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Núi Phượng Vũ (PHOENIX_PEAK), category MINERAL_VEIN, Fire Path; show its produced material fire_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "FROSTY_PEAK",
+        "name": "Núi Băng Thủy",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Ice Path",
+        "produce_key": "ice_crystal",
+        "secondary_produce_key": "ice_crystal",
+        "visual_brief": "Depict the static resource site Núi Băng Thủy (FROSTY_PEAK), category MINERAL_VEIN, Ice Path; show its produced material ice_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Núi Băng Thủy (FROSTY_PEAK), category MINERAL_VEIN, Ice Path; show its produced material ice_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "CORPSE_RIDGE",
+        "name": "Thi Cương",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Enslavement Path",
+        "produce_key": "enslavement_stone",
+        "secondary_produce_key": "enslavement_stone",
+        "visual_brief": "Depict the static resource site Thi Cương (CORPSE_RIDGE), category MINERAL_VEIN, Enslavement Path; show its produced material enslavement_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Thi Cương (CORPSE_RIDGE), category MINERAL_VEIN, Enslavement Path; show its produced material enslavement_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "QI_STONE_VEIN",
+        "name": "Khí Thạch Mạch",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Qi Path",
+        "produce_key": "qi_stone",
+        "secondary_produce_key": "qi_stone",
+        "visual_brief": "Depict the static resource site Khí Thạch Mạch (QI_STONE_VEIN), category MINERAL_VEIN, Qi Path; show its produced material qi_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Khí Thạch Mạch (QI_STONE_VEIN), category MINERAL_VEIN, Qi Path; show its produced material qi_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "REFINEMENT_IRON_MINE",
+        "name": "Luyện Thiết Lò",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Refinement Path",
+        "produce_key": "refinement_iron",
+        "secondary_produce_key": "refinement_iron",
+        "visual_brief": "Depict the static resource site Luyện Thiết Lò (REFINEMENT_IRON_MINE), category MINERAL_VEIN, Refinement Path; show its produced material refinement_iron with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Luyện Thiết Lò (REFINEMENT_IRON_MINE), category MINERAL_VEIN, Refinement Path; show its produced material refinement_iron with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "FORMATION_STONE_VALLEY",
+        "name": "Trận Thạch Cốc",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Formation Path",
+        "produce_key": "formation_stone",
+        "secondary_produce_key": "formation_stone",
+        "visual_brief": "Depict the static resource site Trận Thạch Cốc (FORMATION_STONE_VALLEY), category MINERAL_VEIN, Formation Path; show its produced material formation_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Trận Thạch Cốc (FORMATION_STONE_VALLEY), category MINERAL_VEIN, Formation Path; show its produced material formation_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "RULE_STONE_FOREST",
+        "name": "Quy Tắc Thạch Lâm",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Rule Path",
+        "produce_key": "rule_stone",
+        "secondary_produce_key": "rule_stone",
+        "visual_brief": "Depict the static resource site Quy Tắc Thạch Lâm (RULE_STONE_FOREST), category MINERAL_VEIN, Rule Path; show its produced material rule_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Quy Tắc Thạch Lâm (RULE_STONE_FOREST), category MINERAL_VEIN, Rule Path; show its produced material rule_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "KILLING_IRON_MINE",
+        "name": "Sát Thiết Quặng",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Killing Path",
+        "produce_key": "killing_iron",
+        "secondary_produce_key": "killing_iron",
+        "visual_brief": "Depict the static resource site Sát Thiết Quặng (KILLING_IRON_MINE), category MINERAL_VEIN, Killing Path; show its produced material killing_iron with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Sát Thiết Quặng (KILLING_IRON_MINE), category MINERAL_VEIN, Killing Path; show its produced material killing_iron with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "WIND_STONE_CANYON",
+        "name": "Phong Thạch Cốc",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Wind Path",
+        "produce_key": "wind_stone",
+        "secondary_produce_key": "wind_stone",
+        "visual_brief": "Depict the static resource site Phong Thạch Cốc (WIND_STONE_CANYON), category MINERAL_VEIN, Wind Path; show its produced material wind_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Phong Thạch Cốc (WIND_STONE_CANYON), category MINERAL_VEIN, Wind Path; show its produced material wind_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "SPACE_CRYSTAL_RIFT",
+        "name": "Hư Không Tinh Mạch",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Space Path",
+        "produce_key": "space_crystal",
+        "secondary_produce_key": "space_crystal",
+        "visual_brief": "Depict the static resource site Hư Không Tinh Mạch (SPACE_CRYSTAL_RIFT), category MINERAL_VEIN, Space Path; show its produced material space_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Hư Không Tinh Mạch (SPACE_CRYSTAL_RIFT), category MINERAL_VEIN, Space Path; show its produced material space_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "BLADE_STONE_QUARRY",
+        "name": "Đao Thạch Sơn",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Blade Path",
+        "produce_key": "blade_stone",
+        "secondary_produce_key": "blade_stone",
+        "visual_brief": "Depict the static resource site Đao Thạch Sơn (BLADE_STONE_QUARRY), category MINERAL_VEIN, Blade Path; show its produced material blade_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Đao Thạch Sơn (BLADE_STONE_QUARRY), category MINERAL_VEIN, Blade Path; show its produced material blade_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "SWORD_STONE_CLIFF",
+        "name": "Kiếm Thạch Nhai",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Sword Path",
+        "produce_key": "sword_stone",
+        "secondary_produce_key": "sword_stone",
+        "visual_brief": "Depict the static resource site Kiếm Thạch Nhai (SWORD_STONE_CLIFF), category MINERAL_VEIN, Sword Path; show its produced material sword_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Kiếm Thạch Nhai (SWORD_STONE_CLIFF), category MINERAL_VEIN, Sword Path; show its produced material sword_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "CREATION_STONE_FIELD",
+        "name": "Sinh Cơ Thạch Điền",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Creation Path",
+        "produce_key": "creation_stone",
+        "secondary_produce_key": "creation_stone",
+        "visual_brief": "Depict the static resource site Sinh Cơ Thạch Điền (CREATION_STONE_FIELD), category MINERAL_VEIN, Creation Path; show its produced material creation_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Sinh Cơ Thạch Điền (CREATION_STONE_FIELD), category MINERAL_VEIN, Creation Path; show its produced material creation_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "DESTRUCTION_IRON_MINE",
+        "name": "Toái Thiết Sơn",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Destruction Path",
+        "produce_key": "destruction_iron",
+        "secondary_produce_key": "destruction_iron",
+        "visual_brief": "Depict the static resource site Toái Thiết Sơn (DESTRUCTION_IRON_MINE), category MINERAL_VEIN, Destruction Path; show its produced material destruction_iron with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Toái Thiết Sơn (DESTRUCTION_IRON_MINE), category MINERAL_VEIN, Destruction Path; show its produced material destruction_iron with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "BLOOD_CRYSTAL_POOL",
+        "name": "Huyết Tinh Đầm",
+        "category": "BEAST_PASTURE",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Blood Path",
+        "produce_key": "blood_crystal",
+        "secondary_produce_key": "blood_crystal",
+        "visual_brief": "Depict the static resource site Huyết Tinh Đầm (BLOOD_CRYSTAL_POOL), category BEAST_PASTURE, Blood Path; show its produced material blood_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Huyết Tinh Đầm (BLOOD_CRYSTAL_POOL), category BEAST_PASTURE, Blood Path; show its produced material blood_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "LIGHTNING_CRYSTAL_CLIFF",
+        "name": "Lôi Tinh Nhai",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Lightning Path",
+        "produce_key": "lightning_crystal",
+        "secondary_produce_key": "lightning_crystal",
+        "visual_brief": "Depict the static resource site Lôi Tinh Nhai (LIGHTNING_CRYSTAL_CLIFF), category MINERAL_VEIN, Lightning Path; show its produced material lightning_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Lôi Tinh Nhai (LIGHTNING_CRYSTAL_CLIFF), category MINERAL_VEIN, Lightning Path; show its produced material lightning_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "THEFT_CRYSTAL_CAVE",
+        "name": "Diệu Thủ Tinh Động",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Theft Path",
+        "produce_key": "theft_crystal",
+        "secondary_produce_key": "theft_crystal",
+        "visual_brief": "Depict the static resource site Diệu Thủ Tinh Động (THEFT_CRYSTAL_CAVE), category MINERAL_VEIN, Theft Path; show its produced material theft_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Diệu Thủ Tinh Động (THEFT_CRYSTAL_CAVE), category MINERAL_VEIN, Theft Path; show its produced material theft_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "DARK_CRYSTAL_ABYSS",
+        "name": "Hắc Tinh Uyên",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Dark Path",
+        "produce_key": "dark_crystal",
+        "secondary_produce_key": "dark_crystal",
+        "visual_brief": "Depict the static resource site Hắc Tinh Uyên (DARK_CRYSTAL_ABYSS), category MINERAL_VEIN, Dark Path; show its produced material dark_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Hắc Tinh Uyên (DARK_CRYSTAL_ABYSS), category MINERAL_VEIN, Dark Path; show its produced material dark_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "CLOUD_CRYSTAL_TERRACE",
+        "name": "Vân Tinh Đài",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Cloud Path",
+        "produce_key": "cloud_crystal",
+        "secondary_produce_key": "cloud_crystal",
+        "visual_brief": "Depict the static resource site Vân Tinh Đài (CLOUD_CRYSTAL_TERRACE), category MINERAL_VEIN, Cloud Path; show its produced material cloud_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Vân Tinh Đài (CLOUD_CRYSTAL_TERRACE), category MINERAL_VEIN, Cloud Path; show its produced material cloud_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "LIGHT_CRYSTAL_CAVE",
+        "name": "Quang Tinh Động",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Light Path",
+        "produce_key": "light_crystal",
+        "secondary_produce_key": "light_crystal",
+        "visual_brief": "Depict the static resource site Quang Tinh Động (LIGHT_CRYSTAL_CAVE), category MINERAL_VEIN, Light Path; show its produced material light_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Quang Tinh Động (LIGHT_CRYSTAL_CAVE), category MINERAL_VEIN, Light Path; show its produced material light_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "PHANTOM_CRYSTAL_VALLEY",
+        "name": "Huyễn Tinh Cốc",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Phantom Path",
+        "produce_key": "phantom_crystal",
+        "secondary_produce_key": "phantom_crystal",
+        "visual_brief": "Depict the static resource site Huyễn Tinh Cốc (PHANTOM_CRYSTAL_VALLEY), category MINERAL_VEIN, Phantom Path; show its produced material phantom_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Huyễn Tinh Cốc (PHANTOM_CRYSTAL_VALLEY), category MINERAL_VEIN, Phantom Path; show its produced material phantom_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "STRENGTH_CRYSTAL_PEAK",
+        "name": "Lực Tinh Sơn",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Strength Path",
+        "produce_key": "strength_crystal",
+        "secondary_produce_key": "strength_crystal",
+        "visual_brief": "Depict the static resource site Lực Tinh Sơn (STRENGTH_CRYSTAL_PEAK), category MINERAL_VEIN, Strength Path; show its produced material strength_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Lực Tinh Sơn (STRENGTH_CRYSTAL_PEAK), category MINERAL_VEIN, Strength Path; show its produced material strength_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "TIME_SAND_DUNE",
+        "name": "Tuế Nguyệt Sa Khâu",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Time Path",
+        "produce_key": "time_sand",
+        "secondary_produce_key": "time_sand",
+        "visual_brief": "Depict the static resource site Tuế Nguyệt Sa Khâu (TIME_SAND_DUNE), category MINERAL_VEIN, Time Path; show its produced material time_sand with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Tuế Nguyệt Sa Khâu (TIME_SAND_DUNE), category MINERAL_VEIN, Time Path; show its produced material time_sand with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "HEAVEN_SAND_SEA",
+        "name": "Thiên Tai Sa Hải",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Heaven Path",
+        "produce_key": "heaven_sand",
+        "secondary_produce_key": "heaven_sand",
+        "visual_brief": "Depict the static resource site Thiên Tai Sa Hải (HEAVEN_SAND_SEA), category MINERAL_VEIN, Heaven Path; show its produced material heaven_sand with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Thiên Tai Sa Hải (HEAVEN_SAND_SEA), category MINERAL_VEIN, Heaven Path; show its produced material heaven_sand with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "DEATH_SAND_DUNE",
+        "name": "Tử Sa Khâu",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Death Path",
+        "produce_key": "death_sand",
+        "secondary_produce_key": "death_sand",
+        "visual_brief": "Depict the static resource site Tử Sa Khâu (DEATH_SAND_DUNE), category MINERAL_VEIN, Death Path; show its produced material death_sand with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Tử Sa Khâu (DEATH_SAND_DUNE), category MINERAL_VEIN, Death Path; show its produced material death_sand with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "STAR_SAND_DESERT",
+        "name": "Lưu Tinh Sa Mạc",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Star Path",
+        "produce_key": "star_sand",
+        "secondary_produce_key": "star_sand",
+        "visual_brief": "Depict the static resource site Lưu Tinh Sa Mạc (STAR_SAND_DESERT), category MINERAL_VEIN, Star Path; show its produced material star_sand with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Lưu Tinh Sa Mạc (STAR_SAND_DESERT), category MINERAL_VEIN, Star Path; show its produced material star_sand with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "DREAM_PEARL_POOL",
+        "name": "Mộng Điệp Cốc",
+        "category": "BEAST_PASTURE",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Dream Path",
+        "produce_key": "dream_pearl",
+        "secondary_produce_key": "dream_pearl",
+        "visual_brief": "Depict the static resource site Mộng Điệp Cốc (DREAM_PEARL_POOL), category BEAST_PASTURE, Dream Path; show its produced material dream_pearl with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Mộng Điệp Cốc (DREAM_PEARL_POOL), category BEAST_PASTURE, Dream Path; show its produced material dream_pearl with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "WISDOM_PEARL_POOL",
+        "name": "Trí Tuệ Châu Đàm",
+        "category": "BEAST_PASTURE",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Wisdom Path",
+        "produce_key": "wisdom_pearl",
+        "secondary_produce_key": "wisdom_pearl",
+        "visual_brief": "Depict the static resource site Trí Tuệ Châu Đàm (WISDOM_PEARL_POOL), category BEAST_PASTURE, Wisdom Path; show its produced material wisdom_pearl with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Trí Tuệ Châu Đàm (WISDOM_PEARL_POOL), category BEAST_PASTURE, Wisdom Path; show its produced material wisdom_pearl with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "LUCK_PEARL_POOL",
+        "name": "Vận Châu Đàm",
+        "category": "BEAST_PASTURE",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Luck Path",
+        "produce_key": "luck_pearl",
+        "secondary_produce_key": "luck_pearl",
+        "visual_brief": "Depict the static resource site Vận Châu Đàm (LUCK_PEARL_POOL), category BEAST_PASTURE, Luck Path; show its produced material luck_pearl with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Vận Châu Đàm (LUCK_PEARL_POOL), category BEAST_PASTURE, Luck Path; show its produced material luck_pearl with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "INVESTIGATION_PEARL_POOL",
+        "name": "Trinh Sát Châu Đàm",
+        "category": "BEAST_PASTURE",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Investigation Path",
+        "produce_key": "investigation_pearl",
+        "secondary_produce_key": "investigation_pearl",
+        "visual_brief": "Depict the static resource site Trinh Sát Châu Đàm (INVESTIGATION_PEARL_POOL), category BEAST_PASTURE, Investigation Path; show its produced material investigation_pearl with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Trinh Sát Châu Đàm (INVESTIGATION_PEARL_POOL), category BEAST_PASTURE, Investigation Path; show its produced material investigation_pearl with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "SOUND_RESONANCE_CAVE",
+        "name": "Âm Ba Cốc",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Sound Path",
+        "produce_key": "sound_resonance",
+        "secondary_produce_key": "sound_resonance",
+        "visual_brief": "Depict the static resource site Âm Ba Cốc (SOUND_RESONANCE_CAVE), category MINERAL_VEIN, Sound Path; show its produced material sound_resonance with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Âm Ba Cốc (SOUND_RESONANCE_CAVE), category MINERAL_VEIN, Sound Path; show its produced material sound_resonance with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "BONE_SPLINTER_FIELD",
+        "name": "Cốt Hải",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Bone Path",
+        "produce_key": "bone_splinter",
+        "secondary_produce_key": "bone_splinter",
+        "visual_brief": "Depict the static resource site Cốt Hải (BONE_SPLINTER_FIELD), category MINERAL_VEIN, Bone Path; show its produced material bone_splinter with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Cốt Hải (BONE_SPLINTER_FIELD), category MINERAL_VEIN, Bone Path; show its produced material bone_splinter with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "EMOTION_SILK_GROVE",
+        "name": "Tơ Tình Lâm",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Emotion Path",
+        "produce_key": "emotion_silk",
+        "secondary_produce_key": "emotion_silk",
+        "visual_brief": "Depict the static resource site Tơ Tình Lâm (EMOTION_SILK_GROVE), category MINERAL_VEIN, Emotion Path; show its produced material emotion_silk with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Tơ Tình Lâm (EMOTION_SILK_GROVE), category MINERAL_VEIN, Emotion Path; show its produced material emotion_silk with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "INFORMATION_STONE_LIBRARY",
+        "name": "Tín Thạch Lĩnh",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Information Path",
+        "produce_key": "information_stone",
+        "secondary_produce_key": "information_stone",
+        "visual_brief": "Depict the static resource site Tín Thạch Lĩnh (INFORMATION_STONE_LIBRARY), category MINERAL_VEIN, Information Path; show its produced material information_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Tín Thạch Lĩnh (INFORMATION_STONE_LIBRARY), category MINERAL_VEIN, Information Path; show its produced material information_stone with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "PAINTING_INK_POOL",
+        "name": "Mặc Trì",
+        "category": "BEAST_PASTURE",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Painting Path",
+        "produce_key": "painting_ink",
+        "secondary_produce_key": "painting_ink",
+        "visual_brief": "Depict the static resource site Mặc Trì (PAINTING_INK_POOL), category BEAST_PASTURE, Painting Path; show its produced material painting_ink with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Mặc Trì (PAINTING_INK_POOL), category BEAST_PASTURE, Painting Path; show its produced material painting_ink with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "TRANSFORMATION_ESSENCE_POOL",
+        "name": "Biến Hình Đầm",
+        "category": "BEAST_PASTURE",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Transformation Path",
+        "produce_key": "transformation_essence",
+        "secondary_produce_key": "transformation_essence",
+        "visual_brief": "Depict the static resource site Biến Hình Đầm (TRANSFORMATION_ESSENCE_POOL), category BEAST_PASTURE, Transformation Path; show its produced material transformation_essence with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Biến Hình Đầm (TRANSFORMATION_ESSENCE_POOL), category BEAST_PASTURE, Transformation Path; show its produced material transformation_essence with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "LANGYA_REFINEMENT_PEAK",
+        "name": "Lang Gia Luyện Giới",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Refinement Path",
+        "produce_key": "langya_refinement_shard",
+        "secondary_produce_key": "langya_refinement_shard",
+        "visual_brief": "Depict the static resource site Lang Gia Luyện Giới (LANGYA_REFINEMENT_PEAK), category MINERAL_VEIN, Refinement Path; show its produced material langya_refinement_shard with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Lang Gia Luyện Giới (LANGYA_REFINEMENT_PEAK), category MINERAL_VEIN, Refinement Path; show its produced material langya_refinement_shard with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      },
+      {
+        "id": "BLOOD_CRYSTAL_SEA",
+        "name": "Huyết Hải",
+        "category": "MINERAL_VEIN",
+        "source": "backend/data/ResourcePointTemplate.csv",
+        "status": "delivered",
+        "path": "Blood Path",
+        "produce_key": "blood_crystal",
+        "secondary_produce_key": "blood_crystal",
+        "visual_brief": "Depict the static resource site Huyết Hải (BLOOD_CRYSTAL_SEA), category MINERAL_VEIN, Blood Path; show its produced material blood_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict the static resource site Huyết Hải (BLOOD_CRYSTAL_SEA), category MINERAL_VEIN, Blood Path; show its produced material blood_crystal with a distinct broad silhouette. This is a type marker, not a depleted/ready/active state.. Avoid tiny terrain details; make it distinct from the other mine and discovery markers."
+      }
+    ],
+    "item": [
+      {
+        "id": "blade_stone",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "BLADE_STONE_QUARRY",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "BLADE_STONE_QUARRY",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "blade_stone_rank1",
+          "blade_stone_rank2",
+          "blade_stone_rank3",
+          "blade_stone_rank4",
+          "blade_stone_rank5",
+          "blade_stone_rank6",
+          "blade_stone_rank7",
+          "blade_stone_rank8",
+          "blade_stone_rank9"
+        ],
+        "status": "delivered",
+        "name": "Đao Tí Phàm Thạch",
+        "visual_brief": "Depict one distinctive physical resource identity Đao Tí Phàm Thạch (blade_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Đao Tí Phàm Thạch (blade_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "blood_crystal",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "BLOOD_CRYSTAL_POOL",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "BLOOD_CRYSTAL_POOL",
+            "field": "secondary_produce_key"
+          },
+          {
+            "point_type": "BLOOD_CRYSTAL_SEA",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "BLOOD_CRYSTAL_SEA",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "blood_crystal_rank1",
+          "blood_crystal_rank2",
+          "blood_crystal_rank3",
+          "blood_crystal_rank4",
+          "blood_crystal_rank5",
+          "blood_crystal_rank6",
+          "blood_crystal_rank7",
+          "blood_crystal_rank8",
+          "blood_crystal_rank9"
+        ],
+        "status": "delivered",
+        "name": "Huyết Khuyển Nanh Tinh",
+        "visual_brief": "Depict one distinctive physical resource identity Huyết Khuyển Nanh Tinh (blood_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Huyết Khuyển Nanh Tinh (blood_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "bone_splinter",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "BONE_SPLINTER_FIELD",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "BONE_SPLINTER_FIELD",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "bone_splinter_rank1",
+          "bone_splinter_rank2",
+          "bone_splinter_rank3",
+          "bone_splinter_rank4",
+          "bone_splinter_rank5",
+          "bone_splinter_rank6",
+          "bone_splinter_rank7",
+          "bone_splinter_rank8",
+          "bone_splinter_rank9"
+        ],
+        "status": "delivered",
+        "name": "Cốt Trùng Khô Giáp",
+        "visual_brief": "Depict one distinctive physical resource identity Cốt Trùng Khô Giáp (bone_splinter); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Cốt Trùng Khô Giáp (bone_splinter); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "cloud_crystal",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "CLOUD_CRYSTAL_TERRACE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "CLOUD_CRYSTAL_TERRACE",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "cloud_crystal_rank1",
+          "cloud_crystal_rank2",
+          "cloud_crystal_rank3",
+          "cloud_crystal_rank4",
+          "cloud_crystal_rank5",
+          "cloud_crystal_rank6",
+          "cloud_crystal_rank7",
+          "cloud_crystal_rank8",
+          "cloud_crystal_rank9"
+        ],
+        "status": "delivered",
+        "name": "Vân Thú Tinh Sa",
+        "visual_brief": "Depict one distinctive physical resource identity Vân Thú Tinh Sa (cloud_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Vân Thú Tinh Sa (cloud_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "creation_stone",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "CREATION_STONE_FIELD",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "CREATION_STONE_FIELD",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "creation_stone_rank1",
+          "creation_stone_rank2",
+          "creation_stone_rank3",
+          "creation_stone_rank4",
+          "creation_stone_rank5",
+          "creation_stone_rank6",
+          "creation_stone_rank7",
+          "creation_stone_rank8",
+          "creation_stone_rank9"
+        ],
+        "status": "delivered",
+        "name": "Thổ Cư Sinh Cơ Thạch",
+        "visual_brief": "Depict one distinctive physical resource identity Thổ Cư Sinh Cơ Thạch (creation_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Thổ Cư Sinh Cơ Thạch (creation_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "dark_crystal",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "DARK_CRYSTAL_ABYSS",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "DARK_CRYSTAL_ABYSS",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "dark_crystal_rank1",
+          "dark_crystal_rank2",
+          "dark_crystal_rank3",
+          "dark_crystal_rank4",
+          "dark_crystal_rank5",
+          "dark_crystal_rank6",
+          "dark_crystal_rank7",
+          "dark_crystal_rank8",
+          "dark_crystal_rank9"
+        ],
+        "status": "delivered",
+        "name": "Âm Hồ Hắc Tinh",
+        "visual_brief": "Depict one distinctive physical resource identity Âm Hồ Hắc Tinh (dark_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Âm Hồ Hắc Tinh (dark_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "death_sand",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "DEATH_SAND_DUNE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "DEATH_SAND_DUNE",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "death_sand_rank1",
+          "death_sand_rank2",
+          "death_sand_rank3",
+          "death_sand_rank4",
+          "death_sand_rank5",
+          "death_sand_rank6",
+          "death_sand_rank7",
+          "death_sand_rank8",
+          "death_sand_rank9"
+        ],
+        "status": "delivered",
+        "name": "Tử Khí Quạ Tụ Sa",
+        "visual_brief": "Depict one distinctive physical resource identity Tử Khí Quạ Tụ Sa (death_sand); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Tử Khí Quạ Tụ Sa (death_sand); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "destruction_iron",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "DESTRUCTION_IRON_MINE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "DESTRUCTION_IRON_MINE",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "destruction_iron_rank1",
+          "destruction_iron_rank2",
+          "destruction_iron_rank3",
+          "destruction_iron_rank4",
+          "destruction_iron_rank5",
+          "destruction_iron_rank6",
+          "destruction_iron_rank7",
+          "destruction_iron_rank8",
+          "destruction_iron_rank9"
+        ],
+        "status": "delivered",
+        "name": "Toái Diệt Hắc Thiết",
+        "visual_brief": "Depict one distinctive physical resource identity Toái Diệt Hắc Thiết (destruction_iron); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Toái Diệt Hắc Thiết (destruction_iron); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "dream_pearl",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "DREAM_PEARL_POOL",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "DREAM_PEARL_POOL",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "dream_pearl_rank1",
+          "dream_pearl_rank2",
+          "dream_pearl_rank3",
+          "dream_pearl_rank4",
+          "dream_pearl_rank5",
+          "dream_pearl_rank6",
+          "dream_pearl_rank7",
+          "dream_pearl_rank8",
+          "dream_pearl_rank9"
+        ],
+        "status": "delivered",
+        "name": "Mộng Điệp Phấn",
+        "visual_brief": "Depict one distinctive physical resource identity Mộng Điệp Phấn (dream_pearl); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Mộng Điệp Phấn (dream_pearl); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "earth_soil",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "ORE_VEIN",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "ORE_VEIN",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "earth_soil_rank1",
+          "earth_soil_rank2",
+          "earth_soil_rank3",
+          "earth_soil_rank4",
+          "earth_soil_rank5",
+          "earth_soil_rank6",
+          "earth_soil_rank7",
+          "earth_soil_rank8",
+          "earth_soil_rank9"
+        ],
+        "status": "delivered",
+        "name": "Thạch Hầu Thổ Sa",
+        "visual_brief": "Depict one distinctive physical resource identity Thạch Hầu Thổ Sa (earth_soil); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Thạch Hầu Thổ Sa (earth_soil); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "emotion_silk",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "EMOTION_SILK_GROVE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "EMOTION_SILK_GROVE",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "emotion_silk_rank1",
+          "emotion_silk_rank2",
+          "emotion_silk_rank3",
+          "emotion_silk_rank4",
+          "emotion_silk_rank5",
+          "emotion_silk_rank6",
+          "emotion_silk_rank7",
+          "emotion_silk_rank8",
+          "emotion_silk_rank9"
+        ],
+        "status": "delivered",
+        "name": "Tình Tơ Tụ Phiến",
+        "visual_brief": "Depict one distinctive physical resource identity Tình Tơ Tụ Phiến (emotion_silk); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Tình Tơ Tụ Phiến (emotion_silk); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "enslavement_stone",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "CORPSE_RIDGE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "CORPSE_RIDGE",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "enslavement_stone_rank1",
+          "enslavement_stone_rank2",
+          "enslavement_stone_rank3",
+          "enslavement_stone_rank4",
+          "enslavement_stone_rank5",
+          "enslavement_stone_rank6",
+          "enslavement_stone_rank7",
+          "enslavement_stone_rank8",
+          "enslavement_stone_rank9"
+        ],
+        "status": "delivered",
+        "name": "Ngự Khuyển Nô Dịch Thạch",
+        "visual_brief": "Depict one distinctive physical resource identity Ngự Khuyển Nô Dịch Thạch (enslavement_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Ngự Khuyển Nô Dịch Thạch (enslavement_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "fire_crystal",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "PHOENIX_PEAK",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "PHOENIX_PEAK",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "fire_crystal_rank1",
+          "fire_crystal_rank2",
+          "fire_crystal_rank3",
+          "fire_crystal_rank4",
+          "fire_crystal_rank5",
+          "fire_crystal_rank6",
+          "fire_crystal_rank7",
+          "fire_crystal_rank8",
+          "fire_crystal_rank9"
+        ],
+        "status": "delivered",
+        "name": "Ly Hỏa Thử Bì",
+        "visual_brief": "Depict one distinctive physical resource identity Ly Hỏa Thử Bì (fire_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Ly Hỏa Thử Bì (fire_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "food_essence",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "BEAST_PASTURE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "BEAST_PASTURE",
+            "field": "secondary_produce_key"
+          },
+          {
+            "point_type": "YEAR_ESSENCE_POOL",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "YEAR_ESSENCE_POOL",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "food_essence_rank1",
+          "food_essence_rank2",
+          "food_essence_rank3",
+          "food_essence_rank4",
+          "food_essence_rank5",
+          "food_essence_rank6",
+          "food_essence_rank7",
+          "food_essence_rank8",
+          "food_essence_rank9"
+        ],
+        "status": "delivered",
+        "name": "Tửu Cốt Thực Tinh",
+        "visual_brief": "Depict one distinctive physical resource identity Tửu Cốt Thực Tinh (food_essence); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Tửu Cốt Thực Tinh (food_essence); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "formation_stone",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "FORMATION_STONE_VALLEY",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "FORMATION_STONE_VALLEY",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "formation_stone_rank1",
+          "formation_stone_rank2",
+          "formation_stone_rank3",
+          "formation_stone_rank4",
+          "formation_stone_rank5",
+          "formation_stone_rank6",
+          "formation_stone_rank7",
+          "formation_stone_rank8",
+          "formation_stone_rank9"
+        ],
+        "status": "delivered",
+        "name": "Khôi Lỗi Trận Thạch",
+        "visual_brief": "Depict one distinctive physical resource identity Khôi Lỗi Trận Thạch (formation_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Khôi Lỗi Trận Thạch (formation_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "heaven_sand",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "HEAVEN_SAND_SEA",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "HEAVEN_SAND_SEA",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "heaven_sand_rank1",
+          "heaven_sand_rank2",
+          "heaven_sand_rank3",
+          "heaven_sand_rank4",
+          "heaven_sand_rank5",
+          "heaven_sand_rank6",
+          "heaven_sand_rank7",
+          "heaven_sand_rank8",
+          "heaven_sand_rank9"
+        ],
+        "status": "delivered",
+        "name": "Thiên Tai Linh Sa",
+        "visual_brief": "Depict one distinctive physical resource identity Thiên Tai Linh Sa (heaven_sand); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Thiên Tai Linh Sa (heaven_sand); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "ice_crystal",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "FROSTY_PEAK",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "FROSTY_PEAK",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "ice_crystal_rank1",
+          "ice_crystal_rank2",
+          "ice_crystal_rank3",
+          "ice_crystal_rank4",
+          "ice_crystal_rank5",
+          "ice_crystal_rank6",
+          "ice_crystal_rank7",
+          "ice_crystal_rank8",
+          "ice_crystal_rank9"
+        ],
+        "status": "delivered",
+        "name": "Hàn Băng Thiền Tinh",
+        "visual_brief": "Depict one distinctive physical resource identity Hàn Băng Thiền Tinh (ice_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Hàn Băng Thiền Tinh (ice_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "information_stone",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "INFORMATION_STONE_LIBRARY",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "INFORMATION_STONE_LIBRARY",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "information_stone_rank1",
+          "information_stone_rank2",
+          "information_stone_rank3",
+          "information_stone_rank4",
+          "information_stone_rank5",
+          "information_stone_rank6",
+          "information_stone_rank7",
+          "information_stone_rank8",
+          "information_stone_rank9"
+        ],
+        "status": "delivered",
+        "name": "Tín Thú Phàm Thạch",
+        "visual_brief": "Depict one distinctive physical resource identity Tín Thú Phàm Thạch (information_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Tín Thú Phàm Thạch (information_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "investigation_pearl",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "INVESTIGATION_PEARL_POOL",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "INVESTIGATION_PEARL_POOL",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "investigation_pearl_rank1",
+          "investigation_pearl_rank2",
+          "investigation_pearl_rank3",
+          "investigation_pearl_rank4",
+          "investigation_pearl_rank5",
+          "investigation_pearl_rank6",
+          "investigation_pearl_rank7",
+          "investigation_pearl_rank8",
+          "investigation_pearl_rank9"
+        ],
+        "status": "delivered",
+        "name": "Phàm Ưng Trinh Sát Châu",
+        "visual_brief": "Depict one distinctive physical resource identity Phàm Ưng Trinh Sát Châu (investigation_pearl); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Phàm Ưng Trinh Sát Châu (investigation_pearl); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "killing_iron",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "KILLING_IRON_MINE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "KILLING_IRON_MINE",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "killing_iron_rank1",
+          "killing_iron_rank2",
+          "killing_iron_rank3",
+          "killing_iron_rank4",
+          "killing_iron_rank5",
+          "killing_iron_rank6",
+          "killing_iron_rank7",
+          "killing_iron_rank8",
+          "killing_iron_rank9"
+        ],
+        "status": "delivered",
+        "name": "Sát Thủy Thiết",
+        "visual_brief": "Depict one distinctive physical resource identity Sát Thủy Thiết (killing_iron); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Sát Thủy Thiết (killing_iron); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "langya_refinement_shard",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "LANGYA_REFINEMENT_PEAK",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "LANGYA_REFINEMENT_PEAK",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "langya_refinement_shard_rank1",
+          "langya_refinement_shard_rank2",
+          "langya_refinement_shard_rank3",
+          "langya_refinement_shard_rank4",
+          "langya_refinement_shard_rank5",
+          "langya_refinement_shard_rank6",
+          "langya_refinement_shard_rank7",
+          "langya_refinement_shard_rank8",
+          "langya_refinement_shard_rank9"
+        ],
+        "status": "delivered",
+        "name": "Luyện Hỏa Kỳ Nhông Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Luyện Hỏa Kỳ Nhông Phàm Chi (langya_refinement_shard); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Luyện Hỏa Kỳ Nhông Phàm Chi (langya_refinement_shard); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "light_crystal",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "LIGHT_CRYSTAL_CAVE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "LIGHT_CRYSTAL_CAVE",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "light_crystal_rank1",
+          "light_crystal_rank2",
+          "light_crystal_rank3",
+          "light_crystal_rank4",
+          "light_crystal_rank5",
+          "light_crystal_rank6",
+          "light_crystal_rank7",
+          "light_crystal_rank8",
+          "light_crystal_rank9"
+        ],
+        "status": "delivered",
+        "name": "Huỳnh Trùng Quang Tinh",
+        "visual_brief": "Depict one distinctive physical resource identity Huỳnh Trùng Quang Tinh (light_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Huỳnh Trùng Quang Tinh (light_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "lightning_crystal",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "LIGHTNING_CRYSTAL_CLIFF",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "LIGHTNING_CRYSTAL_CLIFF",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "lightning_crystal_rank1",
+          "lightning_crystal_rank2",
+          "lightning_crystal_rank3",
+          "lightning_crystal_rank4",
+          "lightning_crystal_rank5",
+          "lightning_crystal_rank6",
+          "lightning_crystal_rank7",
+          "lightning_crystal_rank8",
+          "lightning_crystal_rank9"
+        ],
+        "status": "delivered",
+        "name": "Đốc Lang Lôi Tinh",
+        "visual_brief": "Depict one distinctive physical resource identity Đốc Lang Lôi Tinh (lightning_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Đốc Lang Lôi Tinh (lightning_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "luck_pearl",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "LUCK_PEARL_POOL",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "LUCK_PEARL_POOL",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "luck_pearl_rank1",
+          "luck_pearl_rank2",
+          "luck_pearl_rank3",
+          "luck_pearl_rank4",
+          "luck_pearl_rank5",
+          "luck_pearl_rank6",
+          "luck_pearl_rank7",
+          "luck_pearl_rank8",
+          "luck_pearl_rank9"
+        ],
+        "status": "delivered",
+        "name": "Vận Khuyển Vận Châu",
+        "visual_brief": "Depict one distinctive physical resource identity Vận Khuyển Vận Châu (luck_pearl); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Vận Khuyển Vận Châu (luck_pearl); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "metal_ore",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "GOLD_SAND_SHOAL",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "GOLD_SAND_SHOAL",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "metal_ore_rank1",
+          "metal_ore_rank2",
+          "metal_ore_rank3",
+          "metal_ore_rank4",
+          "metal_ore_rank5",
+          "metal_ore_rank6",
+          "metal_ore_rank7",
+          "metal_ore_rank8",
+          "metal_ore_rank9"
+        ],
+        "status": "delivered",
+        "name": "Thiết Hùng Cương Quặng",
+        "visual_brief": "Depict one distinctive physical resource identity Thiết Hùng Cương Quặng (metal_ore); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Thiết Hùng Cương Quặng (metal_ore); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.."
+      },
+      {
+        "id": "painting_ink",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "PAINTING_INK_POOL",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "PAINTING_INK_POOL",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "painting_ink_rank1",
+          "painting_ink_rank2",
+          "painting_ink_rank3",
+          "painting_ink_rank4",
+          "painting_ink_rank5",
+          "painting_ink_rank6",
+          "painting_ink_rank7",
+          "painting_ink_rank8",
+          "painting_ink_rank9"
+        ],
+        "status": "delivered",
+        "name": "Đan Thanh Mặc Điệp Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Đan Thanh Mặc Điệp Phàm Chi (painting_ink); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Đan Thanh Mặc Điệp Phàm Chi (painting_ink); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "phantom_crystal",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "PHANTOM_CRYSTAL_VALLEY",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "PHANTOM_CRYSTAL_VALLEY",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "phantom_crystal_rank1",
+          "phantom_crystal_rank2",
+          "phantom_crystal_rank3",
+          "phantom_crystal_rank4",
+          "phantom_crystal_rank5",
+          "phantom_crystal_rank6",
+          "phantom_crystal_rank7",
+          "phantom_crystal_rank8",
+          "phantom_crystal_rank9"
+        ],
+        "status": "delivered",
+        "name": "Huyễn Yên Nga Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Huyễn Yên Nga Phàm Chi (phantom_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Huyễn Yên Nga Phàm Chi (phantom_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "poison_sand",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "JADE_SNAKE_CAVE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "JADE_SNAKE_CAVE",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "poison_sand_rank1",
+          "poison_sand_rank2",
+          "poison_sand_rank3",
+          "poison_sand_rank4",
+          "poison_sand_rank5",
+          "poison_sand_rank6",
+          "poison_sand_rank7",
+          "poison_sand_rank8",
+          "poison_sand_rank9"
+        ],
+        "status": "delivered",
+        "name": "Vạn Xà Cốc Độc Mãng Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Vạn Xà Cốc Độc Mãng Phàm Chi (poison_sand); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Vạn Xà Cốc Độc Mãng Phàm Chi (poison_sand); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "qi_stone",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "QI_STONE_VEIN",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "QI_STONE_VEIN",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "qi_stone_rank1",
+          "qi_stone_rank2",
+          "qi_stone_rank3",
+          "qi_stone_rank4",
+          "qi_stone_rank5",
+          "qi_stone_rank6",
+          "qi_stone_rank7",
+          "qi_stone_rank8",
+          "qi_stone_rank9"
+        ],
+        "status": "delivered",
+        "name": "Khí Tức Linh Tước Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Khí Tức Linh Tước Phàm Chi (qi_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Khí Tức Linh Tước Phàm Chi (qi_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "refinement_iron",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "REFINEMENT_IRON_MINE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "REFINEMENT_IRON_MINE",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "refinement_iron_rank1",
+          "refinement_iron_rank2",
+          "refinement_iron_rank3",
+          "refinement_iron_rank4",
+          "refinement_iron_rank5",
+          "refinement_iron_rank6",
+          "refinement_iron_rank7",
+          "refinement_iron_rank8",
+          "refinement_iron_rank9"
+        ],
+        "status": "delivered",
+        "name": "Luyện Hỏa Kỳ Nhông Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Luyện Hỏa Kỳ Nhông Phàm Chi (refinement_iron); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Luyện Hỏa Kỳ Nhông Phàm Chi (refinement_iron); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "rule_stone",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "RULE_STONE_FOREST",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "RULE_STONE_FOREST",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "rule_stone_rank1",
+          "rule_stone_rank2",
+          "rule_stone_rank3",
+          "rule_stone_rank4",
+          "rule_stone_rank5",
+          "rule_stone_rank6",
+          "rule_stone_rank7",
+          "rule_stone_rank8",
+          "rule_stone_rank9"
+        ],
+        "status": "delivered",
+        "name": "Cân Xứng Linh Thú Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Cân Xứng Linh Thú Phàm Chi (rule_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Cân Xứng Linh Thú Phàm Chi (rule_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "soul_sand",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "DANG_HON_PEAK",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "DANG_HON_PEAK",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "soul_sand_rank1",
+          "soul_sand_rank2",
+          "soul_sand_rank3",
+          "soul_sand_rank4",
+          "soul_sand_rank5",
+          "soul_sand_rank6",
+          "soul_sand_rank7",
+          "soul_sand_rank8",
+          "soul_sand_rank9"
+        ],
+        "status": "delivered",
+        "name": "Linh Lộc Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Linh Lộc Phàm Chi (soul_sand); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Linh Lộc Phàm Chi (soul_sand); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "sound_resonance",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "SOUND_RESONANCE_CAVE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "SOUND_RESONANCE_CAVE",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "sound_resonance_rank1",
+          "sound_resonance_rank2",
+          "sound_resonance_rank3",
+          "sound_resonance_rank4",
+          "sound_resonance_rank5",
+          "sound_resonance_rank6",
+          "sound_resonance_rank7",
+          "sound_resonance_rank8",
+          "sound_resonance_rank9"
+        ],
+        "status": "delivered",
+        "name": "Âm Ba Khôi Lỗi Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Âm Ba Khôi Lỗi Phàm Chi (sound_resonance); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Âm Ba Khôi Lỗi Phàm Chi (sound_resonance); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "space_crystal",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "SPACE_CRYSTAL_RIFT",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "SPACE_CRYSTAL_RIFT",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "space_crystal_rank1",
+          "space_crystal_rank2",
+          "space_crystal_rank3",
+          "space_crystal_rank4",
+          "space_crystal_rank5",
+          "space_crystal_rank6",
+          "space_crystal_rank7",
+          "space_crystal_rank8",
+          "space_crystal_rank9"
+        ],
+        "status": "delivered",
+        "name": "Hoang Dã Hư Không Di Dời Thú Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Hoang Dã Hư Không Di Dời Thú Phàm Chi (space_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Hoang Dã Hư Không Di Dời Thú Phàm Chi (space_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "star_sand",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "STAR_SAND_DESERT",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "STAR_SAND_DESERT",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "star_sand_rank1",
+          "star_sand_rank2",
+          "star_sand_rank3",
+          "star_sand_rank4",
+          "star_sand_rank5",
+          "star_sand_rank6",
+          "star_sand_rank7",
+          "star_sand_rank8",
+          "star_sand_rank9"
+        ],
+        "status": "delivered",
+        "name": "Lưu Tinh Huỳnh Thú Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Lưu Tinh Huỳnh Thú Phàm Chi (star_sand); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Lưu Tinh Huỳnh Thú Phàm Chi (star_sand); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "strength_crystal",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "STRENGTH_CRYSTAL_PEAK",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "STRENGTH_CRYSTAL_PEAK",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "strength_crystal_rank1",
+          "strength_crystal_rank2",
+          "strength_crystal_rank3",
+          "strength_crystal_rank4",
+          "strength_crystal_rank5",
+          "strength_crystal_rank6",
+          "strength_crystal_rank7",
+          "strength_crystal_rank8",
+          "strength_crystal_rank9"
+        ],
+        "status": "delivered",
+        "name": "Bách Thú Độc Lang Vương Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Bách Thú Độc Lang Vương Phàm Chi (strength_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Bách Thú Độc Lang Vương Phàm Chi (strength_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "sword_stone",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "SWORD_STONE_CLIFF",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "SWORD_STONE_CLIFF",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "sword_stone_rank1",
+          "sword_stone_rank2",
+          "sword_stone_rank3",
+          "sword_stone_rank4",
+          "sword_stone_rank5",
+          "sword_stone_rank6",
+          "sword_stone_rank7",
+          "sword_stone_rank8",
+          "sword_stone_rank9"
+        ],
+        "status": "delivered",
+        "name": "Trảm Kiếm Điểu Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Trảm Kiếm Điểu Phàm Chi (sword_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Trảm Kiếm Điểu Phàm Chi (sword_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "theft_crystal",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "THEFT_CRYSTAL_CAVE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "THEFT_CRYSTAL_CAVE",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "theft_crystal_rank1",
+          "theft_crystal_rank2",
+          "theft_crystal_rank3",
+          "theft_crystal_rank4",
+          "theft_crystal_rank5",
+          "theft_crystal_rank6",
+          "theft_crystal_rank7",
+          "theft_crystal_rank8",
+          "theft_crystal_rank9"
+        ],
+        "status": "delivered",
+        "name": "Diệu Thủ Ấu Chu Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Diệu Thủ Ấu Chu Phàm Chi (theft_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Diệu Thủ Ấu Chu Phàm Chi (theft_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "time_sand",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "TIME_SAND_DUNE",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "TIME_SAND_DUNE",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "time_sand_rank1",
+          "time_sand_rank2",
+          "time_sand_rank3",
+          "time_sand_rank4",
+          "time_sand_rank5",
+          "time_sand_rank6",
+          "time_sand_rank7",
+          "time_sand_rank8",
+          "time_sand_rank9"
+        ],
+        "status": "delivered",
+        "name": "Tuế Nguyệt Bàng Cua Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Tuế Nguyệt Bàng Cua Phàm Chi (time_sand); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Tuế Nguyệt Bàng Cua Phàm Chi (time_sand); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "transformation_essence",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "TRANSFORMATION_ESSENCE_POOL",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "TRANSFORMATION_ESSENCE_POOL",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "transformation_essence_rank1",
+          "transformation_essence_rank2",
+          "transformation_essence_rank3",
+          "transformation_essence_rank4",
+          "transformation_essence_rank5",
+          "transformation_essence_rank6",
+          "transformation_essence_rank7",
+          "transformation_essence_rank8",
+          "transformation_essence_rank9"
+        ],
+        "status": "delivered",
+        "name": "Hoang Dã Thiên Biến Dị Thú Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Hoang Dã Thiên Biến Dị Thú Phàm Chi (transformation_essence); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Hoang Dã Thiên Biến Dị Thú Phàm Chi (transformation_essence); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "water_pearl",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "SPIRIT_SPRING",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "SPIRIT_SPRING",
+            "field": "secondary_produce_key"
+          },
+          {
+            "point_type": "MOON_BOWL",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "MOON_BOWL",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "water_pearl_rank1",
+          "water_pearl_rank2",
+          "water_pearl_rank3",
+          "water_pearl_rank4",
+          "water_pearl_rank5",
+          "water_pearl_rank6",
+          "water_pearl_rank7",
+          "water_pearl_rank8",
+          "water_pearl_rank9"
+        ],
+        "status": "delivered",
+        "name": "Cẩm Lý Ngư Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Cẩm Lý Ngư Phàm Chi (water_pearl); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Cẩm Lý Ngư Phàm Chi (water_pearl); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "wind_stone",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "WIND_STONE_CANYON",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "WIND_STONE_CANYON",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "wind_stone_rank1",
+          "wind_stone_rank2",
+          "wind_stone_rank3",
+          "wind_stone_rank4",
+          "wind_stone_rank5",
+          "wind_stone_rank6",
+          "wind_stone_rank7",
+          "wind_stone_rank8",
+          "wind_stone_rank9"
+        ],
+        "status": "delivered",
+        "name": "Phong Bạo Độc Phong Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Phong Bạo Độc Phong Phàm Chi (wind_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Phong Bạo Độc Phong Phàm Chi (wind_stone); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "wisdom_pearl",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "WISDOM_PEARL_POOL",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "WISDOM_PEARL_POOL",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "wisdom_pearl_rank1",
+          "wisdom_pearl_rank2",
+          "wisdom_pearl_rank3",
+          "wisdom_pearl_rank4",
+          "wisdom_pearl_rank5",
+          "wisdom_pearl_rank6",
+          "wisdom_pearl_rank7",
+          "wisdom_pearl_rank8",
+          "wisdom_pearl_rank9"
+        ],
+        "status": "delivered",
+        "name": "Bạch Diện Linh Hồ Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Bạch Diện Linh Hồ Phàm Chi (wisdom_pearl); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Bạch Diện Linh Hồ Phàm Chi (wisdom_pearl); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      },
+      {
+        "id": "wood_crystal",
+        "source": "backend/data/ResourcePointTemplate.csv + backend/data/Item.csv",
+        "produced_by": [
+          {
+            "point_type": "HERB_VALLEY",
+            "field": "produce_key"
+          },
+          {
+            "point_type": "HERB_VALLEY",
+            "field": "secondary_produce_key"
+          }
+        ],
+        "catalog_ids": [
+          "wood_crystal_rank1",
+          "wood_crystal_rank2",
+          "wood_crystal_rank3",
+          "wood_crystal_rank4",
+          "wood_crystal_rank5",
+          "wood_crystal_rank6",
+          "wood_crystal_rank7",
+          "wood_crystal_rank8",
+          "wood_crystal_rank9"
+        ],
+        "status": "delivered",
+        "name": "Linh Hoa Điệp Phàm Chi",
+        "visual_brief": "Depict one distinctive physical resource identity Linh Hoa Điệp Phàm Chi (wood_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict one distinctive physical resource identity Linh Hoa Điệp Phàm Chi (wood_crystal); rank variants all share this same artwork. Favor the item's material/shape over abstract elemental decoration..",
+        "shared_artwork_id": "beast_material_fragment"
+      }
+    ],
+    "gu": [
+      {
+        "id": "GU_ALL_PEOPLE_UNITED_I",
+        "name": "Vạn Chúng Nhất Tâm Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Vạn Chúng Nhất Tâm Tiên Cổ (GU_ALL_PEOPLE_UNITED_I) as a distinct Gu creature/relic using its lore: Nhân đạo Tiên Cổ vạn chúng đồng lòng, liên kết sĩ khí toàn đội, san sẻ thương tổn và nhân bội chiến lực toàn quân.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Vạn Chúng Nhất Tâm Tiên Cổ (GU_ALL_PEOPLE_UNITED_I) as a distinct Gu creature/relic using its lore: Nhân đạo Tiên Cổ vạn chúng đồng lòng, liên kết sĩ khí toàn đội, san sẻ thương tổn và nhân bội chiến lực toàn quân.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_BLOOD_STAINED_ROBE_I",
+        "name": "Huyết Chinh Bào Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Huyết Chinh Bào Tiên Cổ (GU_BLOOD_STAINED_ROBE_I) as a distinct Gu creature/relic using its lore: Huyết đạo Tiên Cổ hộ thể trứ danh của Cổ Nguyệt Phương Nguyên, hấp thu 40% thương tổn biến thành huyết thuẫn bảo hộ và cường hóa sát thương phản đòn.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Huyết Chinh Bào Tiên Cổ (GU_BLOOD_STAINED_ROBE_I) as a distinct Gu creature/relic using its lore: Huyết đạo Tiên Cổ hộ thể trứ danh của Cổ Nguyệt Phương Nguyên, hấp thu 40% thương tổn biến thành huyết thuẫn bảo hộ và cường hóa sát thương phản đòn.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_CHAOS_CAVE_DRILL_I",
+        "name": "Hỗn Động Toàn Soa Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Hỗn Động Toàn Soa Tiên Cổ (GU_CHAOS_CAVE_DRILL_I) as a distinct Gu creature/relic using its lore: Vũ đạo Tiên Cổ xoay chuyển không gian xuyên thủng động hư không, bắn mũi thoi phá tan toàn bộ khiên chắn của đối phương.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Hỗn Động Toàn Soa Tiên Cổ (GU_CHAOS_CAVE_DRILL_I) as a distinct Gu creature/relic using its lore: Vũ đạo Tiên Cổ xoay chuyển không gian xuyên thủng động hư không, bắn mũi thoi phá tan toàn bộ khiên chắn của đối phương.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_CHARM_GHOST_I",
+        "name": "Mị Lam Thoát Tục Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Mị Lam Thoát Tục Tiên Cổ (GU_CHARM_GHOST_I) as a distinct Gu creature/relic using its lore: Mị đạo Hồn phách Tiên Cổ huyễn hoặc tâm trí, khiến đối thủ mê muội mất kiểm soát quay lại tấn công đồng đội.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Mị Lam Thoát Tục Tiên Cổ (GU_CHARM_GHOST_I) as a distinct Gu creature/relic using its lore: Mị đạo Hồn phách Tiên Cổ huyễn hoặc tâm trí, khiến đối thủ mê muội mất kiểm soát quay lại tấn công đồng đội.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_DANG_HUN_EXPLOSION_I",
+        "name": "Đãng Hồn Tạc Linh Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Đãng Hồn Tạc Linh Tiên Cổ (GU_DANG_HUN_EXPLOSION_I) as a distinct Gu creature/relic using its lore: Hồn đạo Tiên Cổ của núi Đãng Hồn, kích nổ trực tiếp hồn phách địch thủ gây sát thương chân thực bỏ qua giáp.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Đãng Hồn Tạc Linh Tiên Cổ (GU_DANG_HUN_EXPLOSION_I) as a distinct Gu creature/relic using its lore: Hồn đạo Tiên Cổ của núi Đãng Hồn, kích nổ trực tiếp hồn phách địch thủ gây sát thương chân thực bỏ qua giáp.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_DESTINY_SONG_I",
+        "name": "Vận Mệnh Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Vận Mệnh Tiên Cổ (GU_DESTINY_SONG_I) as a distinct Gu creature/relic using its lore: Bát/Cửu Chuyển Tiên Cổ tối thượng, kích hoạt Vận Mệnh Ca vang vọng khắp trời đất, cường hóa đạo ngân bản thân và áp chế vạn vật theo vận mệnh an bài.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Vận Mệnh Tiên Cổ (GU_DESTINY_SONG_I) as a distinct Gu creature/relic using its lore: Bát/Cửu Chuyển Tiên Cổ tối thượng, kích hoạt Vận Mệnh Ca vang vọng khắp trời đất, cường hóa đạo ngân bản thân và áp chế vạn vật theo vận mệnh an bài.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_DRY_WOOD_SPRING_I",
+        "name": "Khô Mộc Phùng Xuân Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Khô Mộc Phùng Xuân Tiên Cổ (GU_DRY_WOOD_SPRING_I) as a distinct Gu creature/relic using its lore: Mộc đạo Tiên Cổ cây khô gặp mùa xuân, giải trừ toàn bộ dị trạng và hồi phục lượng lớn sinh lực cho đồng minh.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Khô Mộc Phùng Xuân Tiên Cổ (GU_DRY_WOOD_SPRING_I) as a distinct Gu creature/relic using its lore: Mộc đạo Tiên Cổ cây khô gặp mùa xuân, giải trừ toàn bộ dị trạng và hồi phục lượng lớn sinh lực cho đồng minh.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_EATING_LOSS_BLESSING_I",
+        "name": "Ăn Thiệt Là Phúc Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Ăn Thiệt Là Phúc Tiên Cổ (GU_EATING_LOSS_BLESSING_I) as a distinct Gu creature/relic using its lore: Thực đạo Tiên Cổ chịu thiệt là phúc, mỗi khi trúng đòn lại chuyển hóa một phần thương tổn thành thuộc tính vĩnh viễn cường hóa bản thân.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Ăn Thiệt Là Phúc Tiên Cổ (GU_EATING_LOSS_BLESSING_I) as a distinct Gu creature/relic using its lore: Thực đạo Tiên Cổ chịu thiệt là phúc, mỗi khi trúng đòn lại chuyển hóa một phần thương tổn thành thuộc tính vĩnh viễn cường hóa bản thân.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_FAREWELL_FRIEND_WIND_I",
+        "name": "Tống Hữu Chi Phong Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Tống Hữu Chi Phong Tiên Cổ (GU_FAREWELL_FRIEND_WIND_I) as a distinct Gu creature/relic using its lore: Phong đạo Tiên Cổ danh chấn Nam Cương của Vũ Dung. Gió tiễn bạn thổi qua, nguyền rủa ăn mòn thân thể địch thủ từng hiệp không thể hóa giải.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Tống Hữu Chi Phong Tiên Cổ (GU_FAREWELL_FRIEND_WIND_I) as a distinct Gu creature/relic using its lore: Phong đạo Tiên Cổ danh chấn Nam Cương của Vũ Dung. Gió tiễn bạn thổi qua, nguyền rủa ăn mòn thân thể địch thủ từng hiệp không thể hóa giải.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_FATE_VANQUISHED_I",
+        "name": "Mệnh Bại Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Mệnh Bại Tiên Cổ (GU_FATE_VANQUISHED_I) as a distinct Gu creature/relic using its lore: Vận đạo Tiên Cổ phá tan vận mệnh, triệt hạ hoàn toàn bất hoại và khiên chắn của đối thủ, giáng đòn phản phệ thiên đạo tuyệt diệt.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Mệnh Bại Tiên Cổ (GU_FATE_VANQUISHED_I) as a distinct Gu creature/relic using its lore: Vận đạo Tiên Cổ phá tan vận mệnh, triệt hạ hoàn toàn bất hoại và khiên chắn của đối thủ, giáng đòn phản phệ thiên đạo tuyệt diệt.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_FIVE_RESTRICTION_LIGHT_I",
+        "name": "Ngũ Giới Huyền Quang Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Ngũ Giới Huyền Quang Tiên Cổ (GU_FIVE_RESTRICTION_LIGHT_I) as a distinct Gu creature/relic using its lore: Luật đạo Tiên Cổ phóng ra huyền quang năm giới vực bích, áp chế cực nặng những kẻ địch khác biệt giới vực xuất xứ.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Ngũ Giới Huyền Quang Tiên Cổ (GU_FIVE_RESTRICTION_LIGHT_I) as a distinct Gu creature/relic using its lore: Luật đạo Tiên Cổ phóng ra huyền quang năm giới vực bích, áp chế cực nặng những kẻ địch khác biệt giới vực xuất xứ.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_FUTURE_SELF_I",
+        "name": "Vị Lai Thân Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Vị Lai Thân Tiên Cổ (GU_FUTURE_SELF_I) as a distinct Gu creature/relic using its lore: Trụ đạo Tiên Cổ mượn sức mạnh tương lai, triệu hoán bản thân ở đỉnh phong chiến lực giáng lâm đè bẹp hiện tại.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Vị Lai Thân Tiên Cổ (GU_FUTURE_SELF_I) as a distinct Gu creature/relic using its lore: Trụ đạo Tiên Cổ mượn sức mạnh tương lai, triệu hoán bản thân ở đỉnh phong chiến lực giáng lâm đè bẹp hiện tại.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_GREAT_NIGHT_I",
+        "name": "Đại Dạ Vô Cương Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Đại Dạ Vô Cương Tiên Cổ (GU_GREAT_NIGHT_I) as a distinct Gu creature/relic using its lore: Ám đạo Tiên Cổ mở ra màn đêm đại dạ bao trùm chiến trường, tước đoạt tầm nhìn địch và cường hóa hắc ám sát thương.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Đại Dạ Vô Cương Tiên Cổ (GU_GREAT_NIGHT_I) as a distinct Gu creature/relic using its lore: Ám đạo Tiên Cổ mở ra màn đêm đại dạ bao trùm chiến trường, tước đoạt tầm nhìn địch và cường hóa hắc ám sát thương.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_HERO_AMONG_MEN_I",
+        "name": "Nhân Trung Hào Kiệt Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Nhân Trung Hào Kiệt Tiên Cổ (GU_HERO_AMONG_MEN_I) as a distinct Gu creature/relic using its lore: Khí phách hào kiệt trong nhân gian tỏa sáng, miễn nhiễm mọi áp chế chuyển vị và gia tăng cực đại uy lực chiêu thức.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Nhân Trung Hào Kiệt Tiên Cổ (GU_HERO_AMONG_MEN_I) as a distinct Gu creature/relic using its lore: Khí phách hào kiệt trong nhân gian tỏa sáng, miễn nhiễm mọi áp chế chuyển vị và gia tăng cực đại uy lực chiêu thức.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_ICE_CRYSTAL_COFFIN_I",
+        "name": "Cực Băng Tinh Quan Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Cực Băng Tinh Quan Tiên Cổ (GU_ICE_CRYSTAL_COFFIN_I) as a distinct Gu creature/relic using its lore: Băng Tuyết đạo Tiên Cổ tuyệt đối đóng băng, phong ấn đối phương vào quan tài băng giá vĩnh cửu bất động 2 hiệp.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Cực Băng Tinh Quan Tiên Cổ (GU_ICE_CRYSTAL_COFFIN_I) as a distinct Gu creature/relic using its lore: Băng Tuyết đạo Tiên Cổ tuyệt đối đóng băng, phong ấn đối phương vào quan tài băng giá vĩnh cửu bất động 2 hiệp.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_IMMORTAL_BINDING_VINE_I",
+        "name": "Phược Tiên Đằng Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Phược Tiên Đằng Tiên Cổ (GU_IMMORTAL_BINDING_VINE_I) as a distinct Gu creature/relic using its lore: Mộc đạo Tiên Cổ dây leo trói tiên, quấn chặt phong tỏa cử động mục tiêu đồng thời rút cạn chân nguyên/tiên nguyên.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Phược Tiên Đằng Tiên Cổ (GU_IMMORTAL_BINDING_VINE_I) as a distinct Gu creature/relic using its lore: Mộc đạo Tiên Cổ dây leo trói tiên, quấn chặt phong tỏa cử động mục tiêu đồng thời rút cạn chân nguyên/tiên nguyên.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_INFINITE_WIND_I",
+        "name": "Vô Hạn Phong Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Vô Hạn Phong Tiên Cổ (GU_INFINITE_WIND_I) as a distinct Gu creature/relic using its lore: Phong đạo Tiên Cổ vô cùng vô tận, mỗi lần tung sát chiêu gió cuồng lại gia tăng thêm 25% uy lực dồn dập áp đảo toàn trường.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Vô Hạn Phong Tiên Cổ (GU_INFINITE_WIND_I) as a distinct Gu creature/relic using its lore: Phong đạo Tiên Cổ vô cùng vô tận, mỗi lần tung sát chiêu gió cuồng lại gia tăng thêm 25% uy lực dồn dập áp đảo toàn trường.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_KUN_PENG_TOTEM_I",
+        "name": "Côn Bằng Đồ Đằng Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Côn Bằng Đồ Đằng Tiên Cổ (GU_KUN_PENG_TOTEM_I) as a distinct Gu creature/relic using its lore: Biến Hóa đạo đồ đằng Thần Thú Côn Bằng che rợp trời xanh, lao thẳng nghiền nát trận hình của đối phương.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Côn Bằng Đồ Đằng Tiên Cổ (GU_KUN_PENG_TOTEM_I) as a distinct Gu creature/relic using its lore: Biến Hóa đạo đồ đằng Thần Thú Côn Bằng che rợp trời xanh, lao thẳng nghiền nát trận hình của đối phương.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_LIGHT_TIME_BLADE_I",
+        "name": "Quang Âm Phi Đao Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Quang Âm Phi Đao Tiên Cổ (GU_LIGHT_TIME_BLADE_I) as a distinct Gu creature/relic using its lore: Quang Âm phi đao siêu tốc độ xuyên qua thời gian và ánh sáng, không cho mục tiêu bất kỳ cơ hội nào né tránh.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Quang Âm Phi Đao Tiên Cổ (GU_LIGHT_TIME_BLADE_I) as a distinct Gu creature/relic using its lore: Quang Âm phi đao siêu tốc độ xuyên qua thời gian và ánh sáng, không cho mục tiêu bất kỳ cơ hội nào né tránh.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_MYRIAD_DISMANTLE_I",
+        "name": "Vạn Triệt Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Vạn Triệt Tiên Cổ (GU_MYRIAD_DISMANTLE_I) as a distinct Gu creature/relic using its lore: Phân rã mọi sát chiêu và khiên phòng ngự của kẻ thù thành nguyên khí hỗn độn, đánh tan kết cấu phòng thủ mục tiêu.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Vạn Triệt Tiên Cổ (GU_MYRIAD_DISMANTLE_I) as a distinct Gu creature/relic using its lore: Phân rã mọi sát chiêu và khiên phòng ngự của kẻ thù thành nguyên khí hỗn độn, đánh tan kết cấu phòng thủ mục tiêu.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_MYRIAD_STAR_FIREFLY_I",
+        "name": "Vạn Tinh Huỳnh Hỏa Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Vạn Tinh Huỳnh Hỏa Tiên Cổ (GU_MYRIAD_STAR_FIREFLY_I) as a distinct Gu creature/relic using its lore: Trí đạo Tiên Cổ vạn đốm đom đóm ánh sao rực rỡ, vừa công phá suy nghĩ đối phương vừa tìm ra điểm yếu chí mạng.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Vạn Tinh Huỳnh Hỏa Tiên Cổ (GU_MYRIAD_STAR_FIREFLY_I) as a distinct Gu creature/relic using its lore: Trí đạo Tiên Cổ vạn đốm đom đóm ánh sao rực rỡ, vừa công phá suy nghĩ đối phương vừa tìm ra điểm yếu chí mạng.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_NIRVANA_FIRE_I",
+        "name": "Niết Bàn Hỏa Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Niết Bàn Hỏa Tiên Cổ (GU_NIRVANA_FIRE_I) as a distinct Gu creature/relic using its lore: Viêm đạo Tiên Cổ niết bàn trùng sinh, khi chịu đòn chí tử liền kích hoạt ngọn lửa tái sinh 40% huyết lượng và phản chấn biển lửa.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Niết Bàn Hỏa Tiên Cổ (GU_NIRVANA_FIRE_I) as a distinct Gu creature/relic using its lore: Viêm đạo Tiên Cổ niết bàn trùng sinh, khi chịu đòn chí tử liền kích hoạt ngọn lửa tái sinh 40% huyết lượng và phản chấn biển lửa.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_QI_JUE_LIFE_I",
+        "name": "Khí Tuyệt Hoán Sinh Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Khí Tuyệt Hoán Sinh Tiên Cổ (GU_QI_JUE_LIFE_I) as a distinct Gu creature/relic using its lore: Khí Tuyệt Ma Tiên thần công, khi máu xuống dưới 30% tự động câu động thiên địa nguyên khí hồi sinh mạnh mẽ.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Khí Tuyệt Hoán Sinh Tiên Cổ (GU_QI_JUE_LIFE_I) as a distinct Gu creature/relic using its lore: Khí Tuyệt Ma Tiên thần công, khi máu xuống dưới 30% tự động câu động thiên địa nguyên khí hồi sinh mạnh mẽ.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_QI_SEA_I",
+        "name": "Vô Lượng Khí Hải Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Vô Lượng Khí Hải Tiên Cổ (GU_QI_SEA_I) as a distinct Gu creature/relic using its lore: Khí đạo Tiên Cổ của Khí Hải Lão Tổ, phóng thích biển khí vô biên nghiền nát tất cả kẻ thù trên chiến trường.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Vô Lượng Khí Hải Tiên Cổ (GU_QI_SEA_I) as a distinct Gu creature/relic using its lore: Khí đạo Tiên Cổ của Khí Hải Lão Tổ, phóng thích biển khí vô biên nghiền nát tất cả kẻ thù trên chiến trường.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_RAGING_BIRD_I",
+        "name": "Nộ Điểu Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Nộ Điểu Tiên Cổ (GU_RAGING_BIRD_I) as a distinct Gu creature/relic using its lore: Viêm đạo Tiên Cổ bắn ra bầy chim lửa giận dữ truy kích khóa chết kẻ thù, nổ tung thiêu rụi phòng tuyến đối phương.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Nộ Điểu Tiên Cổ (GU_RAGING_BIRD_I) as a distinct Gu creature/relic using its lore: Viêm đạo Tiên Cổ bắn ra bầy chim lửa giận dữ truy kích khóa chết kẻ thù, nổ tung thiêu rụi phòng tuyến đối phương.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_REFINE_SELF_I",
+        "name": "Luyện Thân Thành Đạo Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Luyện Thân Thành Đạo Tiên Cổ (GU_REFINE_SELF_I) as a distinct Gu creature/relic using its lore: Luyện đạo Tiên Cổ lấy thân mình làm phôi, luyện hóa chính nhục thân và đạo ngân thành binh khí vô địch xuyên phá thiên hạ.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Luyện Thân Thành Đạo Tiên Cổ (GU_REFINE_SELF_I) as a distinct Gu creature/relic using its lore: Luyện đạo Tiên Cổ lấy thân mình làm phôi, luyện hóa chính nhục thân và đạo ngân thành binh khí vô địch xuyên phá thiên hạ.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_SEPARATION_SONG_I",
+        "name": "Biệt Ly Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Biệt Ly Tiên Cổ (GU_SEPARATION_SONG_I) as a distinct Gu creature/relic using its lore: Thất/Bát Chuyển Âm đạo Tiên Cổ của Phượng Cửu Ca, thôi động Biệt Ly Ca thanh âm thê lương tuyệt vọng, giải trừ trạng thái đối thủ và công phá tiên khiếu chí mạng.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Biệt Ly Tiên Cổ (GU_SEPARATION_SONG_I) as a distinct Gu creature/relic using its lore: Thất/Bát Chuyển Âm đạo Tiên Cổ của Phượng Cửu Ca, thôi động Biệt Ly Ca thanh âm thê lương tuyệt vọng, giải trừ trạng thái đối thủ và công phá tiên khiếu chí mạng.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_SOUL_BEAST_SUMMON_I",
+        "name": "Hồn Thú Triệu Hoán Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Hồn Thú Triệu Hoán Tiên Cổ (GU_SOUL_BEAST_SUMMON_I) as a distinct Gu creature/relic using its lore: Nô đạo và Hồn đạo Tiên Cổ, triệu hoán hoang thú hồn phách thượng cổ nghênh chiến xé rách hàng ngũ địch.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Hồn Thú Triệu Hoán Tiên Cổ (GU_SOUL_BEAST_SUMMON_I) as a distinct Gu creature/relic using its lore: Nô đạo và Hồn đạo Tiên Cổ, triệu hoán hoang thú hồn phách thượng cổ nghênh chiến xé rách hàng ngũ địch.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_THIRTY_THREE_HEAVEN_LIGHT_I",
+        "name": "Tam Thập Tam Thiên Quang Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Tam Thập Tam Thiên Quang Tiên Cổ (GU_THIRTY_THREE_HEAVEN_LIGHT_I) as a distinct Gu creature/relic using its lore: Quang đạo Tiên Cổ giáng xuống 33 đạo thiên quang chói lòa, thiêu đốt kẻ địch và làm mù tầm mắt toàn bộ đối thủ.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Tam Thập Tam Thiên Quang Tiên Cổ (GU_THIRTY_THREE_HEAVEN_LIGHT_I) as a distinct Gu creature/relic using its lore: Quang đạo Tiên Cổ giáng xuống 33 đạo thiên quang chói lòa, thiêu đốt kẻ địch và làm mù tầm mắt toàn bộ đối thủ.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_THREE_MEN_TIGER_I",
+        "name": "Tam Nhân Thành Hổ Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Tam Nhân Thành Hổ Tiên Cổ (GU_THREE_MEN_TIGER_I) as a distinct Gu creature/relic using its lore: Tín đạo Tiên Cổ ngưng tụ lời đồn ba người thành hổ, tích tụ dèm pha gây sát thương ảo ảnh và khiến kẻ địch hoảng loạn sợ hãi.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Tam Nhân Thành Hổ Tiên Cổ (GU_THREE_MEN_TIGER_I) as a distinct Gu creature/relic using its lore: Tín đạo Tiên Cổ ngưng tụ lời đồn ba người thành hổ, tích tụ dèm pha gây sát thương ảo ảnh và khiến kẻ địch hoảng loạn sợ hãi.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_THREE_QI_RETURN_I",
+        "name": "Tam Khí Quy Lai Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Tam Khí Quy Lai Tiên Cổ (GU_THREE_QI_RETURN_I) as a distinct Gu creature/relic using its lore: Thu hồi Thiên - Địa - Nhân tam khí dung nhập công kích, gây sát thương chân thực và tẩm bổ ngược lại bản thân cổ tiên.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Tam Khí Quy Lai Tiên Cổ (GU_THREE_QI_RETURN_I) as a distinct Gu creature/relic using its lore: Thu hồi Thiên - Địa - Nhân tam khí dung nhập công kích, gây sát thương chân thực và tẩm bổ ngược lại bản thân cổ tiên.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_TRIPLE_SWORD_WAVE_I",
+        "name": "Tam Trọng Kiếm Lãng Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Tam Trọng Kiếm Lãng Tiên Cổ (GU_TRIPLE_SWORD_WAVE_I) as a distinct Gu creature/relic using its lore: Kiếm đạo Tiên Cổ của Kiếm Thần Bạc Thanh, vung ra ba tầng kiếm lãng liên hoàn sóng sau đè sóng trước quét sạch quần địch.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Tam Trọng Kiếm Lãng Tiên Cổ (GU_TRIPLE_SWORD_WAVE_I) as a distinct Gu creature/relic using its lore: Kiếm đạo Tiên Cổ của Kiếm Thần Bạc Thanh, vung ra ba tầng kiếm lãng liên hoàn sóng sau đè sóng trước quét sạch quần địch.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_WORDS_FRIGHTENING_I",
+        "name": "Chúng Khẩu Thao Kim Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Chúng Khẩu Thao Kim Tiên Cổ (GU_WORDS_FRIGHTENING_I) as a distinct Gu creature/relic using its lore: Tín đạo Tiên Cổ dèm pha thao kim, miệng chúng tan chảy vàng đá, phong tỏa hoàn toàn chân nguyên và cổ trùng của kẻ địch.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Chúng Khẩu Thao Kim Tiên Cổ (GU_WORDS_FRIGHTENING_I) as a distinct Gu creature/relic using its lore: Tín đạo Tiên Cổ dèm pha thao kim, miệng chúng tan chảy vàng đá, phong tỏa hoàn toàn chân nguyên và cổ trùng của kẻ địch.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_YAMA_EMPEROR_I",
+        "name": "Diêm Đế Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict Diêm Đế Tiên Cổ (GU_YAMA_EMPEROR_I) as a distinct Gu creature/relic using its lore: Hồn đạo Tiên Cổ biến thân Diêm Đế, khoác hoàng bào u minh áp đảo linh hồn đối thủ và mở ra sát chiêu Đãng Hồn Tạc Linh hủy diệt.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict Diêm Đế Tiên Cổ (GU_YAMA_EMPEROR_I) as a distinct Gu creature/relic using its lore: Hồn đạo Tiên Cổ biến thân Diêm Đế, khoác hoàng bào u minh áp đảo linh hồn đối thủ và mở ra sát chiêu Đãng Hồn Tạc Linh hủy diệt.. Keep one dominant shape and details large enough to survive 24 px."
+      },
+      {
+        "id": "GU_YOU_DU_TIGER_I",
+        "name": "U Đô Lực Hổ Tiên Cổ",
+        "source": "backend/data/Gu.csv",
+        "reason": "currently resolves to legacy/heuristic fallback",
+        "status": "delivered",
+        "visual_brief": "Depict U Đô Lực Hổ Tiên Cổ (GU_YOU_DU_TIGER_I) as a distinct Gu creature/relic using its lore: Lực đạo Tiên Cổ u ám triệu hồi Hư Ảnh U Đô Hổ, vồ xé nát giáp trụ và cắn xé nguyên hồn địch thủ.",
+        "prompt_seed": "Original GuWorld gameplay icon, hybrid pixel art prioritizing V2: crisp deliberate pixel clusters, compact readable silhouette at 24 px, restrained high-contrast palette, dark pixel outline, transparent background, centered single subject, no frame, no UI state badge, no text, no watermark. Create new original art; atlas images are style references only, never copy or crop their sprites. Depict U Đô Lực Hổ Tiên Cổ (GU_YOU_DU_TIGER_I) as a distinct Gu creature/relic using its lore: Lực đạo Tiên Cổ u ám triệu hồi Hư Ảnh U Đô Hổ, vồ xé nát giáp trụ và cắn xé nguyên hồn địch thủ.. Keep one dominant shape and details large enough to survive 24 px."
+      }
+    ]
+  },
+  "completed_at": "2026-11-20"
+}

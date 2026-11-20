@@ -53,7 +53,8 @@ Cổ Tiên (Rank 6+) hạ khiếu tại các tầng thế giới khác nhau tạ
 
 - Mỗi request đi tối đa 5 ô; từng ô được kiểm tra hợp lệ.
 - Trigger trên các ô trung gian vẫn chạy. Nếu combat bắt đầu, phần đường còn lại không được thực hiện.
-- Instance bí cảnh và Tiên Khiếu chỉ cho di chuyển trong hình chữ nhật của vùng instance hiện tại.
+- Chuyển vùng qua rìa bản đồ (Edge Transition): Khi di chuyển vượt quá biên độ khu vực (`MinX..MaxX`, `MinY..MaxY`) trên bản đồ mở (`world_map` hoặc các tầng Bạch Thiên / Hắc Thiên / Địa Uyên), server tự động tìm khu vực lân cận trên lưới Atlas cùng tầng. Nếu có vùng kề và đủ rank, nhân vật được chuyển vùng sang khu vực kề và đặt tại vị trí cách mép đối diện 4 ô (`edgeMargin = 4`). Nếu chạm đến rìa cùng cực của thế giới (không có vùng kề trên Atlas), bước di chuyển bị chặn kèm thông báo.
+- Instance bí cảnh và Tiên Khiếu là không gian khép kín (20×20 với Tiên Khiếu), bị giới hạn nghiêm ngặt bởi Khiếu Bích / ranh giới instance; người chơi không thể đi xuyên qua mép sang ngoại giới mà bị chặn lại kèm thông báo nhắc nhở dùng Môn Hộ / cổng ra.
 - Vùng, portal, teleport và resource node lấy tọa độ/quyền truy cập từ map hoặc cấu hình runtime.
 - Realtime chỉ hỗ trợ movement/presence và đồng bộ ngoài combat; không mô phỏng combat.
 

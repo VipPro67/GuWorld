@@ -26,10 +26,10 @@ func LayerQiMultipliers(layer string) (heavenMultiplier float64, earthMultiplier
 
 // LayerTribulationTimeRateMultiplier returns the time flow factor affecting tribulation
 // progression when an aperture is anchored in a vertical world layer.
-// - In Thái Cổ Hắc Thiên (hac_thien), Thiên Ý (Heaven's Will) is distorted and obscured by
-//   the immemorial darkness and soul/star clouds, lengthening the tribulation interval by 50%
-//   (effective time progression is 1.0 / 1.5 ~ 0.6667).
-// - Other layers maintain standard synchronized world time progression (1.0).
+//   - In Thái Cổ Hắc Thiên (hac_thien), Thiên Ý (Heaven's Will) is distorted and obscured by
+//     the immemorial darkness and soul/star clouds, lengthening the tribulation interval by 50%
+//     (effective time progression is 1.0 / 1.5 ~ 0.6667).
+//   - Other layers maintain standard synchronized world time progression (1.0).
 func LayerTribulationTimeRateMultiplier(layer string) float64 {
 	if layer == "hac_thien" {
 		return 1.0 / 1.5

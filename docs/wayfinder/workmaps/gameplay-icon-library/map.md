@@ -23,18 +23,22 @@
 - [Choose the asset production and delivery pipeline](https://github.com/VipPro67/GuWorld/issues/436): Phát hành file WebP riêng theo ID, giữ PNG master; atlas chỉ làm tham chiếu phong cách; duyệt mẫu theo nhóm, kiểm tra tự động và manifest ghi nguồn/prompt.
 - [Specify in-game mapping and rollout strategy](https://github.com/VipPro67/GuWorld/issues/437): CSV `image_url` hợp lệ ưu tiên, sau đó manifest ID rồi fallback hiện tại; tích hợp qua resolver dùng chung và giữ ảnh cũ trong quá trình chuyển đổi.
 - [Inventory exact gameplay icon coverage and resource marker kinds](https://github.com/VipPro67/GuWorld/issues/439): Có 3.472 Gu ID (3.422 family, 15 custom, 35 legacy/heuristic); 897 item đang fallback về 50 nhóm; 47 điểm tài nguyên hiện dùng glyph.
+- [Set the first asset rollout batch and acceptance gates](https://github.com/VipPro67/GuWorld/issues/438): Duyệt mẫu trước; batch đầu gồm 47 marker, 44 resource identities và 35 Gu ID fallback yếu; sau đó ưu tiên Gu ID xuất hiện nhiều rồi hoàn tất theo tranche với gate 24 px, manifest, fallback và smoke check.
 
 ## Open Tickets (Frontier & Blocked)
 
-- **Frontier**
-  - [Set the first asset rollout batch and acceptance gates](https://github.com/VipPro67/GuWorld/issues/438) (local context: [ticket](issues/05-first-rollout-batch-and-acceptance-gates.md))
-
-- **Blocked**
-  - None.
+No open tickets. The implementation path is specified.
 
 ## Not yet specified
 
-- Không còn câu hỏi mơ hồ đã nhận diện; kiểm kê catalog và chọn batch là các ticket đang mở.
+- Không còn câu hỏi trong phạm vi cần quyết định trước khi triển khai.
+
+## Implementation status
+
+- Shared Gu/item/resource resolvers now support manifest paths while retaining existing fallback behavior. Gu record `image_url` is propagated through the main inventory, shop, combat, sect, and trade surfaces; resource point cards and world resource map cells support ID artwork.
+- The first artwork batch is delivered: 35 Gu, 44 shared resource item identities, and 47 resource-point markers (126 catalog IDs). Item art is optimized to 25 visual archetypes: 20 common beast-material IDs share one archetype, while distinctive forms keep separate art. Grouped source sheets and mapping provenance are in `art/game-icons/sources/`; PNG masters and 256×256 transparent WebP runtime assets are in their respective `masters/` and `frontend/public/assets/game-icons/` directories.
+- `cd frontend && npm run validate:game-icons:batch` passes for all 126 IDs, including CSV mapping, manifest path, PNG/WebP dimensions, alpha, and prompt metadata. 24 px previews were used for review and removed after QA; rank variants continue to share canonical resource art.
+- The exact first-batch ID plan and delivered status are recorded in `research/first-rollout-batch-plan.json`.
 
 ## Out of scope
 

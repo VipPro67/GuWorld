@@ -1495,7 +1495,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <img
-                        src={getGuIconUrl(gu.gu_id, spec?.name || gu.gu_id)}
+                        src={getGuIconUrl(gu.gu_id, spec?.name || gu.gu_id, spec?.image_url)}
                         alt=""
                         aria-hidden="true"
                         loading="lazy"

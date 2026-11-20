@@ -87,6 +87,9 @@ type movementSpec struct {
 	// Every other guard still runs; only the realtime-ownership refusal is
 	// skipped because the caller already coordinated with the lease.
 	realtimeAuthorized bool
+	// allowBorderWalk permits small negative or boundary coordinates (within 10 cells)
+	// when walking on the world map to trigger seamless edge transitions.
+	allowBorderWalk bool
 }
 
 // movementError is the only failure shape the chain returns for guard
@@ -107,8 +110,14 @@ func movementDenied(status int, message string) *movementError {
 // before opening a transaction so malformed input never reaches the DB; the
 // full chain also runs it, so there is still one rule.
 func validateMovementTarget(spec movementSpec) *movementError {
-	if spec.hasTarget && !inWorld(spec.x, spec.y) {
-		return movementDenied(http.StatusBadRequest, "Tọa độ vượt ra ngoài ranh giới bản đồ.")
+	if spec.hasTarget {
+		if spec.allowBorderWalk {
+			if spec.x < -10 || spec.x > WorldWidth+10 || spec.y < -10 || spec.y > WorldHeight+10 {
+				return movementDenied(http.StatusBadRequest, "Tọa độ vượt ra ngoài ranh giới bản đồ.")
+			}
+		} else if !inWorld(spec.x, spec.y) {
+			return movementDenied(http.StatusBadRequest, "Tọa độ vượt ra ngoài ranh giới bản đồ.")
+		}
 	}
 	return nil
 }
