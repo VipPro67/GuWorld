@@ -1,4 +1,5 @@
 import { getManifestIconUrl, isValidGameImageUrl } from "./game-icon-manifest.ts";
+import generatedItemIcons from "../data/generated-item-icons.json";
 
 export interface ItemIconSource {
   id: string;
@@ -8,6 +9,7 @@ export interface ItemIconSource {
 }
 
 const PNG_ICON_KEYS = new Set(["bagua-crystal", "animal-essence", "trigram-token", "nightfruit", "primordial-core"]);
+const GENERATED_ITEM_ICON_IDS = new Set(generatedItemIcons as string[]);
 const iconUrl = (key: string) => "/assets/items/icons/" + key + (PNG_ICON_KEYS.has(key) ? ".png" : ".webp");
 
 export function resolveItemIconKey(item: ItemIconSource): string {
@@ -91,6 +93,10 @@ export function getItemIconUrl(item: ItemIconSource): string {
   const customUrl = item.image_url?.trim();
   if (isValidGameImageUrl(customUrl)) {
     return customUrl;
+  }
+  const itemId = item.id.trim();
+  if (GENERATED_ITEM_ICON_IDS.has(itemId)) {
+    return `/assets/items/generated/${itemId}.webp`;
   }
   const manifestUrl = getManifestIconUrl("item", item.id);
   if (manifestUrl) return manifestUrl;

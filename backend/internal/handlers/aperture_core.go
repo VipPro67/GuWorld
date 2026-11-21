@@ -30,24 +30,17 @@ func GetImmortalAperture(c *gin.Context) {
 
 	// 1. Fetch player (read-only query)
 	var player models.Player
-	err := db.DB.QueryRow(`
-		SELECT id, rank, aptitude_percent, human_qi, primeval_stones, immortal_stones, current_mana, time_speed_multiplier, COALESCE(race, '')
+	var currentRegion string
+	var mapInstanceID sql.NullString
+	err := db.DB.QueryRowContext(c.Request.Context(), `
+		SELECT id, rank, aptitude_percent, human_qi, primeval_stones, immortal_stones, current_mana, time_speed_multiplier, COALESCE(race, ''), COALESCE(current_region, ''), map_instance_id::text
 		FROM players WHERE id = $1
-	`, playerID).Scan(&player.ID, &player.Rank, &player.AptitudePercent, &player.HumanQi, &player.PrimevalStones, &player.ImmortalStones, &player.CurrentMana, &player.TimeSpeedMultiplier, &player.Race)
+	`, playerID).Scan(&player.ID, &player.Rank, &player.AptitudePercent, &player.HumanQi, &player.PrimevalStones, &player.ImmortalStones, &player.CurrentMana, &player.TimeSpeedMultiplier, &player.Race, &currentRegion, &mapInstanceID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Cổ sư không tồn tại"})
 		return
 	}
 
-	var currentRegion string
-	var mapInstanceID sql.NullString
-	if err := db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT COALESCE(current_region, ''), map_instance_id::text
-		FROM players WHERE id = $1
-	`, playerID).Scan(&currentRegion, &mapInstanceID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Cổ sư không tồn tại"})
-		return
-	}
 	if currentRegion == "aperture_interior" && mapInstanceID.Valid {
 		var ap models.ImmortalAperture
 		var createdAt, updatedAt time.Time
@@ -147,84 +140,18 @@ func GetImmortalAperture(c *gin.Context) {
 		}
 	}
 
-	originalState := ap.State
-	originalEssence := ap.ImmortalEssence
-	originalYears := ap.InternalYearsPassed
-
-	// Sync current mana in-memory
-	ap.ImmortalEssence = int(player.CurrentMana)
-
-	// Verify state consistency: aperture can ONLY be STABLE if there are no active tribulation events
-	// and no living tribulation enemies.
-	hasActiveTrib, errActive := db.HasActiveTribulationOrEnemies(db.DB, ap.ID)
-	if errActive == nil {
-		if hasActiveTrib && ap.State == "STABLE" {
-			ap.State = "TRIBULATION_ACTIVE"
-		} else if !hasActiveTrib && ap.State == "TRIBULATION_ACTIVE" && ap.ApertureHP >= ap.MaxApertureHP {
-			ap.State = "STABLE"
-		}
-	}
-
 	ap.CreatedAt = createdAt
 	ap.UpdatedAt = updatedAt
 
-	effectiveTimeRate := 0.0
-	if ap.TimeRate > 0 {
-		tsm := 1.0
-		if !isImmortalPlayer {
-			tsm = player.TimeSpeedMultiplier
-			if tsm <= 0 {
-				tsm = 1.0
-			}
-			if bonus, err := db.EquippedTimeSpeedBonus(db.DB, playerID.String()); err == nil {
-				tsm += bonus
-			}
-		}
-		effectiveTimeRate = ap.TimeRate * tsm
-		if ap.IsPlaced {
-			// Hạ khiếu: nhánh sông Quang Âm hòa nhập ngoại giới -> giảm tốc về 1.0 (hoãn kiếp nạn, giảm tốc già hóa)
-			effectiveTimeRate = 1.0
-			placedReg := ""
-			if ap.PlacedRegion != nil {
-				placedReg = *ap.PlacedRegion
-			}
-			layer := worldMapIDForRegion(placedReg)
-			effectiveTimeRate *= LayerTribulationTimeRateMultiplier(layer)
-		}
+	hasActiveTrib, errActive := db.HasActiveTribulationOrEnemies(db.DB, ap.ID)
+	timeSpeedBonus := 0.0
+	if !isImmortalPlayer && ap.TimeRate > 0 {
+		timeSpeedBonus, _ = db.EquippedTimeSpeedBonus(db.DB, playerID.String())
 	}
-
-	// Project internal_years_passed forward based on real time elapsed since updated_at.
-	// This ensures the frontend always gets accurate time values even if other handlers
-	// (e.g. SetApertureTimeRate) update updated_at without projecting internal years.
 	now := time.Now()
-	if ap.State == "STABLE" || ap.State == "DAMAGED" {
-		elapsedSec := now.Sub(updatedAt).Seconds()
-		if elapsedSec > 0 && effectiveTimeRate > 0 {
-			elapsedInternalYears := elapsedSec * effectiveTimeRate / 86400.0
-			ap.InternalYearsPassed += elapsedInternalYears
-			ap.UpdatedAt = now
-		}
-	}
-
-	// Project Qi absorption forward while anchored (Hạ Khiếu) according to vertical layer rate
-	if ap.IsPlaced && ap.PlacedAt != nil {
-		elapsedMinutes := now.Sub(*ap.PlacedAt).Minutes()
-		if elapsedMinutes > 0 {
-			placedReg := ""
-			if ap.PlacedRegion != nil {
-				placedReg = *ap.PlacedRegion
-			}
-			layer := worldMapIDForRegion(placedReg)
-			hMult, eMult := LayerQiMultipliers(layer)
-			ap.HeavenQi = math.Min(ap.MaxHeavenQi, ap.HeavenQi+elapsedMinutes*(ap.MaxHeavenQi*0.01)*hMult)
-			ap.EarthQi = math.Min(ap.MaxEarthQi, ap.EarthQi+elapsedMinutes*(ap.MaxEarthQi*0.01)*eMult)
-		}
-	}
-
-	// Consolidate updates: only persist real state transitions or periodic checkpoints (>60s)
-	// to avoid hammering the database with row-locking UPDATEs on every GET request/poll.
-	shouldPersist := ap.State != originalState || ap.ImmortalEssence != originalEssence || (now.Sub(updatedAt) >= 60*time.Second && ap.InternalYearsPassed != originalYears)
-	if shouldPersist {
+	projection := projectImmortalApertureView(ap, player, updatedAt, timeSpeedBonus, hasActiveTrib, errActive == nil, now)
+	ap = projection.aperture
+	if projection.shouldPersist {
 		_, errUpd := db.DB.ExecContext(c.Request.Context(), `
 			UPDATE immortal_apertures
 			SET state = $1, immortal_essence = $2, internal_years_passed = $3, updated_at = $4
@@ -236,19 +163,12 @@ func GetImmortalAperture(c *gin.Context) {
 	}
 
 	if !isImmortalPlayer {
-		if (ap.State == "STABLE" || ap.State == "DAMAGED") && ap.NextTribulationYear > 0 && ap.InternalYearsPassed >= ap.NextTribulationYear {
+		if projection.shouldTriggerTribulation {
 			_ = checkAndTriggerSingleAperture(ap.ID)
 			_ = db.DB.QueryRow(`SELECT state FROM immortal_apertures WHERE id = $1`, ap.ID).Scan(&ap.State)
 		}
-
-		if (ap.State == "STABLE" || ap.State == "DAMAGED") && effectiveTimeRate > 0 && ap.NextTribulationYear > ap.InternalYearsPassed {
-			remainingInternalYears := ap.NextTribulationYear - ap.InternalYearsPassed
-			arrival := ap.UpdatedAt.Add(time.Duration(remainingInternalYears/effectiveTimeRate*86400.0) * time.Second)
-			ap.NextTribulationAt = &arrival
-		}
-	} else {
-		ap.NextTribulationAt = nil
 	}
+	ap.NextTribulationAt = apertureNextTribulationAt(ap, projection.effectiveTimeRate, isImmortalPlayer)
 
 	c.JSON(http.StatusOK, ap)
 }

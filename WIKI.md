@@ -50,6 +50,8 @@ Túi Đồ quản lý Cổ trùng, vật phẩm và nguyên liệu. Tùy loại 
 - Dùng Cổ tiêu hao, dùng Cổ hỗ trợ ngoài combat, hoặc thả Cổ.
 - Luyện hóa ý chí, ôn dưỡng hoặc sửa chữa Cổ khi điều kiện của thao tác đó thỏa mãn.
 
+Vật phẩm có artwork riêng sẽ hiển thị icon theo ID; các vật phẩm còn lại dùng icon chia sẻ theo loại. Ảnh riêng chỉ được chọn khi file đã có trong bundle, và `image_url` hợp lệ từ catalog vẫn được ưu tiên.
+
 Cổ có thể đói, hư hại hoặc chết; một số thao tác không áp dụng cho Cổ đã chết, đang bị giữ chỗ cho sản phẩm, hoặc đang tham gia hoạt động khác. Hãy đọc trạng thái và kết quả server trả về trước khi lặp lại thao tác.
 
 ### Luyện Cổ và Cổ phương
