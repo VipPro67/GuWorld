@@ -40,6 +40,27 @@ test("operation formatter includes path and native params", () => {
   assert.match(formatOperation({ op: "TARGET_REDIRECTION", sub_type: "CONFUSION" }).text, /Chuyển hướng đòn địch/);
   assert.match(formatOperation({ op: "OUTCOME_ROULETTE", sub_type: "LUCK" }).text, /Cát Hung Chi Biến/);
   assert.match(formatOperation({ op: "OUTCOME_ROULETTE", sub_type: "CHAOS" }).text, /Hỗn Độn Đánh Cược/);
+  assert.match(formatOperation({ op: "END_BATTLE", sub_type: "FORCE_VICTORY", message: "{actor} định đoạt chiến cuộc — toàn bộ địch nhân gục ngã!" }).text, /Bản thân định đoạt chiến cuộc/);
+  assert.match(formatOperation({ op: "GRANT_CAPABILITY", sub_type: "CAPTURE_BONUS", params: { value: 0.15 } }).text, /Thu Phục Sủng Vật \+15%/);
+  assert.match(formatOperation({ op: "DAMAGE_MODIFIER", sub_type: "MINION_COUNT", per_minion: 0.2 }).text, /Quân Đoàn Hợp Kích \(\+20% ST\/dị thú\)/);
+  assert.match(formatOperation({ op: "OPEN_REWARD_CONTAINER", sub_type: "IMMORTAL_MINE" }).text, /Mở Rương Tiên Mạch/);
+  assert.match(formatOperation({ op: "OPEN_REWARD_CONTAINER", sub_type: "MORTAL_MINE" }).text, /Mở Rương Phàm Mỏ/);
+  assert.match(formatOperation({ op: "RANDOMIZE_TRAIT", sub_type: "CONSTITUTION" }).text, /Hoán Cải Thể Chất Ngẫu Nhiên/);
+  assert.match(formatOperation({ op: "RANDOMIZE_TRAIT", sub_type: "RACE" }).text, /Hoán Chuyển Dị Tộc/);
+  assert.match(formatOperation({ op: "REPAIR_APERTURE", value: 1000 }).text, /Hàn Gắn & Hồi Phục Khiếu \+1,000/);
+  assert.match(formatOperation({ op: "REQUIRE", sub_type: "IMMORTAL" }).text, /Yêu Cầu: Đẳng cấp Cổ Tiên/);
+  assert.match(formatOperation({ op: "MODIFY_APERTURE", sub_type: "AREA_SIZE", value: 500000 }).text, /Mở Rộng Không Khiếu \+500,000 Mẫu/);
+  assert.match(formatOperation({ op: "MODIFY_APERTURE", sub_type: "TIME_RATE", value: 2 }).text, /Gia Tốc Dòng Thời Gian Không Khiếu \+2x/);
+  assert.match(formatOperation({ op: "GRANT_RESOURCE", resource: "HUMAN_QI", value: 50000 }).text, /Tăng Nhân Khí: \+50,000/);
+  assert.match(formatOperation({ op: "GRANT_RESOURCE", resource: "DAO_MARK", value: 10, path: "Earth Path" }).text, /Ban Tặng: \+10 Đạo Ngân \[Earth Path\]/);
+  assert.match(formatOperation({ op: "RESTORE_RESOURCE", resource: "EARTH_QI", value: 200 }).text, /Hồi Phục Địa Khí: \+200/);
+  assert.match(formatOperation({ op: "RESTORE_RESOURCE", resource: "HEAVEN_QI", value: 300 }).text, /Hồi Phục Thiên Khí: \+300/);
+  assert.match(formatOperation({ op: "THRESHOLD_CHECK", key: "sat_khi_level", threshold: 5 }).text, /Kiểm tra ngưỡng.*5/);
+  assert.match(formatOperation({ op: "HIT_RULE", sub_type: "COUNTER_THRESHOLD", params: { key: "sat_khi_level", threshold: 10 } }).text, /Tất Trúng & Xuyên Khiên/);
+  assert.match(formatOperation({ op: "HIT_RULE", sub_type: "MULTI_HIT", params: { count: 3 } }).text, /Liên Hoàn Kích \(3 lần đánh liên tiếp\)/);
+  assert.match(formatOperation({ op: "HIT_RULE", sub_type: "FIRST_TURN_EVADE" }).text, /Tuyệt Đối Né Tránh \(Lượt 1\)/);
+  assert.match(formatOperation({ op: "SLOT_INTERACTION", sub_type: "PERMANENT_STEAL" }).text, /Đoạt Cổ Vĩnh Viễn/);
+  assert.match(formatOperation({ op: "SLOT_INTERACTION", sub_type: "TEMPORARY_STEAL" }).text, /Đoạt Cổ Tạm Thời/);
 });
 
 test("EffectEnvelopeView renders trigger, target and operation content", () => {

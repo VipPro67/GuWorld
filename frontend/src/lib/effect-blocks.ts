@@ -52,6 +52,13 @@ export interface EffectOperation {
   stat?: string;
   stack_policy?: string;
   code?: string;
+  delta?: number;
+  min?: number;
+  max?: number;
+  hp_threshold?: number;
+  threshold?: number;
+  heal_percent?: number;
+  cleanse_debuffs?: boolean;
   params?: Record<string, unknown>;
 }
 
@@ -120,30 +127,62 @@ export function normalizeEffectEnvelope(value: unknown): EffectEnvelope {
   return { schema_version: 2, blocks: [] };
 }
 
-export type EffectLike = EffectEnvelope | EffectBlock[] | { effects?: EffectEnvelope | EffectBlock[] | null } | null | undefined;
+export type EffectLike =
+  | EffectEnvelope
+  | EffectBlock[]
+  | { blocks?: EffectBlock[] | null; effects?: EffectEnvelope | EffectBlock[] | null }
+  | Record<string, unknown>
+  | null
+  | undefined;
 
 export function effectEnvelope(value: EffectLike): EffectEnvelope {
-  const candidate = value && typeof value === "object" && "effects" in value
-    ? (value as { effects?: EffectEnvelope | EffectBlock[] | null }).effects
-    : value;
-  if (Array.isArray(candidate)) {
-    return { blocks: candidate };
+  if (!value) return EMPTY_EFFECT_ENVELOPE;
+  if (Array.isArray(value)) {
+    return { blocks: value };
   }
-  if (candidate && typeof candidate === "object") {
-    if ("blocks" in candidate && Array.isArray((candidate as EffectEnvelope).blocks)) {
-      return candidate as EffectEnvelope;
+  if (typeof value === "object") {
+    if ("blocks" in value && Array.isArray((value as { blocks: unknown }).blocks)) {
+      return "schema_version" in value
+        ? (value as EffectEnvelope)
+        : { blocks: (value as { blocks: EffectBlock[] }).blocks };
     }
-    // Fallback: parse legacy/struct GameFX object if present
-    const obj = candidate as Record<string, unknown>;
-    const blocks: EffectBlock[] = [];
-    const addOp = (id: string, code: string, val: unknown) => {
-      blocks.push({
-        id,
-        trigger: "ALWAYS_ON",
-        target: { selector: "SELF" },
-        operations: [{ op: "UNIQUE", code, params: { value: val } }],
-      });
-    };
+    const candidate = "effects" in value
+      ? (value as { effects?: EffectEnvelope | EffectBlock[] | null }).effects
+      : value;
+    if (Array.isArray(candidate)) {
+      return { blocks: candidate };
+    }
+    if (candidate && typeof candidate === "object") {
+      if ("blocks" in candidate && Array.isArray((candidate as EffectEnvelope).blocks)) {
+        return candidate as EffectEnvelope;
+      }
+      // Fallback: parse legacy/struct GameFX object if present
+      const obj = candidate as Record<string, unknown>;
+      const blocks: EffectBlock[] = [];
+      const addOp = (id: string, code: string, val: unknown) => {
+        blocks.push({
+          id,
+          trigger: "ALWAYS_ON",
+          target: { selector: "SELF" },
+          operations: [{ op: "UNIQUE", code, params: { value: val } }],
+        });
+      };
+      if (typeof obj.restore_hp === "number" && obj.restore_hp !== 0) {
+        blocks.push({
+          id: "RESTORE_HP",
+          trigger: "ON_CONSUME",
+          target: { selector: "SELF" },
+          operations: [{ op: "HEAL", sub_type: "FLAT", resource: "HP", value: obj.restore_hp }],
+        });
+      }
+      if (typeof obj.restore_mana === "number" && obj.restore_mana !== 0) {
+        blocks.push({
+          id: "RESTORE_MANA",
+          trigger: "ON_CONSUME",
+          target: { selector: "SELF" },
+          operations: [{ op: "HEAL", sub_type: "FLAT", resource: "MANA", value: obj.restore_mana }],
+        });
+      }
     if (obj.stat_mods && typeof obj.stat_mods === "object" && Object.keys(obj.stat_mods).length > 0) {
       addOp("STAT_MODS", "STAT_MODS", obj.stat_mods);
     }
@@ -186,6 +225,7 @@ export function effectEnvelope(value: EffectLike): EffectEnvelope {
     if (blocks.length > 0) {
       return { blocks };
     }
+    }
   }
   return EMPTY_EFFECT_ENVELOPE;
 }
@@ -225,7 +265,13 @@ export function sumNumericValues(value: EffectLike, query: OperationQuery): Nume
 }
 
 export function hasCapability(value: EffectLike, code: string): boolean {
-  return hasOperation(value, { trigger: "CAPABILITY", op: "UNIQUE", code });
+  const upper = code.toUpperCase();
+  return operationsBy(value, { trigger: "CAPABILITY" }).some(
+    (op) => (op.op?.toUpperCase() === "UNIQUE" && op.code?.toUpperCase() === upper) ||
+            (op.op?.toUpperCase() === "GRANT_CAPABILITY" && op.sub_type?.toUpperCase() === upper) ||
+            op.code?.toUpperCase() === upper ||
+            op.sub_type?.toUpperCase() === upper
+  );
 }
 
 export function statModifier(value: EffectLike, stat: string, trigger: string | string[] = "ALWAYS_ON"): number {
@@ -277,15 +323,23 @@ const DEFAULT_PORTAL_RANGE_BY_RANK: Record<number, number> = {
  */
 export function portalRange(value: EffectLike, rank: number): number {
   for (const code of ["PORTAL_CREATE", "RANDOM_PORTAL"]) {
-    const op = operationsBy(value, { op: "UNIQUE", code })[0];
+    const op = operationsBy(value).find((o) =>
+      (o.op?.toUpperCase() === "UNIQUE" && o.code?.toUpperCase() === code) ||
+      (o.op?.toUpperCase() === "GRANT_CAPABILITY" && o.sub_type?.toUpperCase() === code)
+    );
     const range = op?.params?.range;
     if (typeof range === "number" && range > 0) return range;
   }
   if (hasCapability(value, "IGNORE_MOVEMENT_RANGE")) return 0;
   return DEFAULT_PORTAL_RANGE_BY_RANK[rank] ?? 0;
 }
-export const captureBonus = (value: EffectLike) => operationsBy(value, { code: "CAPTURE_BONUS" })
-  .reduce((sum, op) => sum + (typeof op.params?.value === "number" ? op.params.value : numericValue(op).value), 0);
+export const captureBonus = (value: EffectLike) =>
+  operationsBy(value)
+    .filter((op) => (op.op?.toUpperCase() === "UNIQUE" && op.code?.toUpperCase() === "CAPTURE_BONUS") ||
+                    (op.op?.toUpperCase() === "GRANT_CAPABILITY" && op.sub_type?.toUpperCase() === "CAPTURE_BONUS") ||
+                    op.code?.toUpperCase() === "CAPTURE_BONUS" ||
+                    op.sub_type?.toUpperCase() === "CAPTURE_BONUS")
+    .reduce((sum, op) => sum + (typeof op.params?.value === "number" ? op.params.value : numericValue(op).value), 0);
 export const refinementTier = (value: EffectLike) => operationsBy(value, { op: "STAT_MOD", stat: "REFINE_MANA_TIER" })[0]?.value ?? 0;
 export const hasRefinementMechanic = (value: EffectLike, code: string) => hasOperation(value, { op: "UNIQUE", code });
 export const nativeNumericValue = (value: EffectLike, code: string) => operationsBy(value, { op: "UNIQUE", code })

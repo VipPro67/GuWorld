@@ -1,5 +1,5 @@
 
-import type { EffectEnvelope } from "@/lib/effect-blocks";
+import type { EffectEnvelope, EffectBlock } from "@/lib/effect-blocks";
 export type { EffectBlock as ComposableEffectBlock, EffectOperation as AtomicOperation, EffectTarget as TargetScope, EffectCondition } from "@/lib/effect-blocks";
 
 export interface GuDictionaryItem {
@@ -59,6 +59,7 @@ export interface ItemSpec {
   rarity?: number;
   rank?: number;
   path?: string;
+  blocks?: EffectBlock[];
   effects?: EffectEnvelope;
   tags?: string[];
   description: string;

@@ -14,7 +14,18 @@ const effects: EffectEnvelope = { schema_version: 2, blocks: [
     { op: "STAT_MOD", sub_type: "GROWTH_CAP", stat: "ATTACK", value: 12 }, { op: "UNIQUE", code: "GROWTH_DURATION_HOURS", params: { value: 48 } },
   ] },
 ] };
-test("effectEnvelope accepts block envelopes with or without an explicit schema version", () => { assert.deepEqual(effectEnvelope({ blocks: effects.blocks }), { blocks: effects.blocks }); assert.equal(effectEnvelope(effects), effects); assert.equal(effectEnvelope({ effects }), effects); assert.equal(effectEnvelope(null), EMPTY_EFFECT_ENVELOPE); });
+test("effectEnvelope accepts block envelopes with or without an explicit schema version", () => {
+  assert.deepEqual(effectEnvelope({ blocks: effects.blocks }), { blocks: effects.blocks });
+  assert.equal(effectEnvelope(effects), effects);
+  assert.equal(effectEnvelope({ effects }), effects);
+  assert.equal(effectEnvelope(null), EMPTY_EFFECT_ENVELOPE);
+  // ItemSpec with blocks directly or legacy restore_hp
+  assert.deepEqual(effectEnvelope({ blocks: effects.blocks, effects: { restore_hp: 50 } }), { blocks: effects.blocks });
+  const legacyItem = effectEnvelope({ restore_hp: 30, restore_mana: 20 });
+  assert.equal(legacyItem.blocks.length, 2);
+  assert.equal(legacyItem.blocks[0].operations[0].op, "HEAL");
+  assert.equal(legacyItem.blocks[0].operations[0].value, 30);
+});
 test("normalizeEffectEnvelope loads Gu.csv arrays, API envelopes, and JSON strings", () => {
   assert.deepEqual(normalizeEffectEnvelope(effects.blocks), effects);
   assert.deepEqual(normalizeEffectEnvelope(effects), effects);
@@ -29,6 +40,13 @@ test("capture-only Gu stays battle-eligible", () => {
   ] };
   assert.equal(isCombatEligible(captureOnly), true);
   assert.equal(captureBonus(captureOnly), 0.1);
+
+  const grantCapability: EffectEnvelope = { schema_version: 2, blocks: [
+    { id: "CAPTURE_BONUS", trigger: "CAPABILITY", target: { selector: "SELF" }, operations: [{ op: "GRANT_CAPABILITY", sub_type: "CAPTURE_BONUS", params: { value: 0.2 } }] },
+  ] };
+  assert.equal(isCombatEligible(grantCapability), true);
+  assert.equal(captureBonus(grantCapability), 0.2);
+  assert.equal(hasCapability(grantCapability, "CAPTURE_BONUS"), true);
 });
 
 test("portalRange follows explicit params, ignore capability, and rank fallback", () => {

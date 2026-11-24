@@ -18,7 +18,7 @@ const TRIGGER_CONFIG: Record<string, { label: string; color: string; icon: strin
   ON_TICK: { label: "Mỗi Chu Kỳ", color: "bg-teal-950/60 text-teal-300 border-teal-800/50", icon: "🔄" },
   ON_CAST: { label: "Khi Niệm", color: "bg-indigo-950/60 text-indigo-300 border-indigo-800/50", icon: "✨" },
   CAPABILITY: { label: "Năng Lực", color: "bg-sky-950/60 text-sky-300 border-sky-800/50", icon: "🌐" },
-  ON_CONSUME: { label: "Khi Nuốt", color: "bg-emerald-950/60 text-emerald-300 border-emerald-800/50", icon: "🧪" },
+  ON_CONSUME: { label: "Khi Dùng", color: "bg-emerald-950/60 text-emerald-300 border-emerald-800/50", icon: "🧪" },
   ON_USE: { label: "Khi Kích Hoạt", color: "bg-amber-950/60 text-amber-300 border-amber-800/50", icon: "📜" },
 };
 
@@ -59,6 +59,10 @@ const STATUS_NAMES: Record<string, string> = {
   SLOW1: "Làm Chậm Cấp 1",
   SLOW_DAMAGE: "Sát Thương Chậm",
   WEAK: "Suy Yếu",
+  ATK_UP: "Tăng Công",
+  DEF_UP: "Tăng Thủ",
+  FLYING: "Bay Lượn",
+  PHI_HANH: "Phi Hành",
   REGEN: "Hồi Phục",
   THORNS: "Gai Phản Đòn",
   TAUNT: "Khiêu Khích",
@@ -285,6 +289,31 @@ const UNIQUE_NAMES: Record<string, string> = {
   FIVE_RESTRICTION_DEEP_LIGHT: "Ngũ Cấm Huyền Quang Khí (Khóa Ngũ Hành Phong Ấn Cổ Trùng 3 Hiệp)",
   CHARM_GHOST_COME: "Tử Quỷ Khoái Lai (Quyến Rũ Mê Hoặc Thần Hồn Điên Đảo 2 Hiệp)",
   DEVOUR_HEAVEN_EARTH: "Thôn Thiên Địa (Cắn Nuốt 50% Khiên Kẻ Địch Chuyển Hóa Thành HP)",
+  ADD_SOUL_MAX: "Tăng Giới Hạn Hồn Phách",
+  ADD_THOUGHT_MAX: "Tăng Giới Hạn Tạp Niệm",
+  CONCEAL_GU: "Ẩn Giấu Khí Tức Cổ Trùng",
+  DECREASE_TIME_SPEED: "Làm Chậm Dòng Thời Gian Khiếu",
+  GUARANTEED_HIT: "Tất Trúng (Không Thể Né)",
+  IGNORE_MONSTER_ENCOUNTER: "Tránh Né Dị Thú Hoang Dã",
+  INCREASE_TIME_SPEED: "Gia Tốc Dòng Thời Gian Khiếu",
+  KNOCKBACK: "Đẩy Lùi Mục Tiêu",
+  MAN_BEAST_BURIAL: "Nhân Thú Táng (Huyết Tế Căn Cốt)",
+  PERM_STEAL_GU: "Đoạt Cổ Vĩnh Viễn",
+  POISON_VOW: "Độc Thệ (Lời Thề Độc)",
+  PULL_TARGET: "Kéo Mục Tiêu Lên Tiền Tuyến",
+  RECORD_MESSAGE: "Lưu Giữ Thần Niệm / Tin Nhắn",
+  REDUCE_STRESS: "Giải Tỏa Áp Lực Tiên Khiếu",
+  RESTORE_MENTAL: "Hồi Phục Tinh Thần",
+  RESTORE_SOUL_HP: "Hồi Phục Sinh Lực Hồn Phách",
+  RETREAT_SELF: "Rút Lui Về Tuyến Sau",
+  SAT_KHI_GUARANTEE: "Sát Khí Tuyệt Sát",
+  SEVER_CLUES: "Cắt Đứt Thiên Cơ Manh Mối",
+  SPRING_EGG_HATCH: "Ấp Trứng Khai Sinh Nguyên Tuyền",
+  STONE_APERTURE: "Thạch Khiếu (Hóa Đá Không Khiếu)",
+  SUMMON_MONSTER: "Triệu Hồi Dị Thú Trợ Chiến",
+  SWAP_TARGET: "Hoán Đổi Vị Trí Mục Tiêu",
+  TEMP_STEAL_GU: "Tước Đoạt Cổ Trùng Tạm Thời",
+  THIRD_WATCH: "Tam Canh (Ngừng Đọng Thời Gian)",
 };
 
 const STATUS_BEHAVIORS: Record<string, string> = {};
@@ -375,7 +404,12 @@ export function formatOperation(op: EffectOperation): { text: string; color: str
       return { text: `Miễn nhiễm ${status} theo điều kiện`, color: "text-indigo-300", icon: "✨", tooltip: "Khi block condition đúng, trạng thái tương ứng không khóa hành động." };
     }
     case "SLOT_INTERACTION":
-      return { text: op.sub_type === "TEMPORARY_STEAL" ? "Cướp Cổ tạm thời trong PvP" : "Cướp Cổ vĩnh viễn trong PvP", color: "text-amber-300", icon: "🪝", tooltip: "Handler PvP áp dụng công thức tỉ lệ và transaction theo params đã khai báo." };
+      return {
+        text: op.sub_type === "TEMPORARY_STEAL" ? "Đoạt Cổ Tạm Thời (Tước Cổ Trong Trận)" : "Đoạt Cổ Vĩnh Viễn (Chiếm Cổ Sau Trận)",
+        color: "text-amber-300 font-semibold",
+        icon: "🪝",
+        tooltip: "Tước đoạt hoặc chiếm giữ Cổ trùng đối phương theo cơ chế PvP.",
+      };
     case "REVIVE":
       return { text: "Hồi sinh khi chịu đòn chí tử", color: "text-rose-300", icon: "🔁", tooltip: "Tự hồi sinh theo chance, mode và giới hạn sử dụng trong params; xử lý tại ON_DEATH." };
     case "EFFECT_IMMUNITY":
@@ -482,6 +516,34 @@ export function formatOperation(op: EffectOperation): { text: string; color: str
       }
       if (op.sub_type === "GUARANTEED") {
         return { text: "Tất Trúng (không thể né)", color: "text-amber-300", icon: "🎯", tooltip: "Đòn đánh chắc chắn trúng mục tiêu, không thể né tránh." };
+      }
+      if (op.sub_type === "COUNTER_THRESHOLD") {
+        const paramKey = op.params?.key != null ? String(op.params.key) : "";
+        const keyName = UNIQUE_NAMES[paramKey.toUpperCase()] || paramKey || "tầng đếm";
+        const thresh = typeof op.params?.threshold === "number" ? op.params.threshold : 0;
+        return {
+          text: `Tích lũy [${keyName}] ≥ ${thresh}: Tất Trúng & Xuyên Khiên`,
+          color: "text-amber-300 font-semibold",
+          icon: "🎯",
+          tooltip: "Khi số tầng tích lũy đạt ngưỡng, đòn đánh chắc chắn trúng đích và xuyên qua mọi khiên/miễn nhiễm.",
+        };
+      }
+      if (op.sub_type === "MULTI_HIT") {
+        const count = op.params?.count || op.value || 2;
+        return {
+          text: `Liên Hoàn Kích (${count} lần đánh liên tiếp)`,
+          color: "text-orange-400 font-semibold",
+          icon: "⚡",
+          tooltip: "Tung ra nhiều đợt tấn công liên tiếp trong cùng một lượt hành động.",
+        };
+      }
+      if (op.sub_type === "FIRST_TURN_EVADE") {
+        return {
+          text: "Tuyệt Đối Né Tránh (Lượt 1)",
+          color: "text-indigo-300 font-semibold",
+          icon: "💨",
+          tooltip: "Hoàn toàn né tránh mọi đòn tấn công trong lượt thi đấu đầu tiên.",
+        };
       }
       return { text: `Quy tắc tấn công: ${op.sub_type || ""}`, color: "text-amber-300", icon: "🎯" };
     }
@@ -643,8 +705,403 @@ export function formatOperation(op: EffectOperation): { text: string; color: str
       const paramStr = op.params && Object.keys(op.params).length > 0 ? ` ${JSON.stringify(op.params)}` : "";
       return { text: `${codeName}${paramStr}`, color: "text-fuchsia-300", icon: "🔮", tooltip };
     }
-    default:
-      return { text: `${opType}: ${JSON.stringify(op)}`, color: "text-zinc-300", icon: "•" };
+    case "END_BATTLE": {
+      const summary = op.message ? op.message.replace(/\{actor\}/g, "Bản thân").replace(/\{target\}/g, "Mục tiêu") : "Đoạt Thắng (Toàn diệt địch nhân)";
+      return {
+        text: `Đoạt Thắng: ${summary}`,
+        color: "text-amber-400 font-bold",
+        icon: "👑",
+        tooltip: "Kết thúc chiến đấu ngay lập tức — giành chiến thắng tuyệt đối trước toàn bộ quân địch.",
+      };
+    }
+    case "GRANT_CAPABILITY": {
+      const sub = (op.sub_type || "").toUpperCase();
+      if (sub === "CAPTURE_BONUS") {
+        const val = Number(op.params?.value ?? op.value ?? 0);
+        return {
+          text: `Thu Phục Sủng Vật +${Math.round(val * 100)}%`,
+          color: "text-purple-300 font-semibold",
+          icon: "🐾",
+          tooltip: "Gia tăng đáng kể tỷ lệ bắt giữ và thuần phục dã thú / dị thú.",
+        };
+      }
+      if (sub === "PORTAL_CREATE") {
+        const range = Number(op.params?.range ?? op.value ?? 0);
+        return {
+          text: `Mở Cổng Truyền Tống${range > 0 ? ` (${range} ô)` : " (Vô hạn cự ly)"}`,
+          color: "text-sky-300",
+          icon: "🌀",
+          tooltip: "Mở cổng không gian di chuyển đến các khu vực hoặc hub đã kích hoạt.",
+        };
+      }
+      if (sub === "RANDOM_PORTAL") {
+        const range = Number(op.params?.range ?? op.value ?? 0);
+        return {
+          text: `Truyền Tống Ngẫu Nhiên${range > 0 ? ` (${range} ô)` : ""}`,
+          color: "text-sky-300",
+          icon: "🎲",
+          tooltip: "Dịch chuyển ngẫu nhiên đến một vị trí trong phạm vi bản đồ.",
+        };
+      }
+      if (sub === "IGNORE_MOVEMENT_RANGE") {
+        return {
+          text: "Vượt Cự Ly Giới Hạn (Vô hạn di chuyển)",
+          color: "text-sky-300 font-semibold",
+          icon: "🚀",
+          tooltip: "Bỏ qua mọi giới hạn khoảng cách khi di chuyển hoặc truyền tống qua giới vực.",
+        };
+      }
+      const name = UNIQUE_NAMES[sub] || sub;
+      return {
+        text: `Năng Lực: ${name}`,
+        color: "text-sky-300",
+        icon: "🌐",
+        tooltip: HOOK_BEHAVIORS[sub] || "Năng lực đặc thù kích hoạt ngoài bản đồ thế giới.",
+      };
+    }
+    case "DAMAGE_MODIFIER": {
+      if (op.sub_type === "MINION_COUNT") {
+        const perMinion = Math.round((op.per_minion ?? 0.15) * 100);
+        return {
+          text: `Quân Đoàn Hợp Kích (+${perMinion}% ST/dị thú)`,
+          color: "text-rose-300 font-semibold",
+          icon: "🐾",
+          tooltip: op.message || "Tăng uy lực sát thương theo số lượng dị thú/sủng vật trợ chiến phe ta.",
+        };
+      }
+      if (op.sub_type === "MISSING_HP") {
+        const percent = Math.round(((op.value ?? 1) - 1) * 100) || Math.round((op.value ?? 0) * 100);
+        return {
+          text: `Máu Thấp Bộc Phá (+${percent}% ST theo HP mất)`,
+          color: "text-rose-300 font-semibold",
+          icon: "🩸",
+          tooltip: op.message || "Gia tăng sát thương khi sinh lực người thi triển bị hao hụt.",
+        };
+      }
+      if (op.sub_type === "TARGET_DEBUFF_COUNT") {
+        const perDebuff = Math.round((op.per_target_debuff ?? op.value ?? 0.1) * 100);
+        return {
+          text: `Khắc Chế Tàn Phế (+${perDebuff}% ST/debuff mục tiêu)`,
+          color: "text-rose-300",
+          icon: "📉",
+          tooltip: "Gia tăng sát thương theo tổng số lượng trạng thái bất lợi trên người mục tiêu.",
+        };
+      }
+      if (op.sub_type === "TARGET_HAS_STATUS") {
+        const sName = STATUS_NAMES[op.status_id?.toUpperCase() || ""] || op.status_id || "Dị trạng";
+        const percent = Math.round((op.value ?? 0) * 100);
+        return {
+          text: `Bồi Kích Mục Tiêu ${sName} (+${percent}% ST)`,
+          color: "text-rose-300",
+          icon: "🎯",
+          tooltip: `Tăng mạnh sát thương khi mục tiêu đang dính ${sName}.`,
+        };
+      }
+      if (op.sub_type === "COUNTER_COUNT") {
+        return {
+          text: `Tăng sát thương theo tích lũy [${op.key || "Chiến ý"}]`,
+          color: "text-rose-300",
+          icon: "🪙",
+          tooltip: "Sát thương tăng tiến dựa trên số tầng đếm tích lũy.",
+        };
+      }
+      return {
+        text: `Khuếch Đại Sát Thương: ${op.sub_type || ""}`,
+        color: "text-rose-300",
+        icon: "⚔️",
+        tooltip: op.message,
+      };
+    }
+    case "DISPEL": {
+      if (op.sub_type === "ALL_BUFFS") {
+        return { text: "Xóa Toàn Bộ Buff Của Mục Tiêu", color: "text-amber-300 font-semibold", icon: "💨", tooltip: "Hóa giải toàn bộ các hiệu ứng có lợi trên người mục tiêu." };
+      }
+      if (op.sub_type === "BUFFS") {
+        const count = op.value ? ` (${op.value} hiệu ứng)` : "";
+        return { text: `Tước Đoạt Buff${count}`, color: "text-amber-300", icon: "💨", tooltip: "Xóa bớt các trạng thái có lợi của đối phương." };
+      }
+      if (op.sub_type === "PROTECTION") {
+        return { text: "Phá Vỡ Lớp Bảo Vệ & Khiên", color: "text-amber-300 font-semibold", icon: "💥", tooltip: "Xuyên thủng và xóa bỏ các lớp khiên chắn hộ thể." };
+      }
+      return { text: `Giải trừ: ${op.sub_type || "hiệu ứng"}`, color: "text-amber-300", icon: "💨" };
+    }
+    case "DISPLACE": {
+      if (op.sub_type === "KNOCKBACK") {
+        return { text: `Đẩy Lùi ${op.value ?? 1} Hàng`, color: "text-indigo-300", icon: "🔄", tooltip: "Đẩy mục tiêu lùi về hàng sau trên chiến trận 3x3." };
+      }
+      if (op.sub_type === "PULL") {
+        return { text: `Kéo Lại Gần ${op.value ?? 1} Hàng`, color: "text-indigo-300", icon: "🧲", tooltip: "Kéo mục tiêu lên hàng trước để dễ bề tấn công." };
+      }
+      if (op.sub_type === "RETREAT") {
+        return { text: "Rút Về Hàng Sau", color: "text-indigo-300", icon: "↩️", tooltip: "Lùi bước về hàng sau để được tuyến trước che chở." };
+      }
+      if (op.sub_type === "SWAP") {
+        return { text: "Hoán Đổi Vị Trí Mục Tiêu", color: "text-indigo-300", icon: "🔀", tooltip: "Thay đổi vị trí của mục tiêu trong đội hình chiến đấu." };
+      }
+      return { text: `Chuyển dịch vị trí (${op.sub_type || ""})`, color: "text-indigo-300", icon: "🔄" };
+    }
+    case "MITIGATE_DAMAGE": {
+      const percent = Math.round((op.value ?? 0) * 100);
+      return {
+        text: `Chuyển ${percent}% Sát Thương Nhận Vào Thành Khiên`,
+        color: "text-sky-300 font-semibold",
+        icon: "🛡️",
+        tooltip: op.message || "Hấp thụ sát thương nhận vào và chuyển hóa thành lớp Khiên Ảo mới.",
+      };
+    }
+    case "TURN_ORDER_RULE": {
+      if (op.sub_type === "SEIZE_INITIATIVE") {
+        return {
+          text: "Đoạt Tiên Cơ (Luôn đi trước ở Lượt 1)",
+          color: "text-yellow-300 font-semibold",
+          icon: "⚡",
+          tooltip: "Chiếm thế chủ động, luôn được ra tay trước tiên ở lượt mở đầu bất kể tốc độ.",
+        };
+      }
+      if (op.sub_type === "SUPPRESS_ENEMY_PRIORITY") {
+        return {
+          text: "Trấn Áp Tiên Thủ (Khóa quyền đi trước của địch)",
+          color: "text-red-300 font-semibold",
+          icon: "⛔",
+          tooltip: "Vô hiệu hóa quyền ưu tiên hành động và tốc độ xuất chiêu của đối phương.",
+        };
+      }
+      return { text: `Quy tắc lượt: ${op.sub_type || ""}`, color: "text-yellow-300", icon: "⚡" };
+    }
+    case "SET_RULE": {
+      if (op.sub_type === "IMMUNE_DREAM_STATUS") {
+        return {
+          text: "Miễn Nhiễm Toàn Bộ Trạng Thái Mộng Cảnh",
+          color: "text-amber-300 font-semibold",
+          icon: "☯️",
+          tooltip: "Không thể bị kéo vào Mộng Cảnh hoặc dính các trạng thái mộng đạo.",
+        };
+      }
+      return { text: `Quy tắc đặc thù: ${op.sub_type || ""}`, color: "text-amber-300", icon: "☯️" };
+    }
+    case "SUMMON": {
+      const pos = op.params?.position === "frontline" ? "tiền tuyến" : "hậu phương";
+      return {
+        text: `Triệu Hồi Hộ Vệ Trợ Chiến (${pos})`,
+        color: "text-emerald-300 font-semibold",
+        icon: "🐾",
+        tooltip: "Gọi linh thú/con rối xuất hiện trên chiến trường chia sẻ sát thương và tấn công đối phương.",
+      };
+    }
+    case "DETONATE_STATUS": {
+      const sName = STATUS_NAMES[op.status_id?.toUpperCase() || ""] || op.status_id || "dị trạng";
+      return {
+        text: `Kích Nổ ${sName} (Bộc phát sát thương)`,
+        color: "text-rose-400 font-semibold",
+        icon: "💥",
+        tooltip: op.message || `Kích hoạt toàn bộ các tầng ${sName} trên mục tiêu cùng lúc để tạo sát thương bộc phá.`,
+      };
+    }
+    case "COUNTER_ADD": {
+      const delta = op.delta ?? op.value ?? 1;
+      const keyName = UNIQUE_NAMES[op.key?.toUpperCase() || ""] || op.key || "tầng đếm";
+      const maxStr = typeof op.max === "number" ? ` (tối đa ${op.max})` : "";
+      return {
+        text: `Tích lũy ${delta >= 0 ? "+" : ""}${delta} [${keyName}]${maxStr}`,
+        color: "text-amber-300",
+        icon: "🪙",
+        tooltip: "Tích lũy tầng số liệu phục vụ tính toán các đòn đánh hoặc sát chiêu tiếp theo.",
+      };
+    }
+    case "THRESHOLD_RECOVERY": {
+      const hpThresh = Math.round((op.hp_threshold ?? op.value ?? 0.3) * 100);
+      const healPct = Math.round((op.heal_percent ?? 0.4) * 100);
+      const cleanseStr = op.cleanse_debuffs ? " & Thanh tẩy dị trạng" : "";
+      return {
+        text: `Máu < ${hpThresh}%: Hồi Phục ${healPct}% HP${cleanseStr}`,
+        color: "text-emerald-300 font-semibold",
+        icon: "💚",
+        tooltip: op.message || "Khi sinh lực giảm xuống dưới ngưỡng báo động, lập tức hồi phục cấp tốc.",
+      };
+    }
+    case "THRESHOLD_CHECK": {
+      const key = op.key || "Tầng đếm";
+      const thresh = op.threshold ?? op.value ?? 0;
+      return {
+        text: `Kiểm tra ngưỡng [${UNIQUE_NAMES[key.toUpperCase()] || key}] ≥ ${thresh}`,
+        color: "text-amber-300",
+        icon: "⚖️",
+        tooltip: "Kiểm tra điều kiện tầng tích lũy để kích hoạt các hiệu ứng kế tiếp.",
+      };
+    }
+    case "APPLY_STACKING_STATUS": {
+      const key = op.status_key || op.status_id || "Dị trạng";
+      const maxStr = op.max_stacks ? ` (tối đa ${op.max_stacks} tầng)` : "";
+      return {
+        text: `Áp Đặt Dị Trạng Cộng Dồn: ${STATUS_NAMES[key.toUpperCase()] || key}${maxStr}`,
+        color: "text-orange-300",
+        icon: "🔥",
+        tooltip: "Áp đặt trạng thái có khả năng tích tầng, uy lực tăng tiến theo số tầng dồn.",
+      };
+    }
+    case "PERIODIC_RESOURCE": {
+      const res = op.resource === "MANA" ? "Chân Nguyên" : op.resource || "Tài nguyên";
+      return {
+        text: `Sản sinh định kỳ: +${op.value ?? 0} ${res}/giờ`,
+        color: "text-teal-300",
+        icon: "⏳",
+        tooltip: "Tự động sinh ra tài nguyên theo chu kỳ thời gian thực.",
+      };
+    }
+    case "MODIFY_APERTURE": {
+      if (op.sub_type === "AREA_SIZE") {
+        const val = op.value ? Number(op.value).toLocaleString() : "0";
+        return {
+          text: `Mở Rộng Không Khiếu +${val} Mẫu`,
+          color: "text-purple-300 font-semibold",
+          icon: "🌌",
+          tooltip: op.message || "Gia tăng vĩnh viễn diện tích Không Gian Tiên Khiếu.",
+        };
+      }
+      if (op.sub_type === "TIME_RATE" || op.sub_type === "TIME_RATE_ADD") {
+        return { text: `Gia Tốc Dòng Thời Gian Không Khiếu +${op.value ?? 0}x`, color: "text-purple-300", icon: "⏳", tooltip: "Thời gian trong Không Khiếu trôi nhanh hơn, thúc đẩy tài nguyên phát triển." };
+      }
+      if (op.sub_type === "TIME_RATE_SUBTRACT") {
+        return { text: `Làm Chậm Dòng Thời Gian Không Khiếu -${op.value ?? 0}x`, color: "text-purple-300", icon: "⏳", tooltip: "Kéo dài thọ nguyên bằng cách làm chậm dòng thời gian trong Khiếu." };
+      }
+      if (op.sub_type === "STRESS_REDUCE") {
+        return { text: `Giảm Áp Lực Không Khiếu ${op.value ?? 0}`, color: "text-purple-300", icon: "🛡️", tooltip: "Giảm tải áp lực không gian và sức ép của Tiên Khiếu." };
+      }
+      return { text: `Cải tạo Không Khiếu: ${op.sub_type || ""}`, color: "text-purple-300", icon: "🌌" };
+    }
+    case "MODIFY_APTITUDE": {
+      const val = op.value ?? 0;
+      return { text: `Nâng Cao Tư Chất Không Khiếu +${val}%`, color: "text-amber-300 font-bold", icon: "🌟", tooltip: "Gia tăng vĩnh viễn tư chất Không Khiếu (Giáp, Ất, Bính, Đinh)." };
+    }
+    case "PETRIFY_APERTURE": {
+      return { text: "Hóa Thạch Không Khiếu (Đóng băng cảnh giới & thọ nguyên)", color: "text-stone-400 font-semibold", icon: "🗿", tooltip: "Khiến Không Khiếu hóa đá để ngừng tiêu hao thọ mệnh và thoát khỏi thiên kiếp." };
+    }
+    case "REPAIR_APERTURE": {
+      const val = op.value ? Number(op.value).toLocaleString() : "0";
+      return {
+        text: `Hàn Gắn & Hồi Phục Khiếu +${val}`,
+        color: "text-teal-300 font-semibold",
+        icon: "🛡️",
+        tooltip: op.message || "Chữa lành tổn thương và hàn gắn các vết rạn nứt trong Không Khiếu.",
+      };
+    }
+    case "OPEN_REWARD_CONTAINER": {
+      if (op.sub_type === "IMMORTAL_MINE") {
+        return {
+          text: "Mở Rương Tiên Mạch (Tài nguyên Tiên & Bí phương)",
+          color: "text-amber-300 font-semibold",
+          icon: "💎",
+          tooltip: op.message || "Rương chứa tài nguyên quý từ Tiên Mạch với tỉ lệ bí phương và vật phẩm Chuyển 6-9 cao hơn hẳn.",
+        };
+      }
+      if (op.sub_type === "MORTAL_MINE") {
+        return {
+          text: "Mở Rương Phàm Mỏ (Linh thạch & Linh tài)",
+          color: "text-amber-300 font-semibold",
+          icon: "📦",
+          tooltip: op.message || "Rương chứa nhiều tài nguyên quý giá từ mỏ linh thạch.",
+        };
+      }
+      return {
+        text: `Mở Rương Chứa Thưởng: ${op.sub_type || ""}`,
+        color: "text-amber-300 font-semibold",
+        icon: "🎁",
+        tooltip: op.message || "Mở nhận vật phẩm và phần thưởng ngẫu nhiên bên trong.",
+      };
+    }
+    case "RANDOMIZE_TRAIT": {
+      if (op.sub_type === "CONSTITUTION") {
+        return {
+          text: "Hoán Cải Thể Chất Ngẫu Nhiên (Nghịch thiên cải mệnh)",
+          color: "text-rose-300 font-semibold",
+          icon: "🧬",
+          tooltip: op.message || "Đan dược nghịch thiên cải mệnh, tái tạo thể chất ngẫu nhiên cho Cổ sư.",
+        };
+      }
+      if (op.sub_type === "RACE") {
+        return {
+          text: "Hoán Chuyển Dị Tộc / Chủng Tộc (Đổi huyết mạch)",
+          color: "text-rose-300 font-semibold",
+          icon: "🩸",
+          tooltip: op.message || "Đan dược hoán đổi huyết mạch chủng tộc ngẫu nhiên.",
+        };
+      }
+      return {
+        text: `Hoán Cải Đặc Tính: ${op.sub_type || ""}`,
+        color: "text-rose-300 font-semibold",
+        icon: "🎲",
+        tooltip: op.message || "Hoán đổi đặc tính thuộc tính bản thân ngẫu nhiên.",
+      };
+    }
+    case "REQUIRE": {
+      if (op.sub_type === "IMMORTAL") {
+        return {
+          text: "Yêu Cầu: Đẳng cấp Cổ Tiên (Rank 6+)",
+          color: "text-red-400 font-semibold",
+          icon: "⚡",
+          tooltip: "Chỉ Cổ Tiên mới có thể sử dụng hoặc luyện hóa vật phẩm này.",
+        };
+      }
+      return {
+        text: `Yêu Cầu Tiên Quyết: ${op.sub_type || ""}`,
+        color: "text-red-400 font-semibold",
+        icon: "⚠️",
+        tooltip: op.message || "Điều kiện tiên quyết bắt buộc phải thỏa mãn để sử dụng.",
+      };
+    }
+    case "PLACE_WORLD_OBJECT": {
+      const name = op.sub_type === "PRIMEVAL_SPRING" ? "Nguyên Tuyền (Mắt Nguồn Nguyên Thạch)" : op.sub_type || "Công Trình";
+      return { text: `Khởi Tạo Thực Thể: ${name}`, color: "text-emerald-300 font-semibold", icon: "🏛️", tooltip: "Kiến tạo tài nguyên địa mạch trường tồn trên thế giới." };
+    }
+    case "ADVANCE_PROGRESSION": {
+      return { text: "Thăng Tiến Tiểu Cảnh Giới Tu Vi", color: "text-yellow-300 font-bold", icon: "📈", tooltip: "Lập tức đột phá lên tiểu cảnh giới kế tiếp." };
+    }
+    case "ADVANCE_MAJOR_REALM": {
+      return { text: "Đột Phá Đại Cảnh Giới Chuyển Bậc", color: "text-yellow-300 font-bold", icon: "⚡", tooltip: "Đột phá chuyển bậc đại cảnh giới." };
+    }
+    case "GRANT_BODY_MOD": {
+      return { text: "Cải Tạo Tiên Thể: Thập Tuyệt Thể / Chí Tôn Tiên Thể", color: "text-amber-300 font-bold", icon: "✨", tooltip: "Tái tạo căn cốt thể chất tối thượng, xóa bỏ xung đột đạo ngân." };
+    }
+    case "GRANT_RESOURCE": {
+      if (op.resource === "LIFESPAN") {
+        return { text: `Ban Tặng: +${op.value ?? 0} Năm Thọ Nguyên`, color: "text-emerald-300 font-bold", icon: "🎁", tooltip: "Gia tăng vĩnh viễn lượng tài nguyên hoặc tuổi thọ." };
+      }
+      if (op.resource === "HUMAN_QI") {
+        const val = op.value ? Number(op.value).toLocaleString() : "0";
+        return { text: `Tăng Nhân Khí: +${val}`, color: "text-amber-300 font-bold", icon: "👤", tooltip: op.message || "Tăng lượng Nhân Khí cần thiết để thăng Tiên hoặc luyện đan." };
+      }
+      if (op.resource === "DAO_MARK") {
+        const pathStr = op.path ? ` [${op.path}]` : "";
+        return { text: `Ban Tặng: +${op.value ?? 0} Đạo Ngân${pathStr}`, color: "text-emerald-300 font-bold", icon: "💠", tooltip: op.message || "Gia tăng số lượng đạo ngân lưu phái vĩnh viễn." };
+      }
+      return { text: `Ban Tặng: +${op.value ?? 0} ${op.resource || ""}`, color: "text-emerald-300 font-bold", icon: "🎁", tooltip: "Gia tăng vĩnh viễn lượng tài nguyên hoặc tuổi thọ." };
+    }
+    case "RESTORE_RESOURCE": {
+      if (op.resource === "EARTH_QI") {
+        const val = op.value ? Number(op.value).toLocaleString() : "0";
+        return { text: `Hồi Phục Địa Khí: +${val}`, color: "text-yellow-400 font-semibold", icon: "🌍", tooltip: op.message || "Hồi phục tài nguyên Địa Khí trong Không Khiếu." };
+      }
+      if (op.resource === "HEAVEN_QI") {
+        const val = op.value ? Number(op.value).toLocaleString() : "0";
+        return { text: `Hồi Phục Thiên Khí: +${val}`, color: "text-sky-300 font-semibold", icon: "☁️", tooltip: op.message || "Hồi phục tài nguyên Thiên Khí trong Không Khiếu." };
+      }
+      const res = op.resource === "SOUL" ? "Hồn Phách" : op.resource || "Tài nguyên";
+      return { text: `Hồi Phục ${op.value ?? 0} ${res}`, color: "text-cyan-300", icon: "💚", tooltip: "Hồi phục tài nguyên tương ứng cho bản thân." };
+    }
+    case "MODIFY_MAX_RESOURCE": {
+      const res = op.resource === "SOUL" ? "Giới Hạn Hồn Phách" : op.resource || "Giới Hạn Tài Nguyên";
+      return { text: `Tăng ${res} +${op.value ?? 0}`, color: "text-indigo-300", icon: "📈", tooltip: "Mở rộng ngưỡng chứa tối đa của tài nguyên." };
+    }
+    case "GROWTH_DURATION": {
+      return { text: `Thời gian trưởng thành: ${op.value ?? 0} giờ`, color: "text-teal-300", icon: "🌱", tooltip: "Thời gian nuôi dưỡng cần thiết để Cổ đạt đến trạng thái phát huy tối đa sức mạnh." };
+    }
+    case "DEDUCTION_FINISH_CHANCE": {
+      return { text: "Tăng Xác Suất Đốn Ngộ Thôi Diễn", color: "text-amber-300", icon: "💡", tooltip: "Gia tăng tỷ lệ hoàn thành tức thì khi thôi diễn phương thuốc hoặc bí pháp." };
+    }
+    default: {
+      const summary = op.message ? op.message.replace(/\{actor\}/g, "Bản thân").replace(/\{target\}/g, "Mục tiêu") : (op.sub_type || op.code || opType);
+      return { text: summary, color: "text-zinc-200", icon: "✨", tooltip: JSON.stringify(op) };
+    }
   }
 }
 

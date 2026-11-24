@@ -2,7 +2,7 @@ import { create } from "zustand";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import type { RequiredGus } from "@/lib/gu-dict";
 import { manaRegenPerTick, nativeNumericValue } from "@/lib/effect-blocks";
-import type { EffectDictionaryEntry, EffectEnvelope } from "@/lib/effect-blocks";
+import type { EffectDictionaryEntry, EffectEnvelope, EffectBlock } from "@/lib/effect-blocks";
 import { useUIStore } from "@/store/useUIStore";
 import { uiRealtimeManager } from "@/lib/realtime/UIRealtimeManager";
 import { authFetch, setUnauthorizedHandler } from "@/lib/auth";
@@ -941,6 +941,7 @@ export interface ItemSpec {
   rarity?: number;
   rank?: number;
   path?: string;
+  blocks?: EffectBlock[];
   effects?: EffectEnvelope;
   tags?: string[];
   description: string;

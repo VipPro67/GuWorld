@@ -8,6 +8,7 @@ import { translateGuType, translatePath } from "@/lib/translate";
 import { getPathColor as _getPathColor } from "@/lib/utils";
 import { GamePanel } from "@/components/ui";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
+import { renderableEffectBlocks } from "@/lib/effect-presentation";
 import { hasCapability, hasOperation, portalRange, usesRandomPortal } from "@/lib/effect-blocks";
 import { KillerMovesPanel } from "@/components/KillerMovesPanel";
 import { getItemIconUrl } from "@/lib/item-icons";
@@ -2593,16 +2594,20 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
               </div>
 
               {/* Effects View */}
-              {spec.effects && Object.keys(spec.effects).length > 0 && (
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block font-bold">
-                    Kỹ Năng & Hiệu Ứng
-                  </span>
-                  <div className="bg-zinc-900/50 p-3 rounded-xl border border-zinc-850">
-                    <EffectEnvelopeView effects={spec.effects} />
+              {(() => {
+                const presentation = renderableEffectBlocks(spec.effects);
+                if (presentation.blocks.length === 0 && presentation.unsupportedSchema === undefined) return null;
+                return (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block font-bold">
+                      Kỹ Năng & Hiệu Ứng
+                    </span>
+                    <div className="bg-zinc-900/50 p-3 rounded-xl border border-zinc-850">
+                      <EffectEnvelopeView effects={spec.effects} />
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Quick Actions for Single Gu */}
               {singleGu && (() => {
@@ -3174,6 +3179,23 @@ ${spec.gu_type !== "Consumable" ? `Độ bền: ${Math.round(minDurability)}/100
                   {spec.description || "Thiên tài địa bảo trong trời đất, hữu dụng cho Cổ sư tu luyện."}
                 </p>
               </div>
+
+              {/* Effects View for Item */}
+              {(() => {
+                const itemEffects = (spec.blocks && spec.blocks.length > 0) ? spec.blocks : (spec.effects || null);
+                const presentation = renderableEffectBlocks(itemEffects);
+                if (presentation.blocks.length === 0 && presentation.unsupportedSchema === undefined) return null;
+                return (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider block font-bold">
+                      Hiệu Ứng & Tác Dụng
+                    </span>
+                    <div className="bg-zinc-900/50 p-3 rounded-xl border border-zinc-850">
+                      <EffectEnvelopeView effects={itemEffects} />
+                    </div>
+                  </div>
+                );
+              })()}
 
               {isConsumable && (onUseItem || onUseItems) ? (
                 <div className="space-y-2 pt-2 border-t border-zinc-900">
