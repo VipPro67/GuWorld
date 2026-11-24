@@ -2,6 +2,9 @@
 
 import React from "react";
 import { useGameStore } from "@/store/useGameStore";
+import { LegalModal, LegalDocType } from "@/components/legal/LegalModal";
+import { AccountDeletionModal } from "@/components/legal/AccountDeletionModal";
+import { Scale, Trash2, Shield } from "lucide-react";
 import {
   useUiPreferences,
   updateUiPreferences,
@@ -12,6 +15,9 @@ import {
 export const LobbySettingsPanel: React.FC = () => {
   const prefs = useUiPreferences();
   const [savingCombatSettings, setSavingCombatSettings] = React.useState(false);
+  const [legalModalOpen, setLegalModalOpen] = React.useState(false);
+  const [legalDocType, setLegalDocType] = React.useState<LegalDocType>("TOS");
+  const [accountDeletionOpen, setAccountDeletionOpen] = React.useState(false);
   const combatSettings = useGameStore((state) => state.combatSettings);
   const combatSettingsLoading = useGameStore((state) => state.combatSettingsLoading);
   const fetchCombatSettings = useGameStore((state) => state.fetchCombatSettings);
@@ -123,6 +129,57 @@ export const LobbySettingsPanel: React.FC = () => {
           />
         </label>
       </div>
+
+      <div className="border-t border-zinc-800 pt-4 space-y-3">
+        <h3 className="font-serif font-semibold text-amber-200">Văn Bản Pháp Lý & Bảo Vệ Dữ Liệu</h3>
+        <p className="text-xs text-zinc-400">
+          Tuân thủ Nghị định 147/2024/NĐ-CP (18+, hạn chế 180 phút/ngày, cấm RMT) và Nghị định 13/2023/NĐ-CP (Bảo vệ dữ liệu cá nhân).
+        </p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              setLegalDocType("TOS");
+              setLegalModalOpen(true);
+            }}
+            className="inline-flex min-h-10 items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-amber-500/30 text-xs font-semibold text-amber-300 transition-colors cursor-pointer"
+          >
+            <Scale className="w-3.5 h-3.5 text-amber-400" />
+            <span>Điều Khoản & Pháp Lý</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLegalDocType("PRIVACY");
+              setLegalModalOpen(true);
+            }}
+            className="inline-flex min-h-10 items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-amber-500/30 text-xs font-semibold text-zinc-300 transition-colors cursor-pointer"
+          >
+            <Shield className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Chính Sách Bảo Mật (NĐ 13)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAccountDeletionOpen(true)}
+            className="inline-flex min-h-10 items-center gap-1.5 px-3 py-2 rounded-xl bg-red-950/30 hover:bg-red-950/60 border border-red-900/40 hover:border-red-700/60 text-xs font-semibold text-red-400 transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-red-400" />
+            <span>Xóa Dữ Liệu & Tài Khoản</span>
+          </button>
+        </div>
+      </div>
+
+      <LegalModal
+        isOpen={legalModalOpen}
+        initialTab={legalDocType}
+        onClose={() => setLegalModalOpen(false)}
+        onRequestDeleteAccount={() => setAccountDeletionOpen(true)}
+      />
+
+      <AccountDeletionModal
+        isOpen={accountDeletionOpen}
+        onClose={() => setAccountDeletionOpen(false)}
+      />
     </div>
   );
 };

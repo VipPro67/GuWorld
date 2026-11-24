@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Gem, ShoppingBag, QrCode, RefreshCw, ShieldCheck, Gift, Lock, ArrowLeftRight, Coins, Sparkles, Maximize2 } from "lucide-react";
+import { Gem, ShoppingBag, QrCode, RefreshCw, ShieldCheck, Gift, Lock, ArrowLeftRight, Coins, Sparkles, Maximize2, Scale, FileText } from "lucide-react";
+import { LegalModal, LegalDocType } from "@/components/legal/LegalModal";
 import { PremiumWallet, WalletBalance } from "./PremiumWallet";
 import { useGameStore } from "@/store/useGameStore";
 import { GamePanel, GameTabs, GameButton, GameCard } from "@/components/ui";
@@ -57,6 +58,8 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<"exchange">("exchange");
   const [wallet, setWallet] = useState<WalletBalance | null>(null);
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
+  const [legalDocType, setLegalDocType] = useState<LegalDocType>("PAYMENT");
 
   // Topup State
   const [topupPackages, setTopupPackages] = useState<TopupPackage[]>([]);
@@ -519,6 +522,39 @@ export const PremiumStoreView: React.FC<PremiumStoreViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Legal & Payment Disclaimer Banner */}
+      <div className="rounded-2xl border border-amber-900/40 bg-amber-950/20 p-4 text-xs text-zinc-300 space-y-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-amber-900/30 pb-2">
+          <div className="flex items-center gap-2 text-amber-400 font-serif font-bold text-sm">
+            <Scale className="h-4 w-4 shrink-0 text-amber-500" />
+            <span>Quy Chế Nạp Tiền & Tuyên Bố Bản Quyền</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setLegalDocType("PAYMENT");
+              setLegalModalOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 font-serif text-xs transition-colors cursor-pointer self-start sm:self-auto"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            <span>Xem Chi Tiết Quy Chế</span>
+          </button>
+        </div>
+        <div className="text-[11px] leading-relaxed text-zinc-400 space-y-1">
+          <p>• <b>Ủng hộ máy chủ:</b> Các khoản nạp qua PayOS là sự đóng góp tự nguyện duy trì hạ tầng server, <b>không hoàn lại tiền mặt</b>.</p>
+          <p>• <b>Bảo lưu Alpha:</b> Cam kết bảo lưu 100% số lượng Ngọc nếu hệ thống cần reset dữ liệu trong giai đoạn thử nghiệm Alpha.</p>
+          <p>• <b>Cấm RMT:</b> Vật phẩm và tiền tệ chỉ phục vụ giải trí trong game, nghiêm cấm mua bán quy đổi ra tiền thật (Nghị định 147/2024/NĐ-CP).</p>
+          <p>• <b>Bản quyền:</b> Sản phẩm sáng tạo độc lập của người hâm mộ (Fan-game Fair-Use) từ tiểu thuyết <i>"Cổ Chân Nhân"</i>.</p>
+        </div>
+      </div>
+
+      <LegalModal
+        isOpen={legalModalOpen}
+        initialTab={legalDocType}
+        onClose={() => setLegalModalOpen(false)}
+      />
     </GamePanel>
   );
 };

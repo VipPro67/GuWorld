@@ -72,7 +72,7 @@ func RequestAccountDeletion(c *gin.Context) {
 		}
 	}
 
-	anonymizedEmail := fmt.Sprintf("deleted_%s@guworld.local", playerID.String()[:8])
+	anonymizedEmail := fmt.Sprintf("deleted_%s@guworld.local", playerID.String())
 	anonymizedIP := "0.0.0.0"
 	reason := strings.TrimSpace(req.Reason)
 	if reason == "" {
