@@ -67,7 +67,9 @@ func RevokePlayerStatus(q execQuerier, rq rowQuerier, playerID uuid.UUID, status
 	if !statuses.Has(statusID) {
 		return false, nil
 	}
-	statuses.Remove(statusID)
+	if _, found := CleansePersistentStackingStatusOneTierFromList(&statuses, statusID); !found {
+		statuses.Remove(statusID)
+	}
 	raw, err := statuses.Value()
 	if err != nil {
 		return false, err

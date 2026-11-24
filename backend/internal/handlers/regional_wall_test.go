@@ -3,7 +3,9 @@ package handlers
 import (
 	"math"
 	"testing"
+	"time"
 
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -68,6 +70,38 @@ func TestCheckAndApplyRegionalWallDebuff(t *testing.T) {
 	// Reduced by 20%: 30 * 0.8 = 24
 	if math.Abs(stats["attack"]-24.0) > 1e-6 {
 		t.Errorf("expected debuffed attack 24.0, got %f", stats["attack"])
+	}
+}
+
+func TestRankScaledDebuffValuesUseCSVStrengthAndDuration(t *testing.T) {
+	params := effectcatalog.RankScaledDebuffParams{
+		StrengthFactor: 0.5, DurationBaseMinutes: 15, DurationPerRankMinutes: 5,
+	}
+	strength, duration := rankScaledDebuffValues(params, 6, 2)
+	if math.Abs(strength-(-0.235)) > 1e-9 || duration != 40*time.Minute {
+		t.Fatalf("rank 6/subrank 2 debuff = (%v, %v), want (-0.235, 40m)", strength, duration)
+	}
+	strength, duration = rankScaledDebuffValues(params, 0, 0)
+	if math.Abs(strength-(-0.05)) > 1e-9 || duration != 15*time.Minute {
+		t.Fatalf("invalid rank fallback debuff = (%v, %v), want (-0.05, 15m)", strength, duration)
+	}
+}
+
+func TestPlayerRankScaledDebuffReadsTypedGuOperation(t *testing.T) {
+	previous := models.GuRegistry
+	t.Cleanup(func() { models.GuRegistry = previous })
+	var effects models.GuEffects
+	raw := `[{"id":"RANKED_DEBUFF","trigger":"ON_BATTLE_START","target":{"selector":"TARGET"},"operations":[{"op":"RANK_SCALED_DEBUFF","sub_type":"REGIONAL_WALL","params":{"strength_factor":0.5,"status_id":"regional_wall_suppression","duration_base_minutes":15,"duration_per_rank_minutes":5,"source_name":"Formation"}}]}]`
+	if err := effects.Scan([]byte(raw)); err != nil {
+		t.Fatalf("scan typed Gu effect: %v", err)
+	}
+	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{
+		"GU_TEST": {1: {ID: "GU_TEST", Rank: 1, Effects: effects}},
+	}
+	player := &models.Player{GuInventory: []models.GuInstance{{GuID: "GU_TEST", Rank: 1, Hunger: 1, Equipped: true, Status: "ACTIVE"}}}
+	params, ok := playerRankScaledDebuff(player)
+	if !ok || params.StatusID != "regional_wall_suppression" || params.StrengthFactor != 0.5 || params.DurationBaseMinutes != 15 || params.DurationPerRankMinutes != 5 {
+		t.Fatalf("typed rank-scaled debuff params = %+v, found=%v", params, ok)
 	}
 }
 

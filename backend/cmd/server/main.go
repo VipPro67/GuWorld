@@ -179,6 +179,7 @@ func main() {
 	defer stop()
 
 	worker.StartHungerWorker(ctx, db.DB, 3*time.Hour)
+	handlers.StartTravelJourneyWorker(ctx)
 	worker.StartPetHungerWorker(ctx, db.DB, 1*time.Hour)
 	worker.StartGrowthWorker(ctx, db.DB, 1*time.Hour)
 	handlers.StartTribulationWorker(ctx)
@@ -205,6 +206,7 @@ func main() {
 	worker.StartSocietySimulationWorker(ctx, db.DB, 5*time.Minute)
 	worker.StartGuMasterSpawningWorker(ctx, db.DB, 30*time.Minute)
 	worker.StartApertureRefinementWorker(ctx, db.DB)
+	worker.StartImmortalGuReleaseWorker(ctx, db.DB, 1*time.Hour)
 	handlers.StartRoamingMerchantWorker(ctx, db.DB, 2*time.Minute)
 	if cache.Client != nil {
 		worker.StartOrphanedKeyCleanup(ctx, 10*time.Minute)

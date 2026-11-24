@@ -309,6 +309,10 @@ func EnterAperturePortal(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Lỗi chuyển dịch vào Tiên Khiếu: "+err.Error(), err))
 		return
 	}
+	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE player_travel_journeys SET status='cancelled',revision=revision+1,next_step_at=NULL,last_event='Hành trình dừng do tiến vào Tiên Khiếu',reason_code='instance_transition',updated_at=NOW() WHERE player_id=$1 AND status IN ('running','paused_manual_combat','paused_condition')`, guest.ID); err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể đồng bộ hành trình", err))
+		return
+	}
 	var ownerNotification notify.Notification
 	if portal.OwnerID != "" {
 		ownerID, parseErr := uuid.Parse(portal.OwnerID)
@@ -466,6 +470,10 @@ func LeaveAperture(c *gin.Context) {
 	`, returnRegion, int(returnX), int(returnY), playerID)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi đưa nhân vật trở lại thế giới: "+err.Error(), err))
+		return
+	}
+	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE player_travel_journeys SET status='cancelled',revision=revision+1,next_step_at=NULL,last_event='Hành trình dừng do rời Tiên Khiếu',reason_code='instance_transition',updated_at=NOW() WHERE player_id=$1 AND status IN ('running','paused_manual_combat','paused_condition')`, playerID); err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể đồng bộ hành trình", err))
 		return
 	}
 
@@ -671,6 +679,10 @@ func EvictGuest(c *gin.Context) {
 	`, returnRegion, int(returnX), int(returnY), guestUUID)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi dịch chuyển khách ra ngoài: "+err.Error(), err))
+		return
+	}
+	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE player_travel_journeys SET status='cancelled',revision=revision+1,next_step_at=NULL,last_event='Hành trình dừng do bị đưa khỏi Tiên Khiếu',reason_code='instance_transition',updated_at=NOW() WHERE player_id=$1 AND status IN ('running','paused_manual_combat','paused_condition')`, guestUUID); err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể đồng bộ hành trình", err))
 		return
 	}
 

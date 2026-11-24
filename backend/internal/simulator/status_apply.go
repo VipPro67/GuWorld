@@ -15,6 +15,68 @@ func dotType(statusID string) string {
 	return strings.ToLower(statusID)
 }
 
+// statusStacks counts applied copies of the given status IDs across both the
+// effect list and the DoT list, and sums their strength. Typed STATUS
+// operations route DoT behaviours (BLEED, POISON, BURN, SLOW_DAMAGE,
+// SWORD_MARK) into ActiveDoT, while legacy native hooks appended plain
+// ActiveEffects. Consumers that detect a status must read both lists so a
+// migrated row keeps triggering the same follow-up mechanics.
+func statusStacks(c *CombatantAuto, ids ...string) (count int, strength float64) {
+	if c == nil || len(ids) == 0 {
+		return 0, 0
+	}
+	wanted := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		wanted[strings.ToUpper(id)] = true
+	}
+	for _, eff := range c.ActiveEffects {
+		if eff.Duration > 0 && wanted[strings.ToUpper(eff.ID)] {
+			count++
+			strength += float64(eff.Value)
+		}
+	}
+	for _, dot := range c.ActiveDoT {
+		if wanted[strings.ToUpper(dot.Type)] {
+			count++
+			strength += dot.Value
+		}
+	}
+	return count, strength
+}
+
+// removeStatusStacks drops every applied copy of the given status IDs from both
+// the effect list and the DoT list, reporting what it removed.
+func removeStatusStacks(c *CombatantAuto, ids ...string) (count int, strength float64) {
+	if c == nil || len(ids) == 0 {
+		return 0, 0
+	}
+	wanted := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		wanted[strings.ToUpper(id)] = true
+	}
+	keptEffects := c.ActiveEffects[:0]
+	for _, eff := range c.ActiveEffects {
+		if wanted[strings.ToUpper(eff.ID)] {
+			count++
+			strength += float64(eff.Value)
+			continue
+		}
+		keptEffects = append(keptEffects, eff)
+	}
+	c.ActiveEffects = keptEffects
+	keptDots := c.ActiveDoT[:0]
+	for _, dot := range c.ActiveDoT {
+		if wanted[strings.ToUpper(dot.Type)] {
+			count++
+			strength += dot.Value
+			continue
+		}
+		keptDots = append(keptDots, dot)
+	}
+	c.ActiveDoT = keptDots
+	return count, strength
+}
+
 func refreshCombatEffect(actor *CombatantAuto, effect Effect) {
 	if actor == nil {
 		return
@@ -112,10 +174,60 @@ func collectAllStatusOps(a *SimAction) []statusfx.StatusOp {
 	return ops
 }
 
+// splitStatusOpsByPhase separates status applications that must land before
+// the damage step from those that follow it. Empty Phase keeps the historical
+// post-damage timing.
+func splitStatusOpsByPhase(ops []statusfx.StatusOp) (pre, post []statusfx.StatusOp) {
+	for _, op := range ops {
+		if strings.EqualFold(op.Phase, "PRE_DAMAGE") || strings.EqualFold(op.Phase, "PRE_CHAIN") {
+			pre = append(pre, op)
+			continue
+		}
+		post = append(post, op)
+	}
+	return pre, post
+}
+
+func statusOpsForPhase(ops []statusfx.StatusOp, phase string) []statusfx.StatusOp {
+	filtered := make([]statusfx.StatusOp, 0, len(ops))
+	for _, op := range ops {
+		if strings.EqualFold(op.Phase, phase) {
+			filtered = append(filtered, op)
+		}
+	}
+	return filtered
+}
+
+func postDamageStatusOps(ops []statusfx.StatusOp) []statusfx.StatusOp {
+	filtered := make([]statusfx.StatusOp, 0, len(ops))
+	for _, op := range ops {
+		if strings.EqualFold(op.Phase, "PRE_DAMAGE") || strings.EqualFold(op.Phase, "PRE_CHAIN") {
+			continue
+		}
+		filtered = append(filtered, op)
+	}
+	return filtered
+}
+
 // applyStatusOps applies a normalized list of status operations to the actor
 // (self-target buffs) and/or each resolved target (debuffs/DoTs). It consults
 // the statusfx registry so adding a status needs no new if-chains here.
 func applyStatusOps(actor *CombatantAuto, targets []*CombatantAuto, ops []statusfx.StatusOp, guRank int, turn int, rng *rand.Rand, logs *[]CombatLog) {
+	applyStatusOpsRaw(actor, targets, ops, guRank, turn, rng, logs)
+	// Re-compute multipliers after applying status ops so active effects (e.g. INVINCIBLE, STUN, ATK_UP, etc.) take effect immediately.
+	ComputeEffectMultipliers(actor)
+	for _, target := range targets {
+		if target != nil {
+			ComputeEffectMultipliers(target)
+		}
+	}
+}
+
+// applyStatusOpsRaw applies the operations without recomputing derived
+// multipliers. The pre-damage phase uses it so a migrated row matches the
+// native hook it replaces: legacy hooks appended effects before the strike but
+// never recomputed DefenseMultiplier/DamageMultiplier for that same action.
+func applyStatusOpsRaw(actor *CombatantAuto, targets []*CombatantAuto, ops []statusfx.StatusOp, guRank int, turn int, rng *rand.Rand, logs *[]CombatLog) {
 	if rng == nil {
 		rng = rand.New(rand.NewSource(1))
 	}
@@ -130,7 +242,7 @@ func applyStatusOps(actor *CombatantAuto, targets []*CombatantAuto, ops []status
 		if !ok {
 			continue
 		}
-		if spec.SelfTarget {
+		if spec.SelfTarget && !op.ApplyToTargets {
 			applyStatusOpTo(actor, actor, spec, op, guRank, turn, rng, logs)
 			continue
 		}
@@ -141,19 +253,16 @@ func applyStatusOps(actor *CombatantAuto, targets []*CombatantAuto, ops []status
 			applyStatusOpTo(actor, target, spec, op, guRank, turn, rng, logs)
 		}
 	}
-	// Re-compute multipliers after applying status ops so active effects (e.g. INVINCIBLE, STUN, ATK_UP, etc.) take effect immediately.
-	ComputeEffectMultipliers(actor)
-	for _, target := range targets {
-		if target != nil {
-			ComputeEffectMultipliers(target)
-		}
-	}
 }
 
 func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op statusfx.StatusOp, guRank int, turn int, rng *rand.Rand, logs *[]CombatLog) {
 	if target == nil {
 		return
 	}
+	if rng == nil {
+		rng = rand.New(rand.NewSource(1))
+	}
+	logStart := len(*logs)
 	targetEffectStart, targetDoTStart := len(target.ActiveEffects), len(target.ActiveDoT)
 	actorEffectStart := targetEffectStart
 	if actor != nil && actor != target {
@@ -164,9 +273,49 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 		if actor != nil && actor != target {
 			applyCombatStatusLifecycle(actor, actorEffectStart, len(actor.ActiveDoT), op)
 		}
+		if op.ApplicationMode == "DIRECT" && logStart < len(*logs) {
+			if op.SuppressLog {
+				*logs = (*logs)[:logStart]
+				return
+			}
+			log := &(*logs)[len(*logs)-1]
+			if op.Message != "" && log.Action != "STATUS_MISS" {
+				actorName := ""
+				if actor != nil {
+					actorName = actor.Name
+				}
+				log.Detail = strings.NewReplacer(
+					"{actor}", actorName,
+					"{target}", target.Name,
+					"{status}", spec.Label,
+					"{value}", fmt.Sprintf("%.0f", op.Value),
+					"{turns}", fmt.Sprintf("%d", op.Turns),
+				).Replace(op.Message)
+			}
+			if op.LogAction != "" && log.Action != "STATUS_MISS" {
+				log.Action = op.LogAction
+			}
+		}
 	}()
+	if op.ApplicationMode == "DIRECT" && op.Chance > 0 && op.Chance < 1 && rng.Float64() >= op.Chance {
+		actorName := ""
+		actorID := ""
+		if actor != nil {
+			actorName = actor.Name
+			actorID = actor.ID
+		}
+		*logs = append(*logs, CombatLog{
+			Turn: turn, ActorId: actorID, ActorName: actorName,
+			Action: "STATUS_MISS", TargetId: target.ID,
+			Detail: fmt.Sprintf("[%s] không kích hoạt hiệu ứng [%s] (tỉ lệ %.0f%%)!", actorName, spec.Label, op.Chance*100),
+		})
+		return
+	}
 
-	if spec.SelfTarget {
+	if op.ApplicationMode == "DIRECT" {
+		// Direct status effects preserve deterministic legacy hooks that append
+		// the status without rank suppression, resistance, or reversal gates.
+	} else if spec.SelfTarget && !op.ApplyToTargets {
 		// Self-target proc gate based on Player Rank and Gu Rank (includes Caster Attenuation)
 		if !statusfx.CanApplySelfStatus(rng, actor.Rank, guRank, spec, op.Chance) {
 			*logs = append(*logs, CombatLog{
@@ -235,7 +384,7 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 		// Nghịch Chuyển Cổ: absolute reversal of hostile effects. Every
 		// enemy-sourced status aimed at the holder is undone — only raw
 		// damage passes through. Checked before the resist gate.
-		if hasReverseCalamity(target) {
+		if immuneToHostileEffects(target) {
 			*logs = append(*logs, CombatLog{
 				Turn:      turn,
 				ActorId:   target.ID,
@@ -260,7 +409,7 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 	}
 
 	// Tenacity shortens incoming CC duration (min 1 turn). Buffs bypass.
-	if !spec.SelfTarget && target.Tenacity > 0 {
+	if op.ApplicationMode != "DIRECT" && !spec.SelfTarget && target.Tenacity > 0 {
 		if scale := 1.0 - gamefx.CappedTenacity(target.Tenacity); scale < 1.0 {
 			scaled := int(float64(op.Turns) * scale)
 			if scaled < 1 {
@@ -280,8 +429,18 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 		if sourcePath == "" {
 			sourcePath = daoPathForAction([]string{spec.Path})
 		}
-		sourceDaoMult, _ := actorDaoMultiplier(actor, []string{sourcePath})
-		val *= sourceDaoMult
+		// DIRECT preserves legacy native hooks, which store the authored DoT
+		// value verbatim and are normalized without source-race or Dao scaling.
+		var sourceDaoMult, raceDamageBonus float64
+		var sourceRace string
+		if op.ApplicationMode != "DIRECT" {
+			sourceDaoMult, _ = actorDaoMultiplier(actor, []string{sourcePath})
+			val *= sourceDaoMult
+			if actor != nil {
+				sourceRace = actor.Race
+				raceDamageBonus = gamefx.RaceModifier(target.Race, actor.RaceDamageBonus)
+			}
+		}
 		target.ActiveDoT = append(target.ActiveDoT, DoTEffect{
 			Type:            dotType(op.ID),
 			Value:           val,
@@ -289,8 +448,8 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 			DirectHP:        spec.DirectHP,
 			SourcePath:      sourcePath,
 			SourceDaoMult:   sourceDaoMult,
-			SourceRace:      actor.Race,
-			RaceDamageBonus: gamefx.RaceModifier(target.Race, actor.RaceDamageBonus),
+			SourceRace:      sourceRace,
+			RaceDamageBonus: raceDamageBonus,
 		})
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
@@ -413,7 +572,10 @@ func applyStatusOpTo(actor, target *CombatantAuto, spec statusfx.StatusSpec, op 
 		})
 
 	case statusfx.BehaviourBlind: // BLIND
-		accPenalty := spec.Accuracy
+		accPenalty := op.Value / 100.0
+		if accPenalty <= 0 {
+			accPenalty = spec.Accuracy
+		}
 		if accPenalty <= 0 {
 			accPenalty = 0.35
 		}
@@ -865,6 +1027,12 @@ func applyCombatStatusLifecycle(target *CombatantAuto, effectStart, dotStart int
 }
 
 func mergeCombatEffect(effects *[]Effect, incoming Effect, policy string) {
+	if policy == "STACK" {
+		// STACK keeps every application, matching legacy hooks that append a
+		// fresh Effect each time they fire.
+		*effects = append(*effects, incoming)
+		return
+	}
 	if policy == "REPLACE" {
 		kept := (*effects)[:0]
 		for _, current := range *effects {
@@ -929,6 +1097,12 @@ func mergeCombatEffect(effects *[]Effect, incoming Effect, policy string) {
 }
 
 func mergeCombatDoT(dots *[]DoTEffect, incoming DoTEffect, policy string) {
+	if policy == "STACK" {
+		// STACK keeps every application, matching legacy hooks that append a
+		// fresh Effect (normalized into one DoT) each time they fire.
+		*dots = append(*dots, incoming)
+		return
+	}
 	if policy == "REPLACE" {
 		kept := (*dots)[:0]
 		for _, current := range *dots {

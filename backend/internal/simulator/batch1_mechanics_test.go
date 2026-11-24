@@ -95,6 +95,26 @@ func TestLuckRouletteMechanic(t *testing.T) {
 	}
 }
 
+func TestLuckRouletteUsesConfiguredCSVParams(t *testing.T) {
+	player := newTestCombatant("player", "Player", 1000, 100)
+	enemy := newTestCombatant("enemy", "Enemy", 1, 0)
+	player.Speed = 20
+	enemy.Speed = 10
+	player.Mana = 100
+	player.MaxMana = 100
+	player.Actions = []SimAction{{
+		ActionType: "GU_SKILL", Name: "Cát Hung Bói Toán", Damage: 100, ManaCost: 20,
+		Mechanics: []CombatMechanic{mech("ON_CAST", "LUCK_ROULETTE", `{"great_chance_percent":100,"curse_great_chance_bonus":0,"medium_range_percent":0,"neutral_range_percent":0,"great_damage_multiplier":2,"medium_damage_multiplier":1.5,"neutral_damage_multiplier":1,"bad_damage_multiplier":0.5,"great_mana_cost_multiplier":0.5,"bad_current_hp_loss_percent":0.1,"minimum_bad_hp_loss":1,"curse_duration_turns":2}`)},
+	}}
+	logs := Simulate(&CombatState{Seed: 42, Allies: []*CombatantAuto{player}, Enemies: []*CombatantAuto{enemy}})
+	if !hasDetail(logs, "bạo phát x2.0 sát thương và phản hồi 50% Chân Nguyên") {
+		t.Fatalf("configured great-luck multiplier/mana return not reflected: %+v", logs)
+	}
+	if player.Mana != 90 {
+		t.Fatalf("mana after configured half-cost return = %v, want 90", player.Mana)
+	}
+}
+
 func TestLethalLuckWardPreventsDeath(t *testing.T) {
 	target := newTestCombatant("lucky_guy", "Player", 1000, 50)
 	target.HP = 10
@@ -160,7 +180,7 @@ func TestDreamUnravelDispelsDebuffsAndRestores(t *testing.T) {
 			Name:       "Giải Mộng Cổ",
 			Damage:     10,
 			ManaCost:   10,
-			Mechanics:  []CombatMechanic{{Trigger: "ON_CAST", ActionCode: "DREAM_UNRAVEL"}},
+			Mechanics:  []CombatMechanic{mech("ON_CAST", "DREAM_UNRAVEL", `{"base_conversion_units":2,"mana_percent_per_unit":0.2,"shield_percent_per_unit":0.05,"clear_control_states":true}`)},
 		},
 	}
 
@@ -173,14 +193,19 @@ func TestDreamUnravelDispelsDebuffsAndRestores(t *testing.T) {
 	logs := Simulate(state)
 
 	foundUnravel := false
+	foundConfiguredConversion := false
 	for _, l := range logs {
 		if strings.Contains(l.Detail, "[Mộng Đạo - Giải Mộng]") {
 			foundUnravel = true
+			foundConfiguredConversion = strings.Contains(l.Detail, "60 Chân Nguyên") && strings.Contains(l.Detail, "150 Mộng Giáp")
 			break
 		}
 	}
 	if !foundUnravel {
 		t.Fatalf("expected DREAM_UNRAVEL in logs, got: %+v", logs)
+	}
+	if !foundConfiguredConversion {
+		t.Fatalf("authored conversion expected 60 mana and 150 shield from 1 dispelled active effect; logs=%+v", logs)
 	}
 }
 

@@ -107,7 +107,8 @@ type Effects struct {
 	NonConflictingDaoMarks  bool    `json:"non_conflicting_dao_marks,omitempty"`
 	DaoConflictReductionPct float64 `json:"dao_conflict_reduction_pct,omitempty"`
 	// Immortal indicates if the character's lifespan never decreases.
-	Immortal bool `json:"immortal"`
+	Immortal          bool `json:"immortal"`
+	ImmuneDreamStatus bool `json:"immune_dream_status,omitempty"`
 	// DisableHPRegen disables HP regeneration.
 	DisableHPRegen bool `json:"disable_hp_regen"`
 	// DisableManaRegen disables Mana regeneration.
@@ -139,7 +140,8 @@ func PassiveStatModSupported(stat, subtype, unit, path string) bool {
 	switch stat {
 	case "ATTACK", "DEFENSE", "SPEED", "HP", "DAO_MARK", "PATH_DAMAGE", "PATH_RESISTANCE", "LUCK", "INVESTIGATION", "DISGUISE",
 		"REFINE_SUCCESS", "CULTIVATION_EFFICIENCY", "DAO_MARK_GAIN", "APERTURE_STRESS",
-		"PATH_CONFLICT_REDUCTION", "TENACITY", "CC_RESIST":
+		"HP_REGEN", "MENTAL_RESISTANCE", "PATH_CONFLICT_REDUCTION", "TENACITY", "CC_RESIST",
+		"HEALING_RECEIVED", "MAX_MANA", "MANA_REGEN", "SOUL_REGEN", "SOUL_DEFENSE":
 	default:
 		return false
 	}
@@ -369,6 +371,10 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 				if !PassiveStatModSupported(operation.Stat, operation.SubType, operation.Unit, operation.Path) {
 					return fmt.Errorf("gamefx effect block %q has unsupported STAT_MOD projection %q/%q/%q/%q", block.ID, operation.Stat, operation.SubType, operation.Unit, operation.Path)
 				}
+			case gameplayeffects.OpSetRule:
+				if operation.Enabled == nil || !gameFXRuleProjection(operation.SubType) {
+					return fmt.Errorf("gamefx effect block %q has unsupported SET_RULE projection %q", block.ID, operation.SubType)
+				}
 			case gameplayeffects.OpHeal:
 				if !strings.EqualFold(operation.SubType, "MANA") && !strings.EqualFold(operation.SubType, "LIFESTEAL") {
 					return fmt.Errorf("gamefx effect block %q has unsupported HEAL subtype %q", block.ID, operation.SubType)
@@ -376,6 +382,9 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 			case gameplayeffects.OpUnique:
 				if !gameFXUniqueProjection(operation.Code) {
 					return fmt.Errorf("gamefx effect block %q has unsupported UNIQUE code %q", block.ID, operation.Code)
+				}
+				if err := effectcatalog.ValidateNativeParams(strings.ToUpper(strings.TrimSpace(operation.Code)), operation.Params); err != nil {
+					return fmt.Errorf("gamefx effect block %q has invalid UNIQUE params for %q: %w", block.ID, operation.Code, err)
 				}
 			default:
 				return fmt.Errorf("gamefx effect block %q has unsupported operation %q", block.ID, operation.Op)
@@ -396,6 +405,7 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 		Code    string          `json:"code"`
 		Stat    string          `json:"stat"`
 		SubType string          `json:"sub_type"`
+		Enabled *bool           `json:"enabled"`
 		Path    string          `json:"path"`
 		Unit    string          `json:"unit"`
 		Value   any             `json:"value"`
@@ -447,6 +457,26 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 			continue
 		}
 		for _, op := range b.Operations {
+			if strings.EqualFold(op.Op, "SET_RULE") {
+				if op.Enabled == nil {
+					continue
+				}
+				switch strings.ToUpper(op.SubType) {
+				case "IMMORTAL":
+					e.Immortal = *op.Enabled
+				case "IMMUNE_DREAM_STATUS":
+					e.ImmuneDreamStatus = *op.Enabled
+				case "DISABLE_HP_REGEN":
+					e.DisableHPRegen = *op.Enabled
+				case "DISABLE_MANA_REGEN":
+					e.DisableManaRegen = *op.Enabled
+				case "DISABLE_RESOURCE_REGEN":
+					e.DisableResourceRegen = *op.Enabled
+				case "DISABLE_SOUL_REGEN":
+					e.DisableSoulRegen = *op.Enabled
+				}
+				continue
+			}
 			var p struct {
 				Value any `json:"value"`
 			}
@@ -488,6 +518,20 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 					e.CultivationEfficiencyBonus += asFloat(val)
 				case "DAO_MARK_GAIN":
 					e.DaoMarkGainBonus += asFloat(val)
+				case "HP_REGEN":
+					e.HPRegenBonus += asFloat(val)
+				case "HEALING_RECEIVED":
+					e.HealingReceivedBonus += asFloat(val)
+				case "MAX_MANA":
+					e.MaxManaBonus += asFloat(val)
+				case "MANA_REGEN":
+					e.ManaRegenBonus += asFloat(val)
+				case "SOUL_REGEN":
+					e.SoulRegenBonus += asFloat(val)
+				case "SOUL_DEFENSE":
+					e.SoulDefenseBonus += asFloat(val)
+				case "MENTAL_RESISTANCE":
+					e.MentalResistanceBonus += asFloat(val)
 				case "APERTURE_STRESS":
 					e.ApertureStressBonus += asFloat(val)
 				case "PATH_CONFLICT_REDUCTION":
@@ -587,6 +631,15 @@ func (e *Effects) unmarshalBlocks(data []byte) error {
 		}
 	}
 	return nil
+}
+
+func gameFXRuleProjection(rule string) bool {
+	switch strings.ToUpper(strings.TrimSpace(rule)) {
+	case "IMMUNE_DREAM_STATUS", "IMMORTAL", "DISABLE_HP_REGEN", "DISABLE_MANA_REGEN", "DISABLE_RESOURCE_REGEN", "DISABLE_SOUL_REGEN":
+		return true
+	default:
+		return false
+	}
 }
 
 func gameFXUniqueProjection(code string) bool {
@@ -731,7 +784,11 @@ func getUnconditional(p *models.Player) Effects {
 			continue
 		}
 		seenCult[gu.GuID] = true
-		fx.CultivationEfficiencyBonus += models.GuAlwaysOnValue(spec, "CULTIVATION_EFFICIENCY")
+		cultivationEfficiency := models.GuStatValue(spec, "CULTIVATION_EFFICIENCY")
+		if cultivationEfficiency == 0 {
+			cultivationEfficiency = models.GuAlwaysOnValue(spec, "CULTIVATION_EFFICIENCY")
+		}
+		fx.CultivationEfficiencyBonus += cultivationEfficiency
 	}
 
 	return fx

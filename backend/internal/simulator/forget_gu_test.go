@@ -50,8 +50,8 @@ func TestForgetEgoPercentsAndSeal(t *testing.T) {
 	if enemy.HP != 60000 {
 		t.Fatalf("enemy HP = %v, want 60000 (single 40%% of 100000 MaxHP hit)", enemy.HP)
 	}
-	if !(enemy.VirtualShield > 299 && enemy.VirtualShield < 300) {
-		t.Fatalf("enemy shield = %v, want ~299.4 (1 chip + single 40%% strip of 500)", enemy.VirtualShield)
+	if !(enemy.VirtualShield > 298.9 && enemy.VirtualShield < 299.1) {
+		t.Fatalf("enemy shield = %v, want ~299 (40%% strip before the hit, then 1 damage)", enemy.VirtualShield)
 	}
 	if !hasDetail(logs, "HP trực tiếp") || !hasDetail(logs, "tước") || !hasDetail(logs, "phong ấn Cổ") {
 		t.Fatalf("missing EGO logs (direct HP / shield strip / Gu seal)")

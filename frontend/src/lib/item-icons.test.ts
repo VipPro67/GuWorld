@@ -22,7 +22,9 @@ test("item icons follow the named object before the cultivation path", () => {
 });
 
 test("inventory uses bundled art for missing or invalid image URLs and keeps valid overrides", () => {
-  assert.equal(getItemIconUrl({ id: "ITEM_RANDOM_RACE", name: "Hoán Huyết Đan", image_url: "200.0" }), "/assets/items/icons/pill.webp");
-  assert.equal(getItemIconUrl({ id: "mine_chest", name: "Rương Mỏ Linh Thạch" }), "/assets/items/icons/chest.webp");
+  assert.equal(getItemIconUrl({ id: "ITEM_RANDOM_RACE", name: "Hoán Huyết Đan", image_url: "200.0" }), "/assets/items/generated/ITEM_RANDOM_RACE.webp");
+  assert.equal(getItemIconUrl({ id: "unknown_pill", name: "Hoán Huyết Đan", image_url: "200.0" }), "/assets/items/icons/pill.webp");
+  assert.equal(getItemIconUrl({ id: "mine_chest", name: "Rương Mỏ Linh Thạch" }), "/assets/items/generated/mine_chest.webp");
+  assert.equal(getItemIconUrl({ id: "unknown_chest", name: "Rương Mỏ Linh Thạch" }), "/assets/items/icons/chest.webp");
   assert.equal(getItemIconUrl({ id: "custom", name: "Đan", image_url: "/uploads/custom.webp" }), "/uploads/custom.webp");
 });

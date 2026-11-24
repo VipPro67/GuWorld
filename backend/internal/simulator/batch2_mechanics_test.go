@@ -1,9 +1,11 @@
 package simulator
 
 import (
+	"math/rand"
 	"strings"
 	"testing"
 
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
@@ -283,6 +285,102 @@ func TestBloodSacrificeAndBleedBurst(t *testing.T) {
 	// Player sacrificed HP
 	if player.HP >= 1000 {
 		t.Fatalf("expected player HP to drop due to blood sacrifice, got: %.0f", player.HP)
+	}
+}
+
+func TestTypedStatusDetonationConsumesStacksAndUsesConfiguredDamage(t *testing.T) {
+	actor := newTestCombatant("actor", "Huyết Nhận", 1000, 100)
+	target := newTestCombatant("target", "Mục tiêu", 1000, 50)
+	actor.Name = "Huyết Nhận"
+	target.Name = "Mục tiêu"
+	target.ActiveEffects = []Effect{
+		{ID: statusfx.StatusBleed, Value: 30, Duration: 3},
+		{ID: statusfx.StatusBleed, Value: 50, Duration: 2},
+	}
+	target.ActiveDoT = []DoTEffect{{Type: "bleed", Value: 70, Turns: 2}}
+	action := &SimAction{StatusDetonations: []StatusDetonation{{
+		StatusID: "BLEED", PerStack: 100, MaxHPPercent: 0.08, Phase: "EARLY_RIDER",
+		LogAction: "BLEED_BURST", Message: "{actor} detonates {stack_count} stacks on {target} for {damage}.",
+	}}}
+	logs := []CombatLog{}
+	runner := &combatActionRunner{turn: 1, turnLogs: &logs}
+	runner.applyStatusDetonations(combatPhaseContext{actor: actor, action: action, firstTarget: target}, "EARLY_RIDER")
+	if target.HP != 620 {
+		t.Fatalf("target HP after 3 stacks × 100 + 8%% MaxHP = %v, want 620", target.HP)
+	}
+	if len(target.ActiveEffects) != 0 || len(target.ActiveDoT) != 0 {
+		t.Fatalf("detonated bleed stacks remain: effects=%+v dots=%+v", target.ActiveEffects, target.ActiveDoT)
+	}
+	if len(logs) != 1 || logs[0].Action != "BLEED_BURST" || logs[0].Damage != 380 || logs[0].Detail != "Huyết Nhận detonates 3 stacks on Mục tiêu for 380." {
+		t.Fatalf("detonation log mismatch: %+v", logs)
+	}
+}
+
+func TestPoisonDetonationUsesStrengthFloorAndConfiguredPhase(t *testing.T) {
+	actor := newTestCombatant("actor", "Độc Cổ", 1000, 100)
+	target := newTestCombatant("target", "Mục tiêu", 1000, 50)
+	target.ActiveDoT = []DoTEffect{{Type: "poison", Value: 20, Turns: 2}, {Type: "poison", Value: 40, Turns: 1}}
+	action := &SimAction{StatusDetonations: []StatusDetonation{{
+		StatusID: "POISON", PerStrength: 2.5, MinDamage: 60, Phase: "LATE_RIDER",
+		LogAction: "POISON_DETONATE", Message: "{stack_count} {strength} {damage}",
+	}}}
+	logs := []CombatLog{}
+	runner := &combatActionRunner{turn: 1, turnLogs: &logs}
+	ctx := combatPhaseContext{actor: actor, action: action, firstTarget: target}
+	runner.applyStatusDetonations(ctx, "EARLY_RIDER")
+	if target.HP != 1000 || len(target.ActiveDoT) != 2 {
+		t.Fatal("late-rider detonation ran during the early-rider phase")
+	}
+	runner.applyStatusDetonations(ctx, "LATE_RIDER")
+	if target.HP != 850 || len(target.ActiveDoT) != 0 {
+		t.Fatalf("poison detonation = HP %v / remaining dots %d; want HP 850 and no dots", target.HP, len(target.ActiveDoT))
+	}
+	if len(logs) != 1 || logs[0].Damage != 150 || logs[0].Detail != "2 60 150" {
+		t.Fatalf("poison strength detonation log mismatch: %+v", logs)
+	}
+
+	lowStrength := newTestCombatant("low", "Mục tiêu yếu độc", 1000, 50)
+	lowStrength.ActiveDoT = []DoTEffect{{Type: "poison", Value: 10, Turns: 1}}
+	runner.applyStatusDetonations(combatPhaseContext{actor: actor, action: action, firstTarget: lowStrength}, "LATE_RIDER")
+	if lowStrength.HP != 940 {
+		t.Fatalf("minimum detonation damage left HP %v, want 940", lowStrength.HP)
+	}
+}
+
+func TestTypedStatusDetonationRunsBeforeChildActionDamageWithoutDoubleApplying(t *testing.T) {
+	actor := newTestCombatant("actor", "Actor", 1000, 100)
+	actor.Speed = 20
+	target := newTestCombatant("target", "Target", 1000, 0)
+	target.Speed = 1
+	target.ActiveEffects = []Effect{{ID: statusfx.StatusBleed, Value: 30, Duration: 3}, {ID: statusfx.StatusBleed, Value: 50, Duration: 2}}
+	detonation := StatusDetonation{StatusID: "BLEED", PerStack: 100, MaxHPPercent: 0.08, Phase: "EARLY_RIDER", LogAction: "BLEED_BURST", Message: "detonated {stack_count} for {damage}"}
+	child := &SimAction{ActionType: "GU_EFFECT_OPERATION", Name: "Huyết Nhận", TargetType: "TARGET", Damage: 300, StatusDetonations: []StatusDetonation{detonation}}
+	action := SimAction{
+		ActionType: "GU_SKILL", Name: "Huyết Nhận",
+		OperationEffects: []SimActionOperation{{
+			Compiled: gameplayeffects.CompiledOperation{BlockID: "ACTIVE_SKILL", Trigger: gameplayeffects.TriggerOnAction, Type: gameplayeffects.OpDetonateStatus, StatusID: "BLEED", PerStack: 100, MaxHPPercent: 0.08, Phase: "EARLY_RIDER"},
+			Action:   child,
+		}},
+	}
+	state := &CombatState{Seed: 12, Allies: []*CombatantAuto{actor}, Enemies: []*CombatantAuto{target}}
+	logs := []CombatLog{}
+	summonCount := 0
+	runner := &combatActionRunner{state: state, rng: rand.New(rand.NewSource(12)), turn: 1, turnLogs: &logs, summonCount: &summonCount}
+	runner.runOne(actor, &action, true, []*CombatantAuto{target})
+	if target.HP >= 720 || target.HP < 0 {
+		t.Fatalf("typed detonation was not applied before the child attack; target HP=%v", target.HP)
+	}
+	count := 0
+	for _, log := range logs {
+		if log.Action == "BLEED_BURST" {
+			count++
+			if log.Damage != 280 || log.TargetId != target.ID {
+				t.Fatalf("typed detonation log has wrong damage/target: %+v", log)
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("typed detonation log count = %d, want exactly one; logs=%+v", count, logs)
 	}
 }
 

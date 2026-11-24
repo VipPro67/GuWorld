@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"math"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -420,6 +422,173 @@ func TestSoulRegenTickAndMigrateAliases(t *testing.T) {
 	}
 }
 
+func TestTypedNotifyMatchesLegacyRecordMessage(t *testing.T) {
+	player := &models.Player{}
+	instance := models.GuInstance{InstanceID: "record-instance", GuID: "GU_RECORD"}
+	typed := models.GuDictionaryItem{ID: "GU_RECORD", Name: "Thiên Ảnh Cổ", Rank: 2}
+	if err := typed.Effects.Scan(`{"schema_version":2,"blocks":[{"id":"RECORD_MESSAGE","trigger":"ON_USE","target":{"selector":"SELF"},"operations":[{"op":"NOTIFY","message":"{gu} ghi lại toàn bộ hình ảnh và âm thanh trong khu vực."}]}]}`); err != nil {
+		t.Fatal(err)
+	}
+	got, err := HandleGuEvent(player, typed, instance, "ON_USE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := typed
+	if err := legacy.Effects.Scan(`{"schema_version":2,"blocks":[{"id":"RECORD_MESSAGE","trigger":"ON_USE","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"RECORD_MESSAGE","params":{}}]}]}`); err != nil {
+		t.Fatal(err)
+	}
+	want, err := HandleGuEvent(player, legacy, instance, "ON_USE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want || got != "Thiên Ảnh Cổ ghi lại toàn bộ hình ảnh và âm thanh trong khu vực." {
+		t.Fatalf("typed notify = %q, legacy = %q", got, want)
+	}
+}
+
+func TestTypedGuResourceOperationsOnConsume(t *testing.T) {
+	player := &models.Player{
+		CultivationState: models.CultivationState{Lifespan: 100},
+		ThoughtPool:      models.ThoughtPool{CurrentThought: 8, MaxThought: 50},
+		SoulState:        models.SoulState{SoulHP: 10, MaxSoul: 100},
+	}
+	spec := models.GuDictionaryItem{ID: "GU_RESOURCE_TEST", Name: "Resource Gu", Rank: 3}
+	instance := models.GuInstance{InstanceID: "resource-instance", GuID: spec.ID}
+	run := func(id string, operation string) error {
+		var blockEffects models.GuEffects
+		if err := blockEffects.Scan(`[{"id":"` + id + `","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[` + operation + `]}]`); err != nil {
+			return err
+		}
+		current := spec
+		current.Effects = blockEffects
+		_, err := HandleGuEvent(player, current, instance, "ON_CONSUME")
+		return err
+	}
+	operations := []struct {
+		id, operation string
+	}{
+		{"LIFESPAN", `{"op":"GRANT_RESOURCE","resource":"LIFESPAN","value":10}`},
+		{"SOUL_MAX", `{"op":"MODIFY_MAX_RESOURCE","resource":"SOUL","value":5}`},
+		{"THOUGHT_MAX", `{"op":"MODIFY_MAX_RESOURCE","resource":"THOUGHT","value":5}`},
+		{"SOUL_RESTORE", `{"op":"RESTORE_RESOURCE","resource":"SOUL","value":20}`},
+		{"THOUGHT_RESTORE", `{"op":"RESTORE_RESOURCE","resource":"THOUGHT","value":15}`},
+	}
+	for _, tt := range operations {
+		if err := run(tt.id, tt.operation); err != nil {
+			t.Fatalf("%s: %v", tt.id, err)
+		}
+	}
+	if player.Lifespan != 110 || player.MaxSoul != 105 || player.MaxThought != 55 || player.SoulHP != 30 || player.CurrentThought != 23 {
+		t.Fatalf("typed resources were not applied: lifespan=%v maxSoul=%d maxThought=%v soulHP=%d thought=%v", player.Lifespan, player.MaxSoul, player.MaxThought, player.SoulHP, player.CurrentThought)
+	}
+	for _, operation := range []string{
+		`{"op":"MODIFY_MAX_RESOURCE","resource":"SOUL","value":1.5}`,
+		`{"op":"RESTORE_RESOURCE","resource":"SOUL","value":1.5}`,
+	} {
+		if err := run("INVALID_SOUL_VALUE", operation); err == nil {
+			t.Errorf("operation %s accepted a fractional SOUL value", operation)
+		}
+	}
+}
+
+func TestTypedModifyAptitudePreservesLegacyMutation(t *testing.T) {
+	player := &models.Player{
+		CultivationState: models.CultivationState{Rank: 5, AptitudeType: "Bính", AptitudePercent: 78},
+		ResourceState:    models.ResourceState{CurrentMana: 80, MaxMana: 90},
+	}
+	spec := models.GuDictionaryItem{
+		ID: "GU_BLOOD_SKULL", Name: "Huyết Cốt Cổ", Rank: 4,
+		Effects: mustScanGuEffects(t, `[{"id":"SACRIFICE_APTITUDE","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[{"op":"MODIFY_APTITUDE","sub_type":"ADD_FLAT","value":5}]}]`),
+	}
+	if !models.GuHasAptitudeSacrifice(spec) {
+		t.Fatal("typed aptitude sacrifice did not retain its extra hunger cost marker")
+	}
+	message, err := HandleGuEvent(player, spec, models.GuInstance{GuID: spec.ID, Rank: spec.Rank}, "ON_CONSUME")
+	if err != nil {
+		t.Fatalf("HandleGuEvent: %v", err)
+	}
+	if player.AptitudePercent != 83 || player.AptitudeType != "Giáp" || player.MaxMana != 95 || player.CurrentMana != 80 {
+		t.Fatalf("aptitude mutation = %d%% %q mana %v/%v", player.AptitudePercent, player.AptitudeType, player.CurrentMana, player.MaxMana)
+	}
+	if !strings.Contains(message, "Tư chất Không khiếu tăng lên 83%") {
+		t.Fatalf("unexpected aptitude message %q", message)
+	}
+	legacy := models.GuDictionaryItem{Effects: mustScanGuEffects(t, `[{"id":"SACRIFICE_APTITUDE","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"SACRIFICE_APTITUDE","params":{}}]}]`)}
+	if !models.GuHasAptitudeSacrifice(legacy) {
+		t.Fatal("legacy aptitude sacrifice lost its extra hunger cost marker")
+	}
+}
+
+func TestTypedGrantBodyModPreservesLegacyMutation(t *testing.T) {
+	player := &models.Player{}
+	spec := models.GuDictionaryItem{
+		ID: "GU_SOVEREIGN_FETUS", Name: "Chí Tôn Tiên Thai", Rank: 9,
+		Effects: mustScanGuEffects(t, `[{"id":"SOVEREIGN_BODY_TRANSFORM","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[{"op":"GRANT_BODY_MOD","sub_type":"SOVEREIGN_IMMORTAL"}]}]`),
+	}
+	message, err := HandleGuEvent(player, spec, models.GuInstance{GuID: spec.ID, Rank: spec.Rank}, "ON_CONSUME")
+	if err != nil {
+		t.Fatalf("HandleGuEvent: %v", err)
+	}
+	if !player.BodyMods.Has(models.BodyModSovereignImmortal) {
+		t.Fatalf("body modification not granted: %+v", player.BodyMods)
+	}
+	if !strings.Contains(message, "Tiên Thể Chí Tôn") {
+		t.Fatalf("unexpected body modification message %q", message)
+	}
+	if _, err := HandleGuEvent(player, spec, models.GuInstance{GuID: spec.ID, Rank: spec.Rank}, "ON_CONSUME"); err == nil {
+		t.Fatal("duplicate permanent body modification should be rejected")
+	}
+}
+
+func TestTypedAdvanceProgressionPreservesBreakthroughGuards(t *testing.T) {
+	makePlayer := func(rank, subRank int) *models.Player {
+		return &models.Player{CultivationState: models.CultivationState{Rank: rank, SubRank: subRank}}
+	}
+	run := func(player *models.Player, guRank int) error {
+		effects := mustScanGuEffects(t, `[{"id":"PROGRESSION","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[{"op":"ADVANCE_PROGRESSION"}]}]`)
+		spec := models.GuDictionaryItem{ID: "GU_PROGRESS", Name: "Xá Lợi Cổ", Rank: guRank, Effects: effects}
+		_, err := HandleGuEvent(player, spec, models.GuInstance{Rank: guRank}, "ON_CONSUME")
+		return err
+	}
+
+	progressing := makePlayer(2, 2)
+	if err := run(progressing, 2); err != nil || progressing.SubRank != 3 {
+		t.Fatalf("matching rank should advance one stage: subrank=%d err=%v", progressing.SubRank, err)
+	}
+	if err := run(makePlayer(2, 1), 1); err == nil {
+		t.Fatal("mismatched Gu rank should be rejected")
+	}
+	if err := run(makePlayer(2, 4), 2); err == nil {
+		t.Fatal("peak subrank should not advance to another major rank")
+	}
+	petrified := makePlayer(2, 1)
+	petrified.Statuses.Add(gamefx.StatusAperturePetrified, "test", time.Hour, 0)
+	if err := run(petrified, 2); err == nil {
+		t.Fatal("aperture petrification should block progression")
+	}
+}
+
+func TestTypedGuApertureAdjustmentsOnConsume(t *testing.T) {
+	player := &models.Player{CultivationState: models.CultivationState{ApertureStress: 30, TimeSpeedMultiplier: 1}}
+	effects := mustScanGuEffects(t, `[{"id":"APERTURE_ADJUSTMENTS","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[{"op":"MODIFY_APERTURE","sub_type":"STRESS_REDUCE","value":25},{"op":"MODIFY_APERTURE","sub_type":"TIME_RATE_ADD","value":0.5},{"op":"MODIFY_APERTURE","sub_type":"TIME_RATE_SUBTRACT","value":0.1},{"op":"MODIFY_APERTURE","sub_type":"TIME_RATE_MULTIPLY","value":3}]}]`)
+	spec := models.GuDictionaryItem{ID: "GU_APERTURE_TEST", Name: "Aperture Gu", Rank: 1, Effects: effects}
+	if _, err := HandleGuEvent(player, spec, models.GuInstance{Rank: 1}, "ON_CONSUME"); err != nil {
+		t.Fatal(err)
+	}
+	if player.ApertureStress != 5 || math.Abs(player.TimeSpeedMultiplier-4.2) > 1e-9 {
+		t.Fatalf("aperture state = stress %.1f/time %.2f; want stress 5/time 4.2", player.ApertureStress, player.TimeSpeedMultiplier)
+	}
+	player.TimeSpeedMultiplier = 0.2
+	effects = mustScanGuEffects(t, `[{"id":"TIME_RATE_FLOOR","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[{"op":"MODIFY_APERTURE","sub_type":"TIME_RATE_SUBTRACT","value":5}]}]`)
+	spec.Effects = effects
+	if _, err := HandleGuEvent(player, spec, models.GuInstance{Rank: 1}, "ON_CONSUME"); err != nil {
+		t.Fatal(err)
+	}
+	if player.TimeSpeedMultiplier != 0.1 {
+		t.Fatalf("time rate = %.2f; want floor 0.1", player.TimeSpeedMultiplier)
+	}
+}
+
 func TestManBeastBurialBreakthrough(t *testing.T) {
 	makePlayer := func(rank, subRank int) *models.Player {
 		return &models.Player{
@@ -428,9 +597,10 @@ func TestManBeastBurialBreakthrough(t *testing.T) {
 		}
 	}
 	apply := func(p *models.Player, specRank, instanceRank int) error {
-		spec := models.GuDictionaryItem{ID: "GU_MAN_BEAST_LIFE_BURIAL", Name: "Nhân Thú Táng Sinh Cổ", Rank: specRank}
+		effects := mustScanGuEffects(t, `[{"id":"MAN_BEAST_BURIAL","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[{"op":"ADVANCE_MAJOR_REALM"}]}]`)
+		spec := models.GuDictionaryItem{ID: "GU_MAN_BEAST_LIFE_BURIAL", Name: "Nhân Thú Táng Sinh Cổ", Rank: specRank, Effects: effects}
 		gu := models.GuInstance{GuID: spec.ID, Rank: instanceRank}
-		_, err := handleActionCode(p, spec, gu, models.SpecialMechanic{ActionCode: "MAN_BEAST_BURIAL"})
+		_, err := HandleGuEvent(p, spec, gu, "ON_CONSUME")
 		return err
 	}
 
@@ -556,6 +726,31 @@ func TestStoneAperturePetrifiesWithoutManaLoss(t *testing.T) {
 	}
 	if mismatch.SubRank != 1 || mismatch.Statuses.Has("aperture_petrified") {
 		t.Error("rank mismatch must not raise SubRank or petrify aperture")
+	}
+}
+
+func TestPetrifyApertureTypedOperation(t *testing.T) {
+	p := &models.Player{
+		CultivationState: models.CultivationState{Rank: 3, SubRank: 1},
+		ResourceState:    models.ResourceState{MaxMana: 80, CurrentMana: 50},
+	}
+	spec := models.GuDictionaryItem{
+		ID: "GU_STONE_APERTURE", Name: "Thạch Khiếu Cổ", Rank: 3,
+		Effects: mustScanGuEffects(t, `{"schema_version":2,"blocks":[{"id":"STONE_APERTURE","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[{"op":"PETRIFY_APERTURE"}]}]}`),
+	}
+	gu := models.GuInstance{GuID: spec.ID, Rank: 3}
+	msg, err := HandleGuEvent(p, spec, gu, "ON_CONSUME")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.SubRank != 4 {
+		t.Errorf("SubRank = %d, want 4", p.SubRank)
+	}
+	if !strings.Contains(msg, "đẩy tu vi lên Đỉnh Phong") {
+		t.Errorf("expected petrification message, got: %s", msg)
+	}
+	if !p.Statuses.Has("aperture_petrified") {
+		t.Fatal("expected aperture_petrified status")
 	}
 }
 

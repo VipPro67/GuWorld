@@ -924,9 +924,11 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 
 // MoveRequest specifies target position
 type MoveRequest struct {
-	X              int    `json:"x"`
-	Y              int    `json:"y"`
-	AttackTargetID string `json:"attack_target_id,omitempty"`
+	X               int       `json:"x"`
+	Y               int       `json:"y"`
+	AttackTargetID  string    `json:"attack_target_id,omitempty"`
+	TravelJourney   bool      `json:"-"`
+	TravelJourneyID uuid.UUID `json:"-"`
 }
 
 // hpTooLowForExplore reports whether a player with HP ≤ 20% max HP is trying
@@ -1052,6 +1054,29 @@ func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveReques
 		logger.S.Errorf("MovePlayerPath: failed to evaluate mana for player=%s: %v", authID, err)
 		return http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to load player Aperture: %v", err)}
 	}
+	var journeyTargetRegion string
+	var journeyTargetX, journeyTargetY int
+	var journeyScheduledAt time.Time
+	var journeyStartRegion string
+	var journeyStartX, journeyStartY int
+	if req.TravelJourney {
+		var activeJourney uuid.UUID
+		var journeyStatus string
+		if err := tx.QueryRow(`SELECT journey_id,status,target_region,target_x,target_y,next_step_at FROM player_travel_journeys WHERE player_id=$1 FOR UPDATE`, player.ID).Scan(&activeJourney, &journeyStatus, &journeyTargetRegion, &journeyTargetX, &journeyTargetY, &journeyScheduledAt); err != nil || activeJourney != req.TravelJourneyID || journeyStatus != "running" {
+			return http.StatusConflict, gin.H{"error": "Hành trình đã thay đổi trước khi bước được thực hiện"}
+		}
+		journeyStartRegion, journeyStartX, journeyStartY = player.CurrentRegion, player.X, player.Y
+		if CalculatePlayerStats(&player)["movement"] <= 0 {
+			if _, err := tx.Exec(`UPDATE player_travel_journeys SET status='paused_condition',revision=revision+1,next_step_at=NULL,last_step_at=NOW(),reason_code='movement_unavailable',last_event='Hành trình tạm dừng vì không thể di chuyển.',updated_at=NOW() WHERE player_id=$1 AND journey_id=$2 AND status='running'`, player.ID, req.TravelJourneyID); err != nil {
+				return http.StatusInternalServerError, gin.H{"error": "Không thể tạm dừng hành trình"}
+			}
+			if err := tx.Commit(); err != nil {
+				return http.StatusInternalServerError, gin.H{"error": "Không thể xác nhận trạng thái hành trình"}
+			}
+			PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated, TravelJourneyDomain)
+			return http.StatusOK, gin.H{"journey_paused": true}
+		}
+	}
 	if req.AttackTargetID != "" && player.Statuses.Active().Has("pvp_initiator_cooldown") {
 		return http.StatusTooManyRequests, gin.H{"error": "Bạn cần chờ hết dư âm chiến đấu trước khi chủ động khai chiến PvP lần nữa."}
 	}
@@ -1149,7 +1174,8 @@ func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveReques
 
 	// Auto-resolve combat if skip_battle is enabled
 	var pendingNotifications []notify.Notification
-	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil {
+	isTravelPvP := req.TravelJourney && player.ActiveCombat != nil && player.ActiveCombat.TargetPlayerID != ""
+	if combatTriggered && player.CombatSettings.SkipBattle && player.ActiveCombat != nil && !isTravelPvP {
 		res, err := ResolveCombat(tx, &player, nil, nil)
 		if err != nil {
 			logger.S.Errorf("Auto-resolve combat failed during path move: %v", err)
@@ -1179,6 +1205,15 @@ func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveReques
 				}
 			}
 			eventLogs = append(eventLogs, autoLog)
+			if req.TravelJourney {
+				if err := persistTravelJourneyStep(tx, &player, req.TravelJourneyID, journeyTargetRegion, journeyTargetX, journeyTargetY, journeyScheduledAt, journeyStartRegion, journeyStartX, journeyStartY, false, false, winner, autoLog); err != nil {
+					return http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật hành trình"}
+				}
+			} else {
+				if _, err := tx.Exec(`UPDATE player_travel_journeys SET status='cancelled',revision=revision+1,next_step_at=NULL,last_event='Hành trình dừng do nhân vật di chuyển bằng thao tác khác',reason_code='external_movement',updated_at=NOW() WHERE player_id=$1 AND status IN ('running','paused_manual_combat','paused_condition')`, player.ID); err != nil {
+					return http.StatusInternalServerError, gin.H{"error": "Không thể đồng bộ trạng thái hành trình"}
+				}
+			}
 			if err := tx.Commit(); err != nil {
 				logger.S.Errorf("MovePlayerPath: tx.Commit auto-combat failed for player=%s: %v", player.ID, err)
 				return http.StatusInternalServerError, gin.H{"error": "Transaction commit failed: " + err.Error()}
@@ -1193,6 +1228,9 @@ func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveReques
 				notify.Publish(notification)
 			}
 			PublishPlayerSnapshot(&player, PlayerEventUpdated)
+			if req.TravelJourney {
+				PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated, TravelJourneyDomain)
+			}
 
 			finalLog := strings.Join(eventLogs, "\n")
 			if qiGained > 0 {
@@ -1200,6 +1238,7 @@ func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveReques
 			}
 			return http.StatusOK, gin.H{
 				"player":           buildMovePathPlayerUpdate(&player, before),
+				"movement":         CalculatePlayerStats(&player)["movement"],
 				"log":              finalLog,
 				"combat_triggered": false,
 				"skip_result":      skipSummary,
@@ -1211,6 +1250,11 @@ func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveReques
 	if err := db.SyncPlayerGus(tx, player.ID.String(), before, player.GuInventory); err != nil {
 		logger.S.Errorf("MovePlayerPath: failed to sync Gu inventory for player=%s: %v", player.ID, err)
 		return http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"}
+	}
+	if !req.TravelJourney {
+		if _, err := tx.Exec(`UPDATE player_travel_journeys SET status='cancelled',revision=revision+1,next_step_at=NULL,last_event='Hành trình dừng do nhân vật di chuyển bằng thao tác khác',reason_code='external_movement',updated_at=NOW() WHERE player_id=$1 AND status IN ('running','paused_manual_combat','paused_condition')`, player.ID); err != nil {
+			return http.StatusInternalServerError, gin.H{"error": "Không thể đồng bộ trạng thái hành trình"}
+		}
 	}
 	var combatJSON any
 	if player.ActiveCombat != nil {
@@ -1225,6 +1269,15 @@ func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveReques
 		logger.S.Errorf("MovePlayerPath: failed to update player=%s at (%d,%d), region=%s, combat=%t: %v", player.ID, player.X, player.Y, player.CurrentRegion, player.ActiveCombat != nil, err)
 		return http.StatusInternalServerError, gin.H{"error": "Failed to update movement coordinates"}
 	}
+	if req.TravelJourney {
+		journeyEvent := strings.Join(eventLogs, "\n")
+		if journeyEvent == "" {
+			journeyEvent = lastStepLog
+		}
+		if err := persistTravelJourneyStep(tx, &player, req.TravelJourneyID, journeyTargetRegion, journeyTargetX, journeyTargetY, journeyScheduledAt, journeyStartRegion, journeyStartX, journeyStartY, combatTriggered, isTravelPvP, "", journeyEvent); err != nil {
+			return http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật hành trình"}
+		}
+	}
 
 	syncedMembers := SyncPartyMembersLocation(tx, &player)
 
@@ -1238,6 +1291,9 @@ func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveReques
 	publishPartyMovement(syncedMembers, publishPartyPositionDelta)
 
 	PublishPlayerSnapshot(&player, PlayerEventUpdated)
+	if req.TravelJourney {
+		PublishPlayerRealtimeEvent(player.ID, PlayerEventUpdated, TravelJourneyDomain)
+	}
 	if combatTriggered {
 		PublishPlayerCombatDeltaWithPos(&player, CombatEventStarted, player.ActiveCombat)
 		if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" {
@@ -1269,6 +1325,7 @@ func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveReques
 
 	return http.StatusOK, gin.H{
 		"player":               buildMovePathPlayerUpdate(&player, before),
+		"movement":             CalculatePlayerStats(&player)["movement"],
 		"synced_party_members": syncedMembers,
 		"log":                  finalLog,
 		"combat_triggered":     combatTriggered,

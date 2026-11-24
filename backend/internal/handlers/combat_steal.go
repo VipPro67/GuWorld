@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
@@ -26,48 +28,77 @@ func isOpenWorldPvP(cs *models.CombatState) bool {
 // Base 25% + 10% * (thiefRank - targetRank).
 // If target is Bản Mệnh Cổ (isVital == true), chance is reduced by 50% (* 0.5).
 // No artificial cap, clamped between 0 and 1.0 (100%).
-func permanentStealChance(thiefRank, targetRank int, isVital bool) float64 {
-	chance := 0.25 + 0.10*float64(thiefRank-targetRank)
-	if chance > 1.0 {
-		chance = 1.0
+func slotInteractionMode(code string) string {
+	switch code {
+	case "PERM_STEAL_GU":
+		return "PERMANENT_STEAL"
+	case "TEMP_STEAL_GU":
+		return "TEMPORARY_STEAL"
+	default:
+		return ""
 	}
-	if chance < 0 {
-		chance = 0
-	}
-	if isVital {
-		chance *= 0.5
-	}
-	return chance
 }
 
-// tempStealChance computes the proc chance for Temporary Steal (Ám Thâu Cổ, Rank 8):
-// Base 40% + 5% * (thiefRank - targetRank).
-// If target is Bản Mệnh Cổ (isVital == true), chance is reduced by 50% (* 0.5).
-// Clamped between 0 and 1.0.
-func tempStealChance(thiefRank, targetRank int, isVital bool) float64 {
-	chance := 0.40 + 0.05*float64(thiefRank-targetRank)
-	if isVital {
-		chance *= 0.5
+func slotInteractionParams(spec models.GuDictionaryItem, code string) map[string]any {
+	mode := slotInteractionMode(code)
+	if mode == "" {
+		return nil
 	}
-	if chance > 1.0 {
-		chance = 1.0
+	if compiled := models.CompiledGuEffects(spec); compiled != nil {
+		for _, op := range compiled.Operations(gameplayeffects.TriggerOnBattleStart) {
+			if op.Type == gameplayeffects.OpSlotInteraction && op.SubType == mode && op.Target != nil && op.Target.Selector == gameplayeffects.TargetSingle {
+				var params map[string]any
+				if json.Unmarshal(op.Params, &params) == nil {
+					return params
+				}
+			}
+		}
+	}
+	// Keep compatibility with persisted definitions written before the typed
+	// SLOT_INTERACTION operation existed.
+	if legacy, ok := models.GuNativeMechanic(spec, code); ok {
+		return legacy.Values
+	}
+	return nil
+}
+
+// slotInteractionChance applies CSV-authored rank scaling and vital-Gu penalty.
+func slotInteractionChance(spec models.GuDictionaryItem, code string, thiefRank, targetRank int, isVital bool) float64 {
+	params := slotInteractionParams(spec, code)
+	base, delta, vitalPenalty := 0.25, 0.10, 0.50
+	if code == "TEMP_STEAL_GU" {
+		base, delta = 0.40, 0.05
+	}
+	if value, ok := params["base_chance"].(float64); ok {
+		base = value
+	}
+	if value, ok := params["chance_delta"].(float64); ok {
+		delta = value
+	}
+	if value, ok := params["vital_penalty"].(float64); ok {
+		vitalPenalty = value
+	}
+	chance := base + delta*float64(thiefRank-targetRank)
+	// Preserve the native formula's mode-specific ordering: permanent steals
+	// cap before the vital penalty; temporary steals apply the penalty first.
+	if isVital && code == "TEMP_STEAL_GU" {
+		chance *= 1 - vitalPenalty
+	}
+	if chance > 1 {
+		chance = 1
 	}
 	if chance < 0 {
 		chance = 0
+	}
+	if isVital && code != "TEMP_STEAL_GU" {
+		chance *= 1 - vitalPenalty
 	}
 	return chance
 }
 
 // hasStealMechanic checks if a Gu spec has the specified mechanic code.
 func hasStealMechanic(spec models.GuDictionaryItem, code string) bool {
-	if spec.ID == "GU_FORMLESS_THIEF_9" && code == "PERM_STEAL_GU" {
-		return true
-	}
-	if spec.ID == "GU_SHADOW_STEAL_8" && code == "TEMP_STEAL_GU" {
-		return true
-	}
-	_, found := models.GuNativeMechanic(spec, code)
-	return found
+	return slotInteractionParams(spec, code) != nil
 }
 
 // findStealGus scans a player's inventory for equipped and ACTIVE steal Gus.
@@ -260,7 +291,7 @@ func executePermanentSteal(tx *sql.Tx, combat *models.CombatState, attacker *mod
 
 	// Select random target Gu
 	targetGu := eligible[rand.Intn(len(eligible))]
-	chance := permanentStealChance(thiefGu.Rank, targetGu.Rank, targetGu.IsVital)
+	chance := slotInteractionChance(*thiefSpec, "PERM_STEAL_GU", thiefGu.Rank, targetGu.Rank, targetGu.IsVital)
 	roll := rand.Float64()
 
 	if roll >= chance {
@@ -388,7 +419,7 @@ func executeTempSteal(tx *sql.Tx, combat *models.CombatState, attacker *models.P
 	}
 
 	targetGu := eligible[rand.Intn(len(eligible))]
-	chance := tempStealChance(thiefGu.Rank, targetGu.Rank, targetGu.IsVital)
+	chance := slotInteractionChance(*thiefSpec, "TEMP_STEAL_GU", thiefGu.Rank, targetGu.Rank, targetGu.IsVital)
 	roll := rand.Float64()
 
 	if roll >= chance {

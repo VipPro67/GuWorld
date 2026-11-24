@@ -66,6 +66,17 @@ func TestValidateGuCatalogAggregatesCoverageAndIssues(t *testing.T) {
 	}
 }
 
+func TestValidateGuCatalogValidatesBlockV2EnvelopeWithStrictPrimitiveSchema(t *testing.T) {
+	entry := GuEntry{ID: "GU_BAD_PASSIVE", Rank: 5, Effects: json.RawMessage(`{"schema_version":2,"blocks":[{"id":"PATH_RESISTANCE","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"PATH_RESISTANCE_MODIFIER","params":{"value":5}}]}]}`)}
+	report := ValidateGuCatalog([]GuEntry{entry})
+	if report.Summary.Errors != 1 || report.Summary.Valid != 0 {
+		t.Fatalf("Block v2 envelope bypassed strict native parameter validation: %+v", report.Summary)
+	}
+	if len(report.Issues) == 0 || report.Issues[0].Issue.Code != "invalid_param" {
+		t.Fatalf("expected invalid map parameter issue, got %+v", report.Issues)
+	}
+}
+
 func TestValidateGuCatalogReportsDuplicateIdentity(t *testing.T) {
 	entry := GuEntry{ID: "GU_DUP", Rank: 1, Effects: json.RawMessage(`{}`)}
 	report := ValidateGuCatalog([]GuEntry{entry, entry})

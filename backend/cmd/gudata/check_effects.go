@@ -26,7 +26,11 @@ func cmdCheckEffects(args []string) error {
 	if err != nil {
 		return err
 	}
-	guReport := effectcatalog.ValidateGuCatalog(entries)
+	persistentStatusKeys, err := loadPersistentStatusKeys(dir + "/Status.csv")
+	if err != nil {
+		return err
+	}
+	guReport := effectcatalog.ValidateGuCatalog(entries, persistentStatusKeys)
 
 	itemIssues, err := validateItemBlocks(dir + "/Item.csv")
 	if err != nil {
@@ -57,6 +61,20 @@ func cmdCheckEffects(args []string) error {
 		return fmt.Errorf("found %d Gu error(s) and %d Item issue(s)", guReport.Summary.Errors, len(itemIssues))
 	}
 	return nil
+}
+
+func loadPersistentStatusKeys(path string) (map[string]bool, error) {
+	t, err := readCSV(path)
+	if err != nil {
+		return nil, err
+	}
+	keys := make(map[string]bool, len(t.rows))
+	for _, row := range t.rows {
+		if key := t.get(row, "key"); key != "" {
+			keys[key] = true
+		}
+	}
+	return keys, nil
 }
 
 func loadGuEntries(path string) ([]effectcatalog.GuEntry, error) {

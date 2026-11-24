@@ -1,9 +1,11 @@
 package simulator
 
 import (
+	"math/rand"
 	"strings"
 	"testing"
 
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
@@ -329,6 +331,54 @@ func TestLightningPathStunAndChain(t *testing.T) {
 	}
 	if !foundChain {
 		t.Fatalf("expected CHAIN_LIGHTNING in logs, got: %+v", logs)
+	}
+}
+
+func TestLightningStunPrimitivePreservesLegacyProcAndRNG(t *testing.T) {
+	for seed := int64(0); seed < 32; seed++ {
+		makeState := func() (*CombatState, *CombatantAuto, *CombatantAuto, *CombatantAuto) {
+			actor := newTestCombatant("player", "Player", 100000, 100)
+			target := newTestCombatant("enemy", "Enemy", 100000, 50)
+			secondary := newTestCombatant("secondary", "Secondary", 100000, 50)
+			actor.Rank, target.Rank = 1, 1
+			secondary.Rank = 1
+			actor.Speed, target.Speed = 100, 1
+			return &CombatState{Seed: seed, Allies: []*CombatantAuto{actor}, Enemies: []*CombatantAuto{target, secondary}}, actor, target, secondary
+		}
+		legacyState, legacyActor, legacyTarget, legacySecondary := makeState()
+		typedState, typedActor, typedTarget, typedSecondary := makeState()
+		legacyAction := &SimAction{ActionType: "GU_SKILL", Name: "Lôi Quyền", Damage: 50, TargetType: "TARGET", Mechanics: []CombatMechanic{{Trigger: "ON_ACTION", ActionCode: "LIGHTNING_STUN_BURST"}, {Trigger: "ON_ACTION", ActionCode: "CHAIN_LIGHTNING"}}}
+		typedAction := &SimAction{
+			ActionType: "GU_SKILL", Name: "Lôi Quyền", Damage: 50, TargetType: "TARGET",
+			OperationEffects: []SimActionOperation{
+				{Compiled: gameplayeffects.CompiledOperation{Trigger: gameplayeffects.TriggerOnAction}, SourceRank: 1, Action: &SimAction{
+					ActionType: "GU_EFFECT_OPERATION", Name: "Lôi Quyền", Damage: 50, TargetType: "TARGET", IsEffectOperation: true,
+					PreChainDamageModifiers: []PhaseDamageModifier{{Multiplier: 1.3, EffectID: "LIGHTNING:0:0"}},
+					StatusOps:               []statusfx.StatusOp{{ID: statusfx.StatusStun, Turns: 1, Chance: 0.4, ApplicationMode: "DIRECT", Phase: "PRE_CHAIN", SuppressLog: true}},
+				}},
+				{Compiled: gameplayeffects.CompiledOperation{Trigger: gameplayeffects.TriggerOnAction}, SourceRank: 1, Action: &SimAction{
+					ActionType: "GU_EFFECT_OPERATION", Name: "Lôi Quyền", TargetType: "ALL_ENEMIES", IsEffectOperation: true,
+					ChainDamages: []ChainDamage{{Fraction: 0.5, MinDamage: 30, TargetCount: 1}},
+				}},
+				{Compiled: gameplayeffects.CompiledOperation{Trigger: gameplayeffects.TriggerOnAction}, SourceRank: 1, Action: &SimAction{
+					ActionType: "GU_EFFECT_OPERATION", Name: "Lôi Quyền", TargetType: "SELF", IsEffectOperation: true,
+					CombatNotifications: []CombatNotification{{Action: "LIGHTNING_STUN_BURST", Message: "typed notification", Phase: "PRE_CHAIN", EffectID: "LIGHTNING:0:2"}},
+				}},
+			},
+		}
+		var legacyLogs, typedLogs []CombatLog
+		legacySummons, typedSummons := 0, 0
+		legacyRNG, typedRNG := rand.New(rand.NewSource(seed)), rand.New(rand.NewSource(seed))
+		legacyRunner := &combatActionRunner{state: legacyState, rng: legacyRNG, turn: 1, turnLogs: &legacyLogs, summonCount: &legacySummons}
+		typedRunner := &combatActionRunner{state: typedState, rng: typedRNG, turn: 1, turnLogs: &typedLogs, summonCount: &typedSummons}
+		legacyRunner.runOne(legacyActor, legacyAction, true, legacyState.Enemies)
+		typedRunner.runOne(typedActor, typedAction, true, typedState.Enemies)
+		if legacyTarget.HP != typedTarget.HP || legacySecondary.HP != typedSecondary.HP || hasStatus(legacyTarget, statusfx.StatusStun) != hasStatus(typedTarget, statusfx.StatusStun) {
+			t.Fatalf("seed %d: legacy hp/status/chain=%v/%v/%v, typed=%v/%v/%v", seed, legacyTarget.HP, hasStatus(legacyTarget, statusfx.StatusStun), legacySecondary.HP, typedTarget.HP, hasStatus(typedTarget, statusfx.StatusStun), typedSecondary.HP)
+		}
+		if legacyRNG.Float64() != typedRNG.Float64() {
+			t.Fatalf("seed %d: primitive changed the subsequent RNG stream", seed)
+		}
 	}
 }
 

@@ -22,6 +22,38 @@ func TestGetFlatGuEffectsPassiveOnlyDoesNotPanic(t *testing.T) {
 	}
 }
 
+func TestGuImmuneDreamReadsTypedRuleAndLegacyAlias(t *testing.T) {
+	for _, raw := range []string{
+		`{"schema_version":2,"blocks":[{"id":"DREAM_IMMUNITY","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"SET_RULE","sub_type":"IMMUNE_DREAM_STATUS","enabled":true}]}]}`,
+		`{"schema_version":2,"blocks":[{"id":"DREAM_IMMUNITY","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"IMMUNE_DREAM_STATUS"}]}]}`,
+	} {
+		var effects GuEffects
+		if err := effects.Scan(raw); err != nil {
+			t.Fatalf("scan effects: %v", err)
+		}
+		if !GuImmuneDream(GuDictionaryItem{ID: "GU_FORGET_DREAM", Rank: 7, Effects: effects}) {
+			t.Errorf("dream immunity not read from %s", raw)
+		}
+	}
+}
+
+func TestGuDeductionFinishChanceReadsTypedOperation(t *testing.T) {
+	var effects GuEffects
+	raw := `{"schema_version":2,"blocks":[{"id":"DEDUCTION_CHANCE","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"DEDUCTION_FINISH_CHANCE","params":{"base_chance":0.25,"per_rank_step":0.05,"max_chance":0.95}}]}]}`
+	if err := effects.Scan(raw); err != nil {
+		t.Fatalf("scan typed deduction chance: %v", err)
+	}
+	values, ok := GuDeductionFinishChance(GuDictionaryItem{ID: "GU_WISDOM", Rank: 9, Effects: effects})
+	if !ok || values["base_chance"] != 0.25 || values["per_rank_step"] != 0.05 || values["max_chance"] != 0.95 {
+		t.Fatalf("deduction chance values=%v, found=%t", values, ok)
+	}
+	values["base_chance"] = 0.01
+	copyValues, _ := GuDeductionFinishChance(GuDictionaryItem{ID: "GU_WISDOM", Rank: 9, Effects: effects})
+	if copyValues["base_chance"] != 0.25 {
+		t.Fatalf("returned params alias compiled data: %v", copyValues)
+	}
+}
+
 func TestGuEffectsValueRoundTripsVersionedEnvelope(t *testing.T) {
 	var effects GuEffects
 	if err := effects.Scan(`[{"id":"BASIC_HIT","trigger":"ON_ACTION","target":{"selector":"TARGET"},"operations":[{"op":"DAMAGE","sub_type":"FLAT","value":10,"unit":"FLAT"}]}]`); err != nil {
@@ -272,14 +304,43 @@ func TestItemEffectCommandsAreSorted(t *testing.T) {
 	}
 }
 
-func TestItemEffectsScan_Blocks(t *testing.T) {
+func TestItemEffectsScan_RejectsRemovedNoOp(t *testing.T) {
 	raw := `[{"id":"RESTORE_HUNGER","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"RESTORE_HUNGER","params":{"value":50}}]}]`
 	var eff ItemEffects
-	if err := eff.Scan(raw); err != nil {
-		t.Fatalf("failed to scan item blocks: %v", err)
+	if err := eff.Scan(raw); err == nil {
+		t.Fatal("expected removed no-op effect to be rejected")
 	}
-	if eff["hunger"] != 50 {
-		t.Fatalf("expected hunger 50, got: %v", eff)
+}
+
+func TestItemEffectsScan_TypedHeal(t *testing.T) {
+	raw := `[{"id":"HEAL","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[{"op":"HEAL","sub_type":"FLAT","resource":"HP","value":50}]}]`
+	var eff ItemEffects
+	if err := eff.Scan(raw); err != nil {
+		t.Fatal(err)
+	}
+	if eff["restore_hp"] != 50 {
+		t.Fatalf("restore_hp = %v, want 50", eff["restore_hp"])
+	}
+}
+
+func TestItemEffectsScan_TypedRequireAndDaoGrant(t *testing.T) {
+	raw := `[{"id":"DAO","trigger":"ON_CONSUME","target":{"selector":"SELF"},"operations":[{"op":"REQUIRE","sub_type":"IMMORTAL"},{"op":"GRANT_RESOURCE","resource":"DAO_MARK","value":1000}]}]`
+	var eff ItemEffects
+	if err := eff.Scan(raw); err != nil {
+		t.Fatal(err)
+	}
+	if eff["immortal_only"] != 1 || eff["add_dao_marks"] != 1000 {
+		t.Fatalf("unexpected item effect projection: %+v", eff)
+	}
+	if err := ValidateItemEffectBlocks([]byte(raw)); err != nil {
+		t.Fatalf("typed item operations rejected: %v", err)
+	}
+}
+
+func TestItemGrantRejectsIgnoredPathOverride(t *testing.T) {
+	op := gameplayeffects.Operation{Op: gameplayeffects.OpGrantResource, Resource: "DAO_MARK", Value: 1000, Path: "fire"}
+	if _, err := ValidateItemEffectOperation(op); err == nil {
+		t.Fatal("expected item grant path override to be rejected")
 	}
 }
 
@@ -335,6 +396,20 @@ func TestGuStatValueReadsOnlyFlatAlwaysOnPassives(t *testing.T) {
 	}
 	if passives := CompiledGuEffects(Gu{Effects: effects}).Passives(); len(passives) != 2 {
 		t.Fatalf("unconditioned passives count = %d, want 2", len(passives))
+	}
+}
+
+func TestGuStatValueReadsTypedFormerNativePassives(t *testing.T) {
+	var effects GuEffects
+	raw := `[{"id":"PASSIVES","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"LUCK","sub_type":"ADD_FLAT","value":1},{"op":"STAT_MOD","stat":"TENACITY","sub_type":"ADD_FLAT","value":2},{"op":"STAT_MOD","stat":"CC_RESIST","sub_type":"ADD_FLAT","value":3},{"op":"STAT_MOD","stat":"CULTIVATION_EFFICIENCY","sub_type":"ADD_FLAT","value":4},{"op":"STAT_MOD","stat":"DAO_MARK_GAIN","sub_type":"ADD_FLAT","value":5}]}]`
+	if err := effects.Scan(raw); err != nil {
+		t.Fatalf("scan typed passive effects: %v", err)
+	}
+	spec := GuDictionaryItem{Effects: effects}
+	for stat, want := range map[string]float64{"LUCK": 1, "TENACITY": 2, "CC_RESIST": 3, "CULTIVATION_EFFICIENCY": 4, "DAO_MARK_GAIN": 5} {
+		if got := GuStatValue(spec, stat); got != want {
+			t.Errorf("%s passive = %v, want %v", stat, got, want)
+		}
 	}
 }
 
@@ -395,6 +470,11 @@ func TestImmortalTravelFirstTurnEvadeRank9Only(t *testing.T) {
 		if compiled == nil {
 			t.Fatal("travel effects failed to compile")
 		}
+		for _, op := range compiled.Operations(gameplayeffects.TriggerBeforeHit) {
+			if op.Type == gameplayeffects.OpHitRule && op.SubType == "FIRST_TURN_EVADE" {
+				return true
+			}
+		}
 		for _, op := range compiled.NativeMechanics() {
 			if string(op.Trigger) == "BEFORE_HIT" && op.Code == "FIRST_TURN_EVADE" {
 				return true
@@ -410,7 +490,7 @@ func TestImmortalTravelFirstTurnEvadeRank9Only(t *testing.T) {
 	}
 
 	// Rank 9 (Gu.csv): capabilities plus first-strike evade.
-	rank9 := `[{"id":"SPACE_CAPABILITIES","trigger":"CAPABILITY","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"PORTAL_CREATE"},{"op":"UNIQUE","code":"IGNORE_MOVEMENT_RANGE"}]},{"id":"FIRST_TURN_EVADE","trigger":"BEFORE_HIT","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"FIRST_TURN_EVADE"}]}]`
+	rank9 := `[{"id":"SPACE_CAPABILITIES","trigger":"CAPABILITY","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"PORTAL_CREATE"},{"op":"UNIQUE","code":"IGNORE_MOVEMENT_RANGE"}]},{"id":"FIRST_TURN_EVADE","trigger":"BEFORE_HIT","target":{"selector":"SELF"},"operations":[{"op":"HIT_RULE","sub_type":"FIRST_TURN_EVADE"}]}]`
 	if issues := effectcatalog.ValidateBlockV2([]byte(rank9), effectcatalog.Location{Source: "gu", Key: "GU_FIXED_IMMORTAL_TRAVEL/9"}); len(issues) > 0 {
 		t.Fatalf("rank 9 travel effects rejected by Admin import validator: %+v", issues)
 	}

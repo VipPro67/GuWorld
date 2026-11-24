@@ -16,6 +16,9 @@ import (
 
 func validateDictionaryEffects(c *gin.Context, source, key string, raw json.RawMessage) bool {
 	issues := effectcatalog.ValidateBlockV2(raw, effectcatalog.Location{Source: source, Key: key})
+	if source == "gu" {
+		issues = append(issues, effectcatalog.ValidatePersistentStatusKeys(raw, gamefx.ValidStatuses(), effectcatalog.Location{Source: source, Key: key})...)
+	}
 	if len(issues) == 0 {
 		contextID := map[string]string{"race": "PASSIVE_DERIVED", "constitution": "PASSIVE_DERIVED", "status": "PASSIVE_DERIVED"}[source]
 		if contextID == "" {

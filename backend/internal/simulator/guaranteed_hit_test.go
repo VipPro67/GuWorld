@@ -43,6 +43,26 @@ func TestGuaranteedHitBypassesEvasion(t *testing.T) {
 	}
 }
 
+func TestTypedGuaranteedHitRuleBypassesEvasion(t *testing.T) {
+	attacker := newTestCombatant("a", "Player", 1000, 0)
+	attacker.Speed = 100
+	attacker.Actions = []SimAction{{
+		ActionType: "GU_SKILL", Name: "Tất Trúng", Damage: 500,
+		DamageMult: 1, TargetType: "SINGLE", GuaranteedHit: true,
+	}}
+	defender := newTestCombatant("d", "Enemy", 100000, 0)
+	defender.Speed = 1
+	applyEvasionOps(defender, []statusfx.StatusOp{{
+		ID: statusfx.StatusEvasion, Value: 75, Turns: 5, Chance: 1,
+	}}, 1)
+	for seed := int64(1); seed <= 50; seed++ {
+		logs := Simulate(&CombatState{Seed: seed, Allies: []*CombatantAuto{attacker}, Enemies: []*CombatantAuto{defender}})
+		if count := logCount(logs, "EVADE_MISS"); count != 0 {
+			t.Fatalf("typed HIT_RULE GUARANTEED logged %d evasions", count)
+		}
+	}
+}
+
 // TestGuaranteedHitBypassesBlind verifies that an attacker with BLIND status
 // never misses when using a GUARANTEED_HIT action.
 func TestGuaranteedHitBypassesBlind(t *testing.T) {

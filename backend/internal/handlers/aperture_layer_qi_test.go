@@ -126,7 +126,8 @@ func TestWorldMapIDForRegionPrefixes(t *testing.T) {
 		{"ht_u_minh_tham_uyen", "hac_thien"},
 		{"ht_di_nhan_vuong_quoc", "hac_thien"},
 		{"dai_vuc_trung_chau", "world_map"},
-		{"thanh_mao_son", "world_map"},
+		{"thanh_mao_son", "thanh_mao_son"},
+		{"dai_vuc_nam_cuong", "world_map"},
 	}
 
 	for _, c := range cases {

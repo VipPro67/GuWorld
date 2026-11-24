@@ -102,6 +102,21 @@ func batchApplyOnTickEffects(db *sql.DB) {
 		if compiled == nil {
 			continue
 		}
+		for _, op := range compiled.Operations(gameplayeffects.TriggerOnTick) {
+			if op.Type != gameplayeffects.OpPeriodicResource || op.SubType != "GENERATION_WORKER_TICK" {
+				continue
+			}
+			value := op.Value
+			if value <= 0 {
+				value = 1
+			}
+			switch op.Resource {
+			case "PRIMEVAL_STONE":
+				tickStones[r.playerID] += value
+			case "IMMORTAL_STONE":
+				tickImmortal[r.playerID] += value
+			}
+		}
 		for _, mech := range compiled.NativeMechanics() {
 			if mech.Trigger != gameplayeffects.TriggerOnTick {
 				continue

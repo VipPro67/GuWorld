@@ -23,7 +23,7 @@ Hệ thống có ba hoạt động khác nhau: **suy diễn** tăng độ hoàn 
 
 ### Suy diễn recipe
 
-Gửi recipe ID qua `/refine/deduce`. Server tiêu hao 15 Thought và 10 Primeval Stones cho mỗi attempt, rồi tăng completion dựa trên Wisdom/Refinement/target path mastery, Dao Marks và rank scaling. Gu có native mechanic instant deduction có thể hoàn thiện recipe trong attempt đó; chi phí vẫn đã trừ.
+Gửi recipe ID qua `/refine/deduce`. Server tiêu hao 15 Thought và 10 Primeval Stones cho mỗi attempt, rồi tăng completion dựa trên Wisdom/Refinement/target path mastery, Dao Marks và rank scaling. Gu trang bị, còn no có thể dùng `DEDUCTION_FINISH_CHANCE` để hoàn thiện recipe ngay; hệ thống chọn cơ hội tốt nhất và vẫn trừ chi phí.
 
 ### Cảm ngộ recipe
 

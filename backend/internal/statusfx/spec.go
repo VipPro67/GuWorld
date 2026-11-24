@@ -11,18 +11,29 @@ import (
 // Value and Turns carry the catalog semantics: Value is the intensity (DoT
 // damage per tick, or percent), Turns is the real duration in turns.
 type StatusOp struct {
-	ID         string
-	Value      float64
-	Turns      int
-	Chance     float64 // proc chance per application (0..1); 0 = always applies
-	Unit       StatusUnit
-	SourcePath string
+	ID              string
+	Value           float64
+	Turns           int
+	Chance          float64 // proc chance per application (0..1); 0 = always applies
+	ApplicationMode string  // DIRECT preserves deterministic legacy applications without combat gates.
+	Unit            StatusUnit
+	SourcePath      string
 	// Lifecycle fields are populated by context adapters. Empty fields preserve
 	// legacy status behavior; combat owns the lifetime of these instances.
 	SourceID    string
 	EffectID    string
 	Context     string
 	StackPolicy string
+	// Phase places a combat status application at a named combat seam instead
+	// of the default post-damage step. PRE_DAMAGE lands before strike damage;
+	// PRE_CHAIN lands before chain riders to preserve legacy hook timing.
+	Phase       string
+	Message     string
+	LogAction   string
+	SuppressLog bool
+	// ApplyToTargets lets an authored operation selector override a status
+	// spec's default self-target behavior (for example a party-wide ATK_UP).
+	ApplyToTargets bool
 }
 
 type StatusUnit string

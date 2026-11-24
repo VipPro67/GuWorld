@@ -1,4 +1,4 @@
-import manifest from "../data/game-icon-manifest.json";
+import manifest from "../data/game-icon-manifest.json" with { type: "json" };
 
 export type GameIconGroup = "gu" | "item" | "resourcePoint";
 

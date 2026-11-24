@@ -34,6 +34,29 @@ func TestInstantWinWipesEnemiesAtBattleStart(t *testing.T) {
 	}
 }
 
+func TestTypedForceVictoryWipesEnemiesAtBattleStart(t *testing.T) {
+	ally := newTestCombatant("p", "Player", 100, 10)
+	ally.BattleStartEndCommands = []BattleEndCommand{{Outcome: "FORCE_VICTORY", LogAction: "BATTLE_DECIDED", Message: "{actor} decides the battle."}}
+	enemy := newTestCombatant("e", "Enemy", 5000, 999)
+	enemy.Speed = 1000
+	enemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: 999}}
+
+	logs := Simulate(&CombatState{Seed: 7, Allies: []*CombatantAuto{ally}, Enemies: []*CombatantAuto{enemy}})
+	if enemy.HP != 0 || !enemy.IsDead || ally.HP != 100 {
+		t.Fatalf("typed force victory result: ally HP=%v enemy HP=%v dead=%t", ally.HP, enemy.HP, enemy.IsDead)
+	}
+	found := false
+	for _, log := range logs {
+		if log.Action == "BATTLE_DECIDED" && log.Detail == "p decides the battle." {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("typed end-battle authored log missing: %+v", logs)
+	}
+}
+
 func TestInteractiveInstantWinEndsSessionBeforeAwaitingCommand(t *testing.T) {
 	ally := newTestCombatant("player", "Player", 100, 10)
 	ally.Mechanics = []CombatMechanic{{Trigger: "ON_BATTLE_START", ActionCode: "INSTANT_WIN"}}

@@ -48,6 +48,29 @@ func TestStatusListRoundTrip(t *testing.T) {
 	}
 }
 
+func TestStatusListRoundTripsStackingPolicy(t *testing.T) {
+	var statuses StatusList
+	statuses.AddStacking("sinh_khi_tan", "GU_KILL_ENERGY", 12*time.Hour, -0.4, StatusStackingMetadata{
+		CurrentTier: 2, MaxStacks: 2, DurationHours: 12, DispelRule: "CLEAR_ALL",
+		TierScaling: []StatusStackTier{{Tier: 1, StatPercent: -15}, {Tier: 2, StatPercent: -40}},
+	})
+	raw, err := json.Marshal(statuses)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored StatusList
+	if err := json.Unmarshal(raw, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if len(restored) != 1 || restored[0].Stacking == nil {
+		t.Fatalf("stacking metadata was lost during persistence round trip: %+v", restored)
+	}
+	config := restored[0].Stacking
+	if config.CurrentTier != 2 || config.MaxStacks != 2 || config.DurationHours != 12 || config.DispelRule != "CLEAR_ALL" || len(config.TierScaling) != 2 || config.TierScaling[1].StatPercent != -40 {
+		t.Fatalf("stacking metadata mismatch after round trip: %+v", config)
+	}
+}
+
 func TestStatusListAddDedupe(t *testing.T) {
 	sl := StatusList{}
 	sl.Add("poisoned", "combat", 30*time.Minute, 0)

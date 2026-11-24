@@ -1398,7 +1398,8 @@ type PlayerEventDomain =
   | "pets"
   | "tribulation"
   | "spatial_realm"
-  | "ascension";
+  | "ascension"
+  | "travel_journey";
 
 type PlayerRealtimeEvent = {
   type: PlayerEventType;
@@ -1972,6 +1973,7 @@ export const useGameStore = create<GameState>((set, get) => {
             ? (payload?.state_revision ?? eventData.state_revision)
             : undefined;
           const changedDomains = new Set<PlayerEventDomain>(payload?.changed_domains || []);
+          if (changedDomains.has("travel_journey")) void get().fetchTravelJourney();
           if (eventType === "combat.session.updated") {
             if (eventData?.combat_session) set({ combatSessionEvent: eventData.combat_session });
             return;

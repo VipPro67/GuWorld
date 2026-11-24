@@ -410,14 +410,21 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 
 	// Cổ mang PERSIST_STATUS_ON_HIT: đòn đánh trúng ở PvP thật thì defender
 	// nhận persistent status (data-driven, chung helper với AutoCombatStart).
-	for _, g := range maybeGrantPersistentHitStatuses(tx, player, simState, logs) {
+	persistentGrants, grantErr := maybeGrantPersistentHitStatuses(tx, player, simState, logs)
+	if grantErr != nil {
+		return nil, fmt.Errorf("failed to apply persistent hit status: %w", grantErr)
+	}
+	for _, g := range persistentGrants {
 		if strings.EqualFold(g.StatusKey, gamefx.StatusSinhKhiTan) {
+			tierName := fmt.Sprintf("tầng %d", g.Tier)
+			if g.Tier <= gamefx.SinhKhiTanMaxTier {
+				tierName = gamefx.SinhKhiTanTierName(g.Tier)
+			}
 			logs = append(logs, simulator.CombatLog{
 				Turn:   simState.Turn,
 				Action: "SINH_KHI_TAN_APPLIED",
 				Detail: fmt.Sprintf("Sát khí tàn lụi xâm nhập! Kẻ địch nhận [%s] (công/thủ/tốc giảm %.0f%% trong %d giờ).",
-					gamefx.SinhKhiTanTierName(g.Tier),
-					-gamefx.SinhKhiTanValueForTier(g.Tier)*100, gamefx.SinhKhiTanDurationMinutes/60),
+					tierName, -g.Value*100, int(g.DurationHours)),
 			})
 		} else {
 			logs = append(logs, simulator.CombatLog{
@@ -620,7 +627,13 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 		}
 	}
 	if compiled != nil {
-		operationEffects, adaptErr := adaptBlockCombatOperations(actor, spec, scale, compiled.Operations(gameplayeffects.TriggerOnAction))
+		actionOperations := compiled.Operations(gameplayeffects.TriggerOnAction)
+		for _, castOperation := range compiled.Operations(gameplayeffects.TriggerOnCast) {
+			if castOperation.Type == gameplayeffects.OpDispel || castOperation.Type == gameplayeffects.OpStatus || castOperation.Type == gameplayeffects.OpResourceConversion {
+				actionOperations = append(actionOperations, castOperation)
+			}
+		}
+		operationEffects, adaptErr := adaptBlockCombatOperations(actor, spec, scale, actionOperations)
 		if adaptErr != nil {
 			return simulator.SimAction{}, fmt.Errorf("adapt combat effects for %s: %w", spec.ID, adaptErr)
 		}
@@ -628,9 +641,17 @@ func buildSimActionFromGu(actor *models.Combatant, spec *models.GuDictionaryItem
 	}
 	act.Mechanics = append(act.Mechanics, combatMechanicsForSpec(*spec, true)...)
 	resolveSummonMonsterStats(&act)
-	if statusKey, pvpOnly, hasPersistent := models.GuPersistentHitStatus(*spec); hasPersistent {
-		act.PersistentStatusKey = statusKey
-		act.PersistentPvPOnly = pvpOnly
+	if persistent, hasPersistent := models.GuPersistentHitStatus(*spec); hasPersistent {
+		if !gamefx.ValidStatuses()[persistent.StatusKey] {
+			return simulator.SimAction{}, fmt.Errorf("Gu %s persistent hit status %q is not registered", spec.ID, persistent.StatusKey)
+		}
+		act.PersistentStatusKey = persistent.StatusKey
+		act.PersistentPvPOnly = persistent.PvPOnly
+		act.PersistentStatusConfigured = persistent.Configured
+		act.PersistentStatusMaxStacks = persistent.MaxStacks
+		act.PersistentStatusDurationHours = persistent.DurationHours
+		act.PersistentStatusDispelRule = persistent.DispelRule
+		act.PersistentStatusTierScaling = append([]gameplayeffects.StackingStatusTier(nil), persistent.TierScaling...)
 	}
 
 	if actor.Rank < spec.Rank {
@@ -886,9 +907,9 @@ func hasCombatActiveEffects(spec *models.GuDictionaryItem) bool {
 	for _, block := range spec.Effects.Blocks {
 		if block.Trigger == gameplayeffects.TriggerOnAction && len(block.Operations) > 0 {
 			for _, op := range block.Operations {
-				if op.Op == gameplayeffects.OpDamage || op.Op == gameplayeffects.OpShield || op.Op == gameplayeffects.OpHeal ||
+				if op.Op == gameplayeffects.OpDamage || op.Op == gameplayeffects.OpBonusStrike || op.Op == gameplayeffects.OpChainDamage || op.Op == gameplayeffects.OpShield || op.Op == gameplayeffects.OpHeal ||
 					op.Op == gameplayeffects.OpDirectHP || op.Op == gameplayeffects.OpStatus ||
-					op.Op == gameplayeffects.OpBarrier || op.Op == gameplayeffects.OpCleanse ||
+					op.Op == gameplayeffects.OpBarrier || op.Op == gameplayeffects.OpCleanse || op.Op == gameplayeffects.OpHPCost ||
 					(op.Op == gameplayeffects.OpStatMod && (strings.ToUpper(op.Stat) == "ATTACK" || strings.ToUpper(op.Stat) == "DEFENSE")) ||
 					op.Op == gameplayeffects.OpUnique {
 					return true
@@ -1063,7 +1084,9 @@ func resolveSummonMonsterMechanics(mechanics []simulator.CombatMechanic) []simul
 		m.Values["hp"] = tpl.MaxHP
 		m.Values["damage"] = tpl.BaseAttack
 		m.Values["defense"] = tpl.BaseDefense
-		m.Values["name"] = tpl.Name
+		if name, _ := m.Values["name"].(string); strings.TrimSpace(name) == "" {
+			m.Values["name"] = tpl.Name
+		}
 		out = append(out, m)
 	}
 	return out
@@ -1099,14 +1122,14 @@ func combatMechanicsForSpec(spec models.GuDictionaryItem, action bool) []simulat
 }
 
 // battleStartMechanics returns the ON_BATTLE_START hooks an arena builder must
-// keep when it skips unrelated passives: summons and the INSTANT_WIN hook.
+// keep when it skips unrelated passives: summons and the legacy INSTANT_WIN reader.
 func battleStartMechanics(spec models.GuDictionaryItem) []simulator.CombatMechanic {
 	var result []simulator.CombatMechanic
 	for _, m := range combatMechanicsForSpec(spec, false) {
 		if m.Trigger != "ON_BATTLE_START" {
 			continue
 		}
-		if m.ActionCode == "SUMMON_MONSTER" || m.ActionCode == "SUMMON_WOLF_FRONTLINE" || m.ActionCode == "INSTANT_WIN" {
+		if m.ActionCode == "SUMMON_MONSTER" || m.ActionCode == "SUMMON_WOLF_FRONTLINE" || m.ActionCode == "INSTANT_WIN" || m.ActionCode == "DISPLACE" {
 			result = append(result, m)
 		}
 	}

@@ -135,7 +135,6 @@ const UNIQUE_NAMES: Record<string, string> = {
   DISGUISE: "Ngụy Trang Khí Tức",
   CHANGE_FORM_DISGUISE: "Biến Hóa Ngụy Trang",
   PERFECT_DISGUISE: "Ngụy Trang Hoàn Mỹ",
-  ARENA_IDENTITY_MASK: "Mặt Nạ Đấu Trường",
   REMOTE_TRADE: "Giao Dịch Từ Xa",
   MARKETPLACE_ACCESS: "Truy Cập Chợ Trời",
   CHAT_CONNECT: "Kết Nối Thiên Cơ",
@@ -309,6 +308,20 @@ export const formatTarget = formatEffectTarget;
 export function formatOperation(op: EffectOperation): { text: string; color: string; icon: string; tooltip?: string } {
   const opType = (op.op || "").toUpperCase();
   switch (opType) {
+    case "BONUS_STRIKE":
+      return {
+        text: `Đòn phụ ${Math.round((op.chance ?? 0) * 100)}% · ×${op.value ?? 0} (sàn ${op.min_damage ?? 0})`,
+        color: "text-amber-300",
+        icon: "🐾",
+        tooltip: "Có xác suất tung đòn sát thương trực tiếp theo action; không đi qua lớp khiên và phòng thủ.",
+      };
+    case "CHAIN_DAMAGE":
+      return {
+        text: `Sát thương lan ×${op.value ?? 0} · ${op.target_count ?? 0} mục tiêu phụ (sàn ${op.min_damage ?? 0})`,
+        color: "text-amber-300",
+        icon: "⚡",
+        tooltip: "Gây direct HP theo tỷ lệ sát thương action hiện tại lên các địch còn sống tiếp theo, bỏ qua khiên.",
+      };
     case "DAMAGE": {
       const pathStr = op.path ? ` [${translatePath(op.path)}]` : "";
       const tooltip = "Gây sát thương lên mục tiêu (bị giảm bởi phòng thủ, khiên và chênh lệch cảnh giới).";
@@ -317,6 +330,20 @@ export function formatOperation(op: EffectOperation): { text: string; color: str
       }
       return { text: `Sát thương ${op.value ?? 0}${pathStr}`, color: "text-rose-300", icon: "⚔️", tooltip };
     }
+    case "TARGET_DAMAGE_MODIFIER":
+      return {
+        text: `Giảm ${Math.round((op.value ?? 0) * 100)}% sát thương mục tiêu (sàn ×${op.min_multiplier ?? 0})`,
+        color: "text-amber-300",
+        icon: "📉",
+        tooltip: "Giảm DamageMultiplier của mục tiêu đến hết trận; không phải status nên không tự hết hạn hoặc bị cleanse.",
+      };
+    case "DEFENSE_PENETRATION":
+      return {
+        text: `Xuyên ${Math.round((op.value ?? 0) * 100)}% phòng thủ`,
+        color: "text-amber-300",
+        icon: "🗡️",
+        tooltip: "Bỏ qua tỷ lệ phòng thủ tương ứng của mục tiêu trong đòn đánh.",
+      };
     case "SHIELD": {
       const tooltip = "Tạo lớp khiên ảo hấp thụ sát thương trước khi trừ vào Sinh Lực.";
       if (op.sub_type === "MULTIPLIER") {
@@ -325,14 +352,38 @@ export function formatOperation(op: EffectOperation): { text: string; color: str
       return { text: `Khiên ảo +${op.value ?? 0}`, color: "text-sky-300", icon: "🛡️", tooltip };
     }
     case "HEAL": {
+      if (op.sub_type === "RESOURCE" && op.resource?.toUpperCase() === "MANA") {
+        const amount = op.unit === "PERCENT" ? `${op.value ?? 0}% Max Chân Nguyên` : `${op.value ?? 0} Chân Nguyên`;
+        return { text: `Hồi ${amount}`, color: "text-cyan-300", icon: "💧", tooltip: "Hồi Chân Nguyên cho mục tiêu đã chọn; phần trăm được tính theo Max Chân Nguyên của từng mục tiêu." };
+      }
       if (op.sub_type === "MANA") {
         return { text: `Hồi ${op.value ?? 0} Chân Nguyên`, color: "text-cyan-300", icon: "💧", tooltip: "Hồi phục Chân Nguyên cho Không Khiếu." };
       }
       if (op.sub_type === "LIFESTEAL") {
-        return { text: `Hút máu ${Math.round((op.value ?? 0) * 100)}%`, color: "text-emerald-300", icon: "🩸", tooltip: "Hút máu chuyển hóa phần trăm sát thương gây ra thành sinh lực." };
+        const value = op.value ?? 0;
+        const percent = value > 1 ? value : value * 100;
+        return { text: `Hút máu ${Math.round(percent)}%`, color: "text-emerald-300", icon: "🩸", tooltip: "Hút máu chuyển hóa phần trăm sát thương gây ra thành sinh lực." };
       }
       return { text: `Hồi +${op.value ?? 0} HP`, color: "text-emerald-300", icon: "💚", tooltip: "Hồi phục Sinh Lực cho bản thân." };
     }
+    case "NOTIFY":
+      return { text: op.message || "Ghi log chiến đấu", color: "text-zinc-300", icon: "🗨️", tooltip: "Ghi thông điệp cấu hình vào nhật ký chiến đấu." };
+    case "TENACITY_MODIFIER":
+      return { text: `Kiên Cường +${op.value ?? 0} + ${op.per_missing_hp ?? 0} × HP đã mất`, color: "text-amber-300", icon: "🛡️", tooltip: "Passive combat cộng Kiên Cường theo tỷ lệ HP đã mất của chủ thể." };
+    case "STATUS_IMMUNITY": {
+      const status = op.sub_type === "FREEZE" ? "Đóng Băng" : "Choáng";
+      return { text: `Miễn nhiễm ${status} theo điều kiện`, color: "text-indigo-300", icon: "✨", tooltip: "Khi block condition đúng, trạng thái tương ứng không khóa hành động." };
+    }
+    case "SLOT_INTERACTION":
+      return { text: op.sub_type === "TEMPORARY_STEAL" ? "Cướp Cổ tạm thời trong PvP" : "Cướp Cổ vĩnh viễn trong PvP", color: "text-amber-300", icon: "🪝", tooltip: "Handler PvP áp dụng công thức tỉ lệ và transaction theo params đã khai báo." };
+    case "REVIVE":
+      return { text: "Hồi sinh khi chịu đòn chí tử", color: "text-rose-300", icon: "🔁", tooltip: "Tự hồi sinh theo chance, mode và giới hạn sử dụng trong params; xử lý tại ON_DEATH." };
+    case "EFFECT_IMMUNITY":
+      return { text: "Miễn nhiễm hiệu ứng thù địch", color: "text-indigo-300", icon: "↩️", tooltip: "Miễn mọi hiệu ứng từ địch; sát thương thô vẫn áp dụng." };
+    case "RANK_SCALED_DEBUFF":
+      return { text: "Áp debuff theo rank mục tiêu", color: "text-amber-300", icon: "📉", tooltip: "Cường độ theo công thức Regional Wall và hệ số strength_factor; có thể áp trạng thái PvP theo thời lượng rank." };
+    case "GU_SEAL":
+      return { text: "Phong ấn Cổ phản ứng", color: "text-indigo-300", icon: "🔒", tooltip: "Phản ứng trước đòn địch; params cấu hình xác suất, thời lượng, giới hạn kích hoạt và phản phệ." };
     case "DIRECT_HP": {
       const tooltip = "Sát thương thực đánh thẳng vào Sinh Lực, bỏ qua 100% phòng thủ và xuyên khiên ảo.";
       if (op.sub_type === "MAX_HP_PERCENT") {
@@ -342,6 +393,97 @@ export function formatOperation(op: EffectOperation): { text: string; color: str
         return { text: `Hủy ${Math.round((op.value ?? 0) * 100)}% khiên mục tiêu`, color: "text-amber-300 font-semibold", icon: "💥", tooltip: "Bóc đi phần trăm khiên ảo hiện có của mục tiêu." };
       }
       return { text: `Sát thương trực tiếp vào máu`, color: "text-purple-300", icon: "⚡", tooltip };
+    }
+    case "HP_COST": {
+      const percent = Math.round((op.value ?? 0) * 100);
+      const minimum = op.min_cost ? ` (tối thiểu ${op.min_cost})` : "";
+      const floor = op.min_remaining ? `, giữ lại ${op.min_remaining} HP` : "";
+      return {
+        text: `Trả ${percent}% HP hiện tại${minimum}${floor}`,
+        color: "text-rose-300",
+        icon: "🩸",
+        tooltip: "Trừ HP người thi triển theo HP hiện tại, áp dụng mức trừ tối thiểu và giữ lại ngưỡng HP đã cấu hình.",
+      };
+    }
+    case "TRANSFER_RESOURCE": {
+      if (op.resource?.toUpperCase() === "HP" && op.sub_type === "PERCENT_OF_TARGET_SHIELD") {
+        return {
+          text: `Hấp thụ ${Math.round((op.value ?? 0) * 100)}% Khiên mục tiêu, hồi HP cho bản thân`,
+          color: "text-emerald-300",
+          icon: "🛡️",
+          tooltip: "Hấp thụ tỷ lệ Khiên Ảo hiện tại của mục tiêu và hồi cùng lượng HP cho người thi triển.",
+        };
+      }
+      if (op.resource?.toUpperCase() === "HP" && op.sub_type === "PERCENT_OF_MAX_HP") {
+        const minimum = op.min_amount ? ` (tối thiểu ${op.min_amount})` : "";
+        return {
+          text: `Rút ${Math.round((op.value ?? 0) * 100)}% Max HP${minimum}, hồi HP cho bản thân`,
+          color: "text-emerald-300",
+          icon: "🩸",
+          tooltip: "Trừ trực tiếp HP mục tiêu theo Max HP đã cấu hình và hồi cùng lượng HP cho người thi triển.",
+        };
+      }
+      if (op.resource?.toUpperCase() === "MANA" && op.sub_type === "PERCENT_OF_TARGET") {
+        return {
+          text: `Chuyển ${Math.round((op.value ?? 0) * 100)}% Chân Nguyên mục tiêu`,
+          color: "text-cyan-300",
+          icon: "💧",
+          tooltip: "Chuyển tỷ lệ Chân Nguyên hiện có từ mục tiêu sang người thi triển.",
+        };
+      }
+      return { text: `Chuyển tài nguyên ${op.resource || ""}`, color: "text-cyan-300", icon: "💧" };
+    }
+    case "RESOURCE_CONVERSION": {
+      if (op.sub_type === "DISPEL_TO_RESOURCES") {
+        return {
+          text: "Giải Mộng (thanh tẩy debuff & chuyển hóa thành Chân Nguyên, Khiên)",
+          color: "text-cyan-300",
+          icon: "🔮",
+          tooltip: "Gỡ bỏ các hiệu ứng khống chế và đổi số lượng hiệu ứng gỡ được thành Chân Nguyên và Mộng Giáp.",
+        };
+      }
+      if (op.sub_type === "CURRENT_HP_TO_SHIELD") {
+        const percent = Math.round((op.value ?? 0) * 100);
+        return {
+          text: `Chuyển ${percent}% HP hiện tại thành Khiên`,
+          color: "text-sky-300",
+          icon: "🛡️",
+          tooltip: "Tiêu hao một phần HP hiện tại để chuyển hóa thành Khiên Ảo.",
+        };
+      }
+      return { text: "Chuyển đổi tài nguyên", color: "text-cyan-300", icon: "🔄" };
+    }
+    case "TARGET_REDIRECTION":
+      return {
+        text: "Chuyển hướng đòn địch (Ý Niệm Hỗn Loạn)",
+        color: "text-amber-300",
+        icon: "🌀",
+        tooltip: "Khi kẻ địch chuẩn bị tấn công, có tỷ lệ làm rối loạn mục tiêu khiến địch đánh hụt hoặc tự đánh chính mình.",
+      };
+    case "OUTCOME_ROULETTE": {
+      if (op.sub_type === "CHAOS") {
+        return {
+          text: "Hỗn Độn Đánh Cược (chọn ngẫu nhiên hiệu ứng & trả giá)",
+          color: "text-purple-300 font-semibold",
+          icon: "🎲",
+          tooltip: "Ngẫu nhiên kích hoạt hiệu ứng cực mạnh trong trận, sau trận gánh chịu cái giá vĩnh viễn.",
+        };
+      }
+      return {
+        text: "Cát Hung Chi Biến (vòng quay vận khí)",
+        color: "text-yellow-300",
+        icon: "🍀",
+        tooltip: "Rút thăm ngẫu nhiên kết quả cát hung theo bảng tỷ lệ để định đoạt sát thương và hiệu ứng phụ.",
+      };
+    }
+    case "HIT_RULE": {
+      if (op.sub_type === "LETHAL_LUCK_WARD") {
+        return { text: "Cẩu Thỉ Vận (miễn tử & nhận khiên)", color: "text-yellow-300", icon: "🍀", tooltip: "Khi nhận đòn chí tử, có xác suất giữ lại 1 HP và nhận khiên bảo mệnh." };
+      }
+      if (op.sub_type === "GUARANTEED") {
+        return { text: "Tất Trúng (không thể né)", color: "text-amber-300", icon: "🎯", tooltip: "Đòn đánh chắc chắn trúng mục tiêu, không thể né tránh." };
+      }
+      return { text: `Quy tắc tấn công: ${op.sub_type || ""}`, color: "text-amber-300", icon: "🎯" };
     }
     case "STAT_MOD": {
       const statName = STAT_NAMES[op.stat?.toUpperCase() || ""] || op.stat || "Chỉ số";
@@ -374,6 +516,10 @@ export function formatOperation(op: EffectOperation): { text: string; color: str
     case "CLEANSE": {
       const tooltip = "Hóa giải và thanh tẩy các trạng thái bất lợi / khống chế.";
       return { text: `Thanh tẩy: ${op.sub_type || "Giải trừ hiệu ứng"}`, color: "text-cyan-300", icon: "🍃", tooltip };
+    }
+    case "REVOKE_STATUS": {
+      const statusID = op.status_id || "trạng thái";
+      return { text: `Gỡ trạng thái người chơi: ${statusID}`, color: "text-cyan-300", icon: "🍃", tooltip: "Xóa một persistent player status khi bắt đầu trận, trước khi tính chỉ số." };
     }
     case "UNIQUE": {
       const code = (op.code || "").toUpperCase();

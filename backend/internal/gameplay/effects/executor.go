@@ -20,6 +20,6 @@ func (e DomainExecutor) Execute(ctx context.Context, command Command, tx Applica
 
 func Executors() []Executor {
 	return []Executor{
-		DomainExecutor{DomainCombat}, DomainExecutor{DomainDerived}, DomainExecutor{DomainCapability}, DomainExecutor{DomainWorld}, DomainExecutor{DomainItemUse}, DomainExecutor{DomainGrowth}, DomainExecutor{DomainRefinement},
+		DomainExecutor{DomainCombat}, DomainExecutor{DomainDerived}, DomainExecutor{DomainCapability}, DomainExecutor{DomainWorld}, DomainExecutor{DomainGuUse}, DomainExecutor{DomainItemUse}, DomainExecutor{DomainGrowth}, DomainExecutor{DomainRefinement},
 	}
 }

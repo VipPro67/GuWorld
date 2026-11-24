@@ -42,9 +42,9 @@ func AdminListApertures(c *gin.Context) {
 
 	if search != "" {
 		like := "%" + search + "%"
-		whereClauses = append(whereClauses, fmt.Sprintf("(COALESCE(p.username, 'Tiên Khiếu vô chủ') ILIKE $%d OR COALESCE(p.email, '') ILIKE $%d OR ia.id::text ILIKE $%d OR COALESCE(p.id::text, '') ILIKE $%d)", argIdx, argIdx+1, argIdx+2, argIdx+3))
-		args = append(args, like, like, like, like)
-		argIdx += 4
+		whereClauses = append(whereClauses, fmt.Sprintf("(COALESCE(p.username, 'Tiên Khiếu vô chủ') ILIKE $%d OR COALESCE(p.email, '') ILIKE $%d OR ia.id::text ILIKE $%d OR COALESCE(p.id::text, '') ILIKE $%d OR COALESCE(ia.placed_region, ap_portal.region_id, '') ILIKE $%d OR COALESCE(r.name, '') ILIKE $%d)", argIdx, argIdx+1, argIdx+2, argIdx+3, argIdx+4, argIdx+5))
+		args = append(args, like, like, like, like, like, like)
+		argIdx += 6
 	}
 
 	where := ""
@@ -53,7 +53,13 @@ func AdminListApertures(c *gin.Context) {
 	}
 
 	var total int
-	countQuery := `SELECT COUNT(*) FROM immortal_apertures ia LEFT JOIN players p ON ia.player_id = p.id` + where
+	countQuery := `
+		SELECT COUNT(*) 
+		FROM immortal_apertures ia 
+		LEFT JOIN players p ON ia.player_id = p.id
+		LEFT JOIN aperture_portals ap_portal ON ap_portal.aperture_id = ia.id
+		LEFT JOIN regions r ON r.id = COALESCE(ia.placed_region, ap_portal.region_id)
+	` + where
 	if err := db.DB.QueryRowContext(c.Request.Context(), countQuery, args...).Scan(&total); err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể đếm số lượng tiên khiếu: "+err.Error(), err))
 		return
@@ -67,9 +73,16 @@ func AdminListApertures(c *gin.Context) {
 			ia.next_tribulation_year,
 			COALESCE(ia.earth_calamity_count, 0) + COALESCE(ia.heavenly_tribulation_count, 0) + COALESCE(ia.grand_tribulation_count, 0) + COALESCE(ia.myriad_tribulation_count, 0) + COALESCE(ia.chaos_calamity_count, 0) AS tribulation_count,
 			ia.state, ia.public_state, ia.aperture_rank,
-			ia.created_at, ia.updated_at
+			ia.created_at, ia.updated_at,
+			COALESCE(ia.is_placed, false) AS is_placed,
+			COALESCE(ia.placed_region, ap_portal.region_id, '') AS placed_region,
+			COALESCE(r.name, '') AS region_name,
+			COALESCE(ia.placed_x, ap_portal.x) AS placed_x,
+			COALESCE(ia.placed_y, ap_portal.y) AS placed_y
 		FROM immortal_apertures ia
 		LEFT JOIN players p ON ia.player_id = p.id
+		LEFT JOIN aperture_portals ap_portal ON ap_portal.aperture_id = ia.id
+		LEFT JOIN regions r ON r.id = COALESCE(ia.placed_region, ap_portal.region_id)
 	` + where + ` ORDER BY ia.created_at DESC LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
 
 	dataArgs := append(append([]interface{}{}, args...), limit, offset)
@@ -83,12 +96,14 @@ func AdminListApertures(c *gin.Context) {
 
 	apertures := []gin.H{}
 	for rows.Next() {
-		var id, grade, state, publicState string
+		var id, grade, state, publicState, placedRegion, regionName string
 		var playerID, username sql.NullString
 		var apertureRank int
 		var timeRate, nextTribulationYear, internalYearsPassed, apertureHP, maxApertureHP float64
 		var immortalEssence, areaSize int64
 		var essenceProductionPerYear, tribulationCount int
+		var isPlaced bool
+		var placedX, placedY sql.NullFloat64
 		var createdAt, updatedAt time.Time
 
 		err := rows.Scan(
@@ -97,10 +112,19 @@ func AdminListApertures(c *gin.Context) {
 			&essenceProductionPerYear, &internalYearsPassed,
 			&nextTribulationYear, &tribulationCount, &state, &publicState, &apertureRank,
 			&createdAt, &updatedAt,
+			&isPlaced, &placedRegion, &regionName, &placedX, &placedY,
 		)
 		if err != nil {
 			httperr.Respond(c, httperr.Internal("Không thể đọc dữ liệu tiên khiếu: "+err.Error(), err))
 			return
+		}
+
+		var placedXVal, placedYVal interface{} = nil, nil
+		if placedX.Valid {
+			placedXVal = placedX.Float64
+		}
+		if placedY.Valid {
+			placedYVal = placedY.Float64
 		}
 
 		apertures = append(apertures, gin.H{
@@ -120,6 +144,11 @@ func AdminListApertures(c *gin.Context) {
 			"state":                       state,
 			"public_state":                publicState,
 			"aperture_rank":               apertureRank,
+			"is_placed":                   isPlaced,
+			"placed_region":               placedRegion,
+			"region_name":                 regionName,
+			"placed_x":                    placedXVal,
+			"placed_y":                    placedYVal,
 			"created_at":                  createdAt,
 			"updated_at":                  updatedAt,
 		})
@@ -149,6 +178,9 @@ func AdminGetApertureDetail(c *gin.Context) {
 	var username sql.NullString
 	var playerID sql.NullString
 	var daoJSON []byte
+	var isPlaced bool
+	var placedRegion, regionName string
+	var placedX, placedY sql.NullFloat64
 
 	query := `
 		SELECT 
@@ -161,9 +193,16 @@ func AdminGetApertureDetail(c *gin.Context) {
 			ia.earth_calamity_count, ia.heavenly_tribulation_count, 
 			ia.grand_tribulation_count, ia.myriad_tribulation_count, 
 			ia.chaos_calamity_count, ia.state, ia.dao_marks, ia.public_state, ia.aperture_rank,
-			ia.created_at, ia.updated_at
+			ia.created_at, ia.updated_at,
+			COALESCE(ia.is_placed, false) AS is_placed,
+			COALESCE(ia.placed_region, ap_portal.region_id, '') AS placed_region,
+			COALESCE(r.name, '') AS region_name,
+			COALESCE(ia.placed_x, ap_portal.x) AS placed_x,
+			COALESCE(ia.placed_y, ap_portal.y) AS placed_y
 		FROM immortal_apertures ia
 		LEFT JOIN players p ON ia.player_id = p.id
+		LEFT JOIN aperture_portals ap_portal ON ap_portal.aperture_id = ia.id
+		LEFT JOIN regions r ON r.id = COALESCE(ia.placed_region, ap_portal.region_id)
 		WHERE ia.id = $1
 	`
 
@@ -178,6 +217,7 @@ func AdminGetApertureDetail(c *gin.Context) {
 		&ap.GrandTribulationCount, &ap.MyriadTribulationCount,
 		&ap.ChaosCalamityCount, &ap.State, &daoJSON, &ap.PublicState, &ap.ApertureRank,
 		&ap.CreatedAt, &ap.UpdatedAt,
+		&isPlaced, &placedRegion, &regionName, &placedX, &placedY,
 	)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy tiên khiếu"})
@@ -188,6 +228,21 @@ func AdminGetApertureDetail(c *gin.Context) {
 	ap.PlayerID = playerID.String
 	ap.MaxApertureHP = maxHp
 	ap.ImmortalEssence = int(immortalEssence)
+	ap.IsPlaced = isPlaced
+	if placedRegion != "" {
+		ap.PlacedRegion = &placedRegion
+	}
+	var placedXVal, placedYVal interface{} = nil, nil
+	if placedX.Valid {
+		v := placedX.Float64
+		ap.PlacedX = &v
+		placedXVal = v
+	}
+	if placedY.Valid {
+		v := placedY.Float64
+		ap.PlacedY = &v
+		placedYVal = v
+	}
 
 	var daoMarks models.DaoMarksMap
 	if len(daoJSON) > 0 {
@@ -231,9 +286,13 @@ func AdminGetApertureDetail(c *gin.Context) {
 	resourceRows.Close()
 
 	c.JSON(http.StatusOK, gin.H{
-		"aperture":  ap,
-		"username":  username.String,
-		"resources": resources,
+		"aperture":      ap,
+		"username":      username.String,
+		"resources":     resources,
+		"region_name":   regionName,
+		"placed_region": placedRegion,
+		"placed_x":      placedXVal,
+		"placed_y":      placedYVal,
 	})
 }
 

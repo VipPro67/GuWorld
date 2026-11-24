@@ -1,7 +1,11 @@
 package gamefx
 
 import (
+	"encoding/csv"
 	"encoding/json"
+	"io"
+	"os"
+	"path/filepath"
 	"testing"
 
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
@@ -135,6 +139,36 @@ func TestGetRaceEffects(t *testing.T) {
 	}
 	if got := fx.PathDamageBonus["water"]; got != 0.05 {
 		t.Errorf("water path damage = %v, want 0.05", got)
+	}
+}
+
+func TestBlockV2PathDamageStatProjectsToPathBonus(t *testing.T) {
+	var fx Effects
+	raw := []byte(`{"schema_version":2,"blocks":[{"id":"KILL_PATH_BONUS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","sub_type":"ADD_FLAT","stat":"PATH_DAMAGE","path":"kill","value":0.25}]}]}`)
+	if err := json.Unmarshal(raw, &fx); err != nil {
+		t.Fatalf("decode typed path damage effect: %v", err)
+	}
+	if got := fx.PathDamageBonus["kill"]; got != 0.25 {
+		t.Fatalf("kill path bonus = %v, want 0.25", got)
+	}
+}
+
+func TestBlockV2PassiveStatsProjectToLegacyAggregates(t *testing.T) {
+	var fx Effects
+	raw := []byte(`{"schema_version":2,"blocks":[{"id":"PASSIVE_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","sub_type":"ADD_FLAT","stat":"HP_REGEN","value":500000},{"op":"STAT_MOD","sub_type":"ADD_FLAT","stat":"MENTAL_RESISTANCE","value":0.8},{"op":"STAT_MOD","sub_type":"ADD_FLAT","stat":"DAO_MARK","path":"kill","value":2.5}]}]}`)
+	if err := json.Unmarshal(raw, &fx); err != nil {
+		t.Fatalf("decode typed passive stats: %v", err)
+	}
+	if fx.HPRegenBonus != 500000 || fx.MentalResistanceBonus != 0.8 || fx.DaoNganBonus["kill"] != 2.5 {
+		t.Fatalf("typed passive projection = hp regen %v, mental resistance %v, kill dao %v", fx.HPRegenBonus, fx.MentalResistanceBonus, fx.DaoNganBonus["kill"])
+	}
+}
+
+func TestPassiveStatModSupportsFormerNativeStats(t *testing.T) {
+	for _, stat := range []string{"HP_REGEN", "MENTAL_RESISTANCE", "SOUL_DEFENSE"} {
+		if !PassiveStatModSupported(stat, "ADD_FLAT", "", "") {
+			t.Errorf("%s should be accepted as a flat passive stat", stat)
+		}
 	}
 }
 
@@ -469,6 +503,154 @@ func TestEffectsUnmarshalJSON_Blocks(t *testing.T) {
 	}
 }
 
+func TestDaoMarkStatModMatchesLegacyProjection(t *testing.T) {
+	legacy := `[{"id":"DAO_MARK_MODIFIER","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"DAO_MARK_MODIFIER","params":{"value":{"ice":0.25,"wisdom":0.5}}}]}]`
+	typed := `[{"id":"DAO_MARK_MODIFIER","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"DAO_MARK","sub_type":"ADD_FLAT","path":"ice","value":0.25},{"op":"STAT_MOD","stat":"DAO_MARK","sub_type":"ADD_FLAT","path":"wisdom","value":0.5}]}]`
+
+	var legacyEffects, typedEffects Effects
+	if err := json.Unmarshal([]byte(legacy), &legacyEffects); err != nil {
+		t.Fatalf("unmarshal legacy projection: %v", err)
+	}
+	if err := json.Unmarshal([]byte(typed), &typedEffects); err != nil {
+		t.Fatalf("unmarshal typed projection: %v", err)
+	}
+	if err := ValidateEffectProjection([]byte(typed)); err != nil {
+		t.Fatalf("validate typed projection: %v", err)
+	}
+	for path, want := range legacyEffects.DaoNganBonus {
+		if got := typedEffects.DaoNganBonus[path]; got != want {
+			t.Errorf("typed DAO_MARK %q = %v, want legacy value %v", path, got, want)
+		}
+	}
+	if len(typedEffects.DaoNganBonus) != len(legacyEffects.DaoNganBonus) {
+		t.Fatalf("typed DAO_MARK paths = %v, want legacy paths %v", typedEffects.DaoNganBonus, legacyEffects.DaoNganBonus)
+	}
+}
+
+func TestPassiveStatAliasesMatchTypedProjection(t *testing.T) {
+	legacy := `[
+		{"id":"STAT_MODS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"STAT_MODS","params":{"value":{"attack":-0.2,"defense":0.1,"speed":0.05}}}]},
+		{"id":"REFINE_SUCCESS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"REFINE_SUCCESS","params":{"value":-0.1}}]},
+		{"id":"PATH_DAMAGE_MODIFIER","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"PATH_DAMAGE_MODIFIER","params":{"value":{"fire":0.15,"dream":-0.05}}}]},
+		{"id":"HEALING_RECEIVED","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"HEALING_RECEIVED","params":{"value":-0.15}}]},
+		{"id":"MAX_MANA","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"MAX_MANA","params":{"value":0.5}}]},
+		{"id":"MANA_REGEN","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"MANA_REGEN","params":{"value":-0.2}}]},
+		{"id":"SOUL_REGEN","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"SOUL_REGEN","params":{"value":0.2}}]}
+	]`
+	typed := `[
+		{"id":"STAT_MODS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"ATTACK","sub_type":"ADD_FLAT","value":-0.2},{"op":"STAT_MOD","stat":"DEFENSE","sub_type":"ADD_FLAT","value":0.1},{"op":"STAT_MOD","stat":"SPEED","sub_type":"ADD_FLAT","value":0.05}]},
+		{"id":"REFINE_SUCCESS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"REFINE_SUCCESS","sub_type":"ADD_FLAT","value":-0.1}]},
+		{"id":"PATH_DAMAGE_MODIFIER","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"PATH_DAMAGE","sub_type":"ADD_FLAT","path":"fire","value":0.15},{"op":"STAT_MOD","stat":"PATH_DAMAGE","sub_type":"ADD_FLAT","path":"dream","value":-0.05}]},
+		{"id":"HEALING_RECEIVED","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"HEALING_RECEIVED","sub_type":"ADD_FLAT","value":-0.15}]},
+		{"id":"MAX_MANA","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"MAX_MANA","sub_type":"ADD_FLAT","value":0.5}]},
+		{"id":"MANA_REGEN","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"MANA_REGEN","sub_type":"ADD_FLAT","value":-0.2}]},
+		{"id":"SOUL_REGEN","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"SOUL_REGEN","sub_type":"ADD_FLAT","value":0.2}]}
+	]`
+	var legacyEffects, typedEffects Effects
+	if err := json.Unmarshal([]byte(legacy), &legacyEffects); err != nil {
+		t.Fatalf("unmarshal legacy projection: %v", err)
+	}
+	if err := json.Unmarshal([]byte(typed), &typedEffects); err != nil {
+		t.Fatalf("unmarshal typed projection: %v", err)
+	}
+	if err := ValidateEffectProjection([]byte(typed)); err != nil {
+		t.Fatalf("validate typed projection: %v", err)
+	}
+	if len(legacyEffects.StatMods) != len(typedEffects.StatMods) || legacyEffects.RefineBonus != typedEffects.RefineBonus || len(legacyEffects.PathDamageBonus) != len(typedEffects.PathDamageBonus) || legacyEffects.HealingReceivedBonus != typedEffects.HealingReceivedBonus || legacyEffects.MaxManaBonus != typedEffects.MaxManaBonus || legacyEffects.ManaRegenBonus != typedEffects.ManaRegenBonus || legacyEffects.SoulRegenBonus != typedEffects.SoulRegenBonus {
+		t.Fatalf("legacy and typed aggregate shapes differ: legacy=%+v typed=%+v", legacyEffects, typedEffects)
+	}
+	for stat, want := range legacyEffects.StatMods {
+		if got := typedEffects.StatMods[stat]; got != want {
+			t.Errorf("typed stat %q = %v, want legacy value %v", stat, got, want)
+		}
+	}
+	for path, want := range legacyEffects.PathDamageBonus {
+		if got := typedEffects.PathDamageBonus[path]; got != want {
+			t.Errorf("typed path damage %q = %v, want legacy value %v", path, got, want)
+		}
+	}
+}
+
+func TestSetRuleMatchesLegacyBooleanProjection(t *testing.T) {
+	legacy := `[{"id":"IMMORTAL","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"IMMORTAL","params":{"value":true}}]},{"id":"DISABLE_HP_REGEN","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"DISABLE_HP_REGEN","params":{"value":true}}]},{"id":"DISABLE_MANA_REGEN","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"DISABLE_MANA_REGEN","params":{"value":true}}]},{"id":"DISABLE_RESOURCE_REGEN","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"DISABLE_RESOURCE_REGEN","params":{"value":true}}]},{"id":"DISABLE_SOUL_REGEN","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"DISABLE_SOUL_REGEN","params":{"value":true}}]}]`
+	typed := `[{"id":"IMMORTAL","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"SET_RULE","sub_type":"IMMORTAL","enabled":true}]},{"id":"IMMUNE_DREAM_STATUS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"SET_RULE","sub_type":"IMMUNE_DREAM_STATUS","enabled":true}]},{"id":"DISABLE_HP_REGEN","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"SET_RULE","sub_type":"DISABLE_HP_REGEN","enabled":true}]},{"id":"DISABLE_MANA_REGEN","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"SET_RULE","sub_type":"DISABLE_MANA_REGEN","enabled":true}]},{"id":"DISABLE_RESOURCE_REGEN","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"SET_RULE","sub_type":"DISABLE_RESOURCE_REGEN","enabled":true}]},{"id":"DISABLE_SOUL_REGEN","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"SET_RULE","sub_type":"DISABLE_SOUL_REGEN","enabled":true}]}]`
+	var legacyEffects, typedEffects Effects
+	if err := json.Unmarshal([]byte(legacy), &legacyEffects); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(typed), &typedEffects); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateEffectProjection([]byte(typed)); err != nil {
+		t.Fatalf("validate SET_RULE projection: %v", err)
+	}
+	if legacyEffects.Immortal != typedEffects.Immortal || legacyEffects.DisableHPRegen != typedEffects.DisableHPRegen || legacyEffects.DisableManaRegen != typedEffects.DisableManaRegen || legacyEffects.DisableResourceRegen != typedEffects.DisableResourceRegen || legacyEffects.DisableSoulRegen != typedEffects.DisableSoulRegen {
+		t.Fatalf("legacy and typed rule projections differ: legacy=%+v typed=%+v", legacyEffects, typedEffects)
+	}
+	if !typedEffects.ImmuneDreamStatus {
+		t.Fatal("typed IMMUNE_DREAM_STATUS rule was not projected")
+	}
+}
+
+func TestGameFXRejectsMalformedNativeMapHook(t *testing.T) {
+	for _, raw := range []string{
+		`[{"id":"BAD_STATS","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"STAT_MODS","params":{"value":100}}]}]`,
+		`[{"id":"BAD_RESIST","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"PATH_RESISTANCE_MODIFIER","params":{"value":5}}]}]`,
+	} {
+		var effects Effects
+		if err := json.Unmarshal([]byte(raw), &effects); err == nil {
+			t.Errorf("malformed gamefx map hook was accepted: %s", raw)
+		}
+	}
+}
+
+func TestPassiveDatasetCSVEffectsValidate(t *testing.T) {
+	for _, dataset := range []string{"Race.csv", "Constitution.csv", "Status.csv"} {
+		t.Run(dataset, func(t *testing.T) {
+			file, err := os.Open(filepath.Join("..", "..", "data", dataset))
+			if err != nil {
+				t.Fatalf("open dataset: %v", err)
+			}
+			defer file.Close()
+
+			reader := csv.NewReader(file)
+			header, err := reader.Read()
+			if err != nil {
+				t.Fatalf("read header: %v", err)
+			}
+			effectsColumn := -1
+			for index, name := range header {
+				if name == "effects" {
+					effectsColumn = index
+					break
+				}
+			}
+			if effectsColumn < 0 {
+				t.Fatal("dataset has no effects column")
+			}
+
+			for row := 2; ; row++ {
+				record, err := reader.Read()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					t.Fatalf("read row %d: %v", row, err)
+				}
+				raw := []byte(record[effectsColumn])
+				if err := ValidateEffectProjection(raw); err != nil {
+					t.Errorf("row %d failed passive effect validation: %v", row, err)
+					continue
+				}
+				var projected Effects
+				if err := json.Unmarshal(raw, &projected); err != nil {
+					t.Errorf("row %d failed passive projection: %v", row, err)
+				}
+			}
+		})
+	}
+}
+
 func TestEffectsMarshalJSON_Blocks(t *testing.T) {
 	eff := Effects{
 		StatMods:       map[string]float64{"speed": 0.2},
@@ -556,7 +738,7 @@ func TestGuCultivationEfficiencySameRank(t *testing.T) {
 	t.Cleanup(func() { models.GuRegistry = previous })
 
 	var guEffects models.GuEffects
-	if err := guEffects.Scan(`[{"id":"CULTIVATION_EFFICIENCY","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"UNIQUE","code":"CULTIVATION_EFFICIENCY","params":{"value":0.5}}]}]`); err != nil {
+	if err := guEffects.Scan(`[{"id":"CULTIVATION_EFFICIENCY","trigger":"ALWAYS_ON","target":{"selector":"SELF"},"operations":[{"op":"STAT_MOD","stat":"CULTIVATION_EFFICIENCY","sub_type":"ADD_FLAT","value":0.5}]}]`); err != nil {
 		t.Fatalf("scan gu effects: %v", err)
 	}
 	models.GuRegistry = map[string]map[int]models.GuDictionaryItem{

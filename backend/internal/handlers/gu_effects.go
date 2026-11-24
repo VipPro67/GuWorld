@@ -7,7 +7,9 @@ import (
 	"math"
 	"strings"
 
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -146,23 +148,210 @@ func HandleGuEventTx(tx *sql.Tx, player *models.Player, specs models.GuDictionar
 	if compiled == nil {
 		return "", nil
 	}
+	actor := gameplayeffects.Snapshot{
+		ID: player.ID.String(), Race: player.Race,
+		HP: player.HP, MaxHP: gamefx.EffectiveMaxHP(player),
+		Mana: player.CurrentMana, MaxMana: gamefx.EffectiveMaxMana(player),
+	}
+	result, err := compiled.Evaluate(gameplayeffects.Context{Actor: actor, Target: actor, Rank: specs.Rank, HasRank: true}, gameplayeffects.Event{Trigger: gameplayeffects.Trigger(eventTrigger)})
+	if err != nil {
+		return "", fmt.Errorf("đánh giá effect Cổ thất bại: %w", err)
+	}
+	if result.Truncated {
+		return "", fmt.Errorf("effect Cổ %s vượt quá giới hạn thực thi", specs.ID)
+	}
 	var logs []string
-	for _, operation := range compiled.NativeMechanics() {
-		if string(operation.Trigger) == eventTrigger {
-			mechanic := models.SpecialMechanic{EventTrigger: eventTrigger, ActionCode: operation.Code, Params: operation.Params}
-			msg, err := handleActionCodeTx(tx, player, specs, guInstance, mechanic)
-			if err != nil {
-				return "", err
+	for _, command := range result.Commands {
+		var msg string
+		switch command.Operation {
+		case gameplayeffects.OpGrantBodyMod:
+			if eventTrigger != string(gameplayeffects.TriggerOnConsume) || command.Target != gameplayeffects.TargetSelf {
+				return "", fmt.Errorf("Cổ %s có GRANT_BODY_MOD không hỗ trợ trong trigger/target này", specs.ID)
 			}
-			if msg != "" {
-				logs = append(logs, msg)
+			msg, err = grantBodyMod(player, command.SubType)
+		case gameplayeffects.OpModifyAptitude:
+			if eventTrigger != string(gameplayeffects.TriggerOnConsume) || command.Target != gameplayeffects.TargetSelf {
+				return "", fmt.Errorf("Cổ %s có MODIFY_APTITUDE không hỗ trợ trong trigger/target này", specs.ID)
 			}
+			if command.SubType != "ADD_FLAT" {
+				return "", fmt.Errorf("Cổ %s có MODIFY_APTITUDE subtype không hỗ trợ: %q", specs.ID, command.SubType)
+			}
+			if command.Value != math.Trunc(command.Value) || command.Value < 1 || command.Value > 99 {
+				return "", fmt.Errorf("Cổ %s có MODIFY_APTITUDE value không hợp lệ", specs.ID)
+			}
+			aptitude, aptitudeErr := increasePlayerAptitude(player, int(command.Value))
+			if aptitudeErr != nil {
+				return "", aptitudeErr
+			}
+			msg = fmt.Sprintf("Hiến tế huyết mạch thành công! Tư chất Không khiếu tăng lên %d%%.", aptitude)
+		case gameplayeffects.OpNotify:
+			if (eventTrigger != string(gameplayeffects.TriggerOnUse) && eventTrigger != string(gameplayeffects.TriggerOnConsume)) || command.Target != gameplayeffects.TargetSelf {
+				return "", fmt.Errorf("Cổ %s có NOTIFY không hỗ trợ trong trigger/target này", specs.ID)
+			}
+			if err := effectcatalog.ValidateNotifyMessage(command.Message); err != nil {
+				return "", fmt.Errorf("Cổ %s có NOTIFY không hợp lệ: %w", specs.ID, err)
+			}
+			msg = strings.ReplaceAll(command.Message, "{gu}", specs.Name)
+		case gameplayeffects.OpUnique:
+			mechanic := models.SpecialMechanic{EventTrigger: eventTrigger, ActionCode: command.Code, Params: command.Params}
+			msg, err = handleActionCodeTx(tx, player, specs, guInstance, mechanic)
+		case gameplayeffects.OpGrantResource:
+			if command.Target != gameplayeffects.TargetSelf || command.Resource != "LIFESPAN" || command.Value <= 0 {
+				return "", fmt.Errorf("Cổ %s có GRANT_RESOURCE không hỗ trợ", specs.ID)
+			}
+			player.Lifespan += command.Value
+			msg = fmt.Sprintf("Cổ trùng Thọ Nguyên hòa tan vào không khiếu! Đạo hữu được ban thêm vĩnh viễn %.0f năm thọ mệnh.", command.Value)
+		case gameplayeffects.OpModifyMaxResource:
+			if command.Target != gameplayeffects.TargetSelf || command.Value <= 0 {
+				return "", fmt.Errorf("Cổ %s có MODIFY_MAX_RESOURCE không hỗ trợ", specs.ID)
+			}
+			switch command.Resource {
+			case "SOUL":
+				if command.Value != math.Trunc(command.Value) {
+					return "", fmt.Errorf("Cổ %s có MODIFY_MAX_RESOURCE SOUL phải là số nguyên", specs.ID)
+				}
+				if player.MaxSoul == 0 {
+					player.MaxSoul = 10
+				}
+				player.MaxSoul += int(command.Value)
+				msg = fmt.Sprintf("Linh Hồn tối đa tăng thêm %.0f điểm.", command.Value)
+			case "THOUGHT":
+				if player.MaxThought == 0 {
+					player.MaxThought = 10
+				}
+				player.MaxThought += command.Value
+				msg = fmt.Sprintf("Niệm Lực tối đa tăng thêm %.0f điểm.", command.Value)
+			default:
+				return "", fmt.Errorf("Cổ %s có MODIFY_MAX_RESOURCE resource không hỗ trợ: %q", specs.ID, command.Resource)
+			}
+		case gameplayeffects.OpAdvanceProgression:
+			if command.Target != gameplayeffects.TargetSelf {
+				return "", fmt.Errorf("Cổ %s có ADVANCE_PROGRESSION target không hỗ trợ", specs.ID)
+			}
+			msg, err = advanceGuSubRank(player, specs)
+		case gameplayeffects.OpAdvanceMajorRealm:
+			if command.Target != gameplayeffects.TargetSelf {
+				return "", fmt.Errorf("Cổ %s có ADVANCE_MAJOR_REALM target không hỗ trợ", specs.ID)
+			}
+			msg, err = advanceGuMajorRealm(player, specs, guInstance)
+		case gameplayeffects.OpPetrifyAperture:
+			if command.Target != gameplayeffects.TargetSelf {
+				return "", fmt.Errorf("Cổ %s có PETRIFY_APERTURE target không hỗ trợ", specs.ID)
+			}
+			msg, err = petrifyGuAperture(player, specs, guInstance)
+		case gameplayeffects.OpModifyAperture:
+			if command.Target != gameplayeffects.TargetSelf || command.Value <= 0 {
+				return "", fmt.Errorf("Cổ %s có MODIFY_APERTURE không hỗ trợ", specs.ID)
+			}
+			switch command.SubType {
+			case "STRESS_REDUCE":
+				player.ApertureStress -= command.Value
+				if player.ApertureStress < 0 {
+					player.ApertureStress = 0
+				}
+				msg = fmt.Sprintf("Giảm %.0f áp lực tinh thần.", command.Value)
+			case "TIME_RATE_ADD":
+				player.TimeSpeedMultiplier += command.Value
+				msg = fmt.Sprintf("%s hòa tan vào không khiếu, dòng thời gian vĩnh viễn tăng +%.2f!", specs.Name, command.Value)
+			case "TIME_RATE_SUBTRACT":
+				player.TimeSpeedMultiplier -= command.Value
+				if player.TimeSpeedMultiplier < 0.1 {
+					player.TimeSpeedMultiplier = 0.1
+				}
+				msg = fmt.Sprintf("%s hòa tan vào không khiếu, dòng thời gian vĩnh viễn giảm -%.2f!", specs.Name, command.Value)
+			case "TIME_RATE_MULTIPLY":
+				player.TimeSpeedMultiplier *= command.Value
+				msg = fmt.Sprintf("%s hòa tan vào không khiếu, dòng thời gian tăng tốc x%.2f!", specs.Name, command.Value)
+			default:
+				return "", fmt.Errorf("Cổ %s có MODIFY_APERTURE subtype không hỗ trợ: %q", specs.ID, command.SubType)
+			}
+		case gameplayeffects.OpRestoreResource:
+			if command.Target != gameplayeffects.TargetSelf || command.Value <= 0 {
+				return "", fmt.Errorf("Cổ %s có RESTORE_RESOURCE không hỗ trợ", specs.ID)
+			}
+			switch command.Resource {
+			case "SOUL":
+				if command.Value != math.Trunc(command.Value) {
+					return "", fmt.Errorf("Cổ %s có RESTORE_RESOURCE SOUL phải là số nguyên", specs.ID)
+				}
+				if player.MaxSoul <= 0 {
+					player.MaxSoul = 100
+				}
+				before := player.SoulHP
+				player.SoulHP += int(command.Value)
+				if player.SoulHP > player.MaxSoul {
+					player.SoulHP = player.MaxSoul
+				}
+				msg = fmt.Sprintf("Hồn phách được dưỡng hồi (+%d Hồn Phách).", player.SoulHP-before)
+			case "THOUGHT":
+				before := player.CurrentThought
+				player.CurrentThought += command.Value
+				if player.CurrentThought > player.MaxThought {
+					player.CurrentThought = player.MaxThought
+				}
+				if player.CurrentThought < 0 {
+					player.CurrentThought = 0
+				}
+				msg = fmt.Sprintf("Hồi phục %.0f Niệm Lực.", player.CurrentThought-before)
+			default:
+				return "", fmt.Errorf("Cổ %s có RESTORE_RESOURCE resource không hỗ trợ: %q", specs.ID, command.Resource)
+			}
+		case gameplayeffects.OpPlaceWorldObject:
+			if command.Target != gameplayeffects.TargetSelf || command.SubType != "PRIMEVAL_SPRING" {
+				return "", fmt.Errorf("Cổ %s có PLACE_WORLD_OBJECT không hỗ trợ", specs.ID)
+			}
+			if tx == nil {
+				return "", fmt.Errorf("%s chỉ có thể cấy Nguyên Tuyền khi tiêu hao trực tiếp", specs.Name)
+			}
+			msg, err = springEggHatchEffect(tx, player, models.ItemSpec{Name: specs.Name}, 0)
+		default:
+			return "", fmt.Errorf("Cổ %s chưa có executor cho operation %q", specs.ID, command.Operation)
+		}
+		if err != nil {
+			return "", err
+		}
+		if msg != "" {
+			logs = append(logs, msg)
 		}
 	}
 	if len(logs) == 0 {
 		return "", nil
 	}
 	return strings.Join(logs, " "), nil
+}
+
+func increasePlayerAptitude(player *models.Player, value int) (int, error) {
+	if player == nil {
+		return 0, fmt.Errorf("không tìm thấy người chơi để điều chỉnh tư chất")
+	}
+	if value <= 0 || player.AptitudePercent >= 99 {
+		return 0, fmt.Errorf("Tư chất đã đạt mức tối đa (99%%), không thể hiến tế thêm!")
+	}
+	oldAptitude := player.AptitudePercent
+	player.AptitudePercent += value
+	if player.AptitudePercent > 99 {
+		player.AptitudePercent = 99
+	}
+	switch {
+	case player.AptitudePercent >= 80:
+		player.AptitudeType = "Giáp"
+	case player.AptitudePercent >= 60:
+		player.AptitudeType = "Ất"
+	case player.AptitudePercent >= 40:
+		player.AptitudeType = "Bính"
+	default:
+		player.AptitudeType = "Đinh"
+	}
+	if delta := float64(player.AptitudePercent - oldAptitude); delta > 0 {
+		player.MaxMana += delta
+		if player.Rank < 6 && player.MaxMana > 99 {
+			player.MaxMana = 99
+		}
+		if player.CurrentMana > player.MaxMana {
+			player.CurrentMana = player.MaxMana
+		}
+	}
+	return player.AptitudePercent, nil
 }
 
 func handleActionCode(player *models.Player, spec models.GuDictionaryItem, gu models.GuInstance, mechanic models.SpecialMechanic) (string, error) {
@@ -184,11 +373,7 @@ func handleActionCodeTx(tx *sql.Tx, player *models.Player, spec models.GuDiction
 	}
 	switch actionCode {
 	case "SOVEREIGN_BODY_TRANSFORM":
-		if player.BodyMods.Has(models.BodyModSovereignImmortal) {
-			return "", fmt.Errorf("Thân thể đã được cải tạo thành Tiên Thể Chí Tôn")
-		}
-		player.BodyMods = append(player.BodyMods, models.BodyModSovereignImmortal)
-		return "Tiên Thai Chí Tôn hòa tan vào thân thể! Đạo hữu đã vĩnh viễn thành tựu Tiên Thể Chí Tôn, miễn nhiễm xung đột Đạo Ngân.", nil
+		return grantBodyMod(player, "SOVEREIGN_IMMORTAL")
 	case "INCREASE_APTITUDE":
 		val, _ := params["value"].(float64)
 		value := int(val)
@@ -228,79 +413,17 @@ func handleActionCodeTx(tx *sql.Tx, player *models.Player, spec models.GuDiction
 		if value <= 0 {
 			value = 5 // Default boost for blood skull
 		}
-		if player.AptitudePercent >= 99 {
-			return "", fmt.Errorf("Tư chất đã đạt mức tối đa (99%%), không thể hiến tế thêm!")
+		aptitude, err := increasePlayerAptitude(player, value)
+		if err != nil {
+			return "", err
 		}
-		oldApt := player.AptitudePercent
-		player.AptitudePercent += value
-		if player.AptitudePercent > 99 {
-			player.AptitudePercent = 99
-		}
-
-		if player.AptitudePercent >= 80 {
-			player.AptitudeType = "Giáp"
-		} else if player.AptitudePercent >= 60 {
-			player.AptitudeType = "Ất"
-		} else if player.AptitudePercent >= 40 {
-			player.AptitudeType = "Bính"
-		} else {
-			player.AptitudeType = "Đinh"
-		}
-
-		delta := float64(player.AptitudePercent - oldApt)
-		if delta > 0 {
-			player.MaxMana += delta
-			if player.Rank < 6 && player.MaxMana > 99 {
-				player.MaxMana = 99
-			}
-			if player.CurrentMana > player.MaxMana {
-				player.CurrentMana = player.MaxMana
-			}
-		}
-		return fmt.Sprintf("Hiến tế huyết mạch thành công! Tư chất Không khiếu tăng lên %d%%.", player.AptitudePercent), nil
+		return fmt.Sprintf("Hiến tế huyết mạch thành công! Tư chất Không khiếu tăng lên %d%%.", aptitude), nil
 	case "RANK_PROGRESS":
-		if spec.Rank != player.Rank {
-			return "", fmt.Errorf("%s chỉ dùng cho %s", spec.Name, models.GetRankName(spec.Rank))
-		}
-		if player.SubRank >= 4 {
-			return "", fmt.Errorf("Xá Lợi Cổ không thể đột phá đại cảnh giới")
-		}
-		player.SubRank++
-		stageNames := map[int]string{1: "Sơ Giai", 2: "Trung Giai", 3: "Cao Giai", 4: "Đỉnh Phong"}
-		return fmt.Sprintf("Đột phá! Đạo hữu luyện hóa %s, tu vi nâng cao lên %s %s!", spec.Name, models.GetRankName(player.Rank), stageNames[player.SubRank]), nil
+		return advanceGuSubRank(player, spec)
 	case "MAN_BEAST_BURIAL":
-		if player.Rank < 1 || player.Rank > 4 {
-			return "", fmt.Errorf("%s chỉ có thể dùng ở Rank 1–4", spec.Name)
-		}
-		if spec.Rank != player.Rank || gu.Rank != player.Rank {
-			return "", fmt.Errorf("Rank Cổ trùng phải trùng với Rank bản thân (%d)", player.Rank)
-		}
-		if player.SubRank != 4 {
-			return "", fmt.Errorf("%s chỉ có thể dùng khi đạt Đỉnh Phong", spec.Name)
-		}
-		player.Rank++
-		player.SubRank = 1
-		player.WallProgress = 0
-		player.MaxMana -= 10
-		if player.MaxMana < 20 {
-			player.MaxMana = 20
-		}
-		if player.CurrentMana > player.MaxMana {
-			player.CurrentMana = player.MaxMana
-		}
-		return fmt.Sprintf("%s cưỡng ép đột phá! Tu vi nâng lên %s Sơ Giai, Chân Nguyên tối đa giảm 10.", spec.Name, models.GetRankName(player.Rank)), nil
+		return advanceGuMajorRealm(player, spec, gu)
 	case "APERTURE_PETRIFICATION", "STONE_APERTURE":
-		if gu.Rank != player.Rank {
-			return "", fmt.Errorf("%s chỉ dùng được khi rank Cổ trùng với rank bản thân (%s)", spec.Name, models.GetRankName(player.Rank))
-		}
-		player.SubRank = 4
-		dur := gamefx.AperturePetrifiedDuration(player.Rank)
-		player.Statuses.Add(gamefx.StatusAperturePetrified, spec.Name, dur, 0)
-		label := fmt.Sprintf("%d giờ", int(dur.Hours()))
-		if hours := int(dur.Hours()); hours%24 == 0 {
-			label = fmt.Sprintf("%d ngày", hours/24)
-		}
-		return fmt.Sprintf("%s đẩy tu vi lên Đỉnh Phong nhưng làm Không khiếu hóa đá trong %s (không tự hồi Chân Nguyên, không thể đột phá lên cảnh giới cao hơn).", spec.Name, label), nil
+		return petrifyGuAperture(player, spec, gu)
 	case "GIVE_STONES":
 		val, _ := params["value"].(float64)
 		amount := val
@@ -487,6 +610,77 @@ func handleActionCodeTx(tx *sql.Tx, player *models.Player, spec models.GuDiction
 	default:
 		return "", fmt.Errorf("Chưa hỗ trợ action code: %s", actionCode)
 	}
+}
+
+func grantBodyMod(player *models.Player, subType string) (string, error) {
+	if player == nil {
+		return "", fmt.Errorf("không tìm thấy người chơi để cải tạo thân thể")
+	}
+	switch subType {
+	case "SOVEREIGN_IMMORTAL":
+		if player.BodyMods.Has(models.BodyModSovereignImmortal) {
+			return "", fmt.Errorf("Thân thể đã được cải tạo thành Tiên Thể Chí Tôn")
+		}
+		player.BodyMods = append(player.BodyMods, models.BodyModSovereignImmortal)
+		return "Tiên Thai Chí Tôn hòa tan vào thân thể! Đạo hữu đã vĩnh viễn thành tựu Tiên Thể Chí Tôn, miễn nhiễm xung đột Đạo Ngân.", nil
+	default:
+		return "", fmt.Errorf("body modification subtype không hỗ trợ: %q", subType)
+	}
+}
+
+func advanceGuSubRank(player *models.Player, spec models.GuDictionaryItem) (string, error) {
+	if gamefx.Get(player).BlockedActions[gamefx.ActionBreakthrough] {
+		return "", fmt.Errorf("Không Khiếu đã hóa đá, không thể đột phá tu vi!")
+	}
+	if spec.Rank != player.Rank {
+		return "", fmt.Errorf("%s chỉ dùng cho %s", spec.Name, models.GetRankName(spec.Rank))
+	}
+	if player.SubRank >= 4 {
+		return "", fmt.Errorf("Xá Lợi Cổ không thể đột phá đại cảnh giới")
+	}
+	player.SubRank++
+	stageNames := map[int]string{1: "Sơ Giai", 2: "Trung Giai", 3: "Cao Giai", 4: "Đỉnh Phong"}
+	return fmt.Sprintf("Đột phá! Đạo hữu luyện hóa %s, tu vi nâng cao lên %s %s!", spec.Name, models.GetRankName(player.Rank), stageNames[player.SubRank]), nil
+}
+
+func advanceGuMajorRealm(player *models.Player, spec models.GuDictionaryItem, gu models.GuInstance) (string, error) {
+	if gamefx.Get(player).BlockedActions[gamefx.ActionBreakthrough] {
+		return "", fmt.Errorf("Không Khiếu đã hóa đá, không thể đột phá tu vi!")
+	}
+	if player.Rank < 1 || player.Rank > 4 {
+		return "", fmt.Errorf("%s chỉ có thể dùng ở Rank 1–4", spec.Name)
+	}
+	if spec.Rank != player.Rank || gu.Rank != player.Rank {
+		return "", fmt.Errorf("Rank Cổ trùng phải trùng với Rank bản thân (%d)", player.Rank)
+	}
+	if player.SubRank != 4 {
+		return "", fmt.Errorf("%s chỉ có thể dùng khi đạt Đỉnh Phong", spec.Name)
+	}
+	player.Rank++
+	player.SubRank = 1
+	player.WallProgress = 0
+	player.MaxMana -= 10
+	if player.MaxMana < 20 {
+		player.MaxMana = 20
+	}
+	if player.CurrentMana > player.MaxMana {
+		player.CurrentMana = player.MaxMana
+	}
+	return fmt.Sprintf("%s cưỡng ép đột phá! Tu vi nâng lên %s Sơ Giai, Chân Nguyên tối đa giảm 10.", spec.Name, models.GetRankName(player.Rank)), nil
+}
+
+func petrifyGuAperture(player *models.Player, spec models.GuDictionaryItem, gu models.GuInstance) (string, error) {
+	if gu.Rank != player.Rank {
+		return "", fmt.Errorf("%s chỉ dùng được khi rank Cổ trùng với rank bản thân (%s)", spec.Name, models.GetRankName(player.Rank))
+	}
+	player.SubRank = 4
+	dur := gamefx.AperturePetrifiedDuration(player.Rank)
+	player.Statuses.Add(gamefx.StatusAperturePetrified, spec.Name, dur, 0)
+	label := fmt.Sprintf("%d giờ", int(dur.Hours()))
+	if hours := int(dur.Hours()); hours%24 == 0 {
+		label = fmt.Sprintf("%d ngày", hours/24)
+	}
+	return fmt.Sprintf("%s đẩy tu vi lên Đỉnh Phong nhưng làm Không khiếu hóa đá trong %s (không tự hồi Chân Nguyên, không thể đột phá lên cảnh giới cao hơn).", spec.Name, label), nil
 }
 
 // ApplyGrowthProgress calculates and applies growth progress for a Gu instance.

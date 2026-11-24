@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 )
@@ -49,6 +50,9 @@ func AdminValidateGuEffects(c *gin.Context) {
 	}
 
 	issues := effectcatalog.ValidateBlockV2(req.Effects, effectcatalog.Location{Source: req.Source, Key: req.Key})
+	if req.Source == "gu" {
+		issues = append(issues, effectcatalog.ValidatePersistentStatusKeys(req.Effects, gamefx.ValidStatuses(), effectcatalog.Location{Source: req.Source, Key: req.Key})...)
+	}
 	response := gin.H{"valid": len(issues) == 0, "schema_version": effectcatalog.BlockSchemaVersion, "issues": issues}
 	if len(issues) == 0 {
 		blocks, err := gameplayeffects.DecodeBlockSet(req.Effects)
@@ -97,7 +101,7 @@ func AdminAuditGuEffects(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"source":       "database",
 		"generated_at": time.Now().UTC(),
-		"report":       effectcatalog.ValidateGuCatalog(entries),
+		"report":       effectcatalog.ValidateGuCatalog(entries, gamefx.ValidStatuses()),
 	})
 }
 
@@ -134,7 +138,11 @@ func AdminAuditEffectCatalog(c *gin.Context) {
 				return
 			}
 			entries++
-			issues = append(issues, effectcatalog.ValidateBlockV2(raw, effectcatalog.Location{Source: q.source, Row: row, Key: key})...)
+			location := effectcatalog.Location{Source: q.source, Row: row, Key: key}
+			issues = append(issues, effectcatalog.ValidateBlockV2(raw, location)...)
+			if q.source == "gu" {
+				issues = append(issues, effectcatalog.ValidatePersistentStatusKeys(raw, gamefx.ValidStatuses(), location)...)
+			}
 			if entries > maxGuCatalogEntries || len(issues) > maxGuCatalogEntries {
 				rows.Close()
 				c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "Effect catalog vượt giới hạn audit an toàn"})

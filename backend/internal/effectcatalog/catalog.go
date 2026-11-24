@@ -62,7 +62,7 @@ func (r CatalogReport) HasErrors() bool { return r.Summary.Errors > 0 }
 // ValidateGuCatalog validates all definitions without failing fast and builds
 // a machine-readable inventory proving that every observed key has an explicit
 // owner and disposition.
-func ValidateGuCatalog(entries []GuEntry) CatalogReport {
+func ValidateGuCatalog(entries []GuEntry, persistentStatusKeys ...map[string]bool) CatalogReport {
 	report := CatalogReport{SchemaVersion: CatalogReportSchemaVersion}
 	report.Summary.Entries = len(entries)
 	coverage := map[string]*Coverage{}
@@ -88,10 +88,15 @@ func ValidateGuCatalog(entries []GuEntry) CatalogReport {
 			err = validation
 		} else {
 			trimmed := bytes.TrimSpace(entry.Effects)
-			if len(trimmed) > 0 && trimmed[0] == '[' {
+			if isBlockV2Definition(trimmed) {
 				issues := ValidateBlockV2(trimmed, Location{Source: "gu", Key: entry.ID})
 				for _, iss := range issues {
 					validation.add(SeverityError, iss.Code, iss.Path, iss.Message)
+				}
+				if len(persistentStatusKeys) > 0 && persistentStatusKeys[0] != nil {
+					for _, iss := range ValidatePersistentStatusKeys(trimmed, persistentStatusKeys[0], Location{Source: "gu", Key: entry.ID}) {
+						validation.add(SeverityError, iss.Code, iss.Path, iss.Message)
+					}
 				}
 				if validation.HasErrors() {
 					err = validation
@@ -157,6 +162,25 @@ func ValidateGuCatalog(entries []GuEntry) CatalogReport {
 		return a.Issue.Code < b.Issue.Code
 	})
 	return report
+}
+
+func isBlockV2Definition(raw []byte) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	if raw[0] == '[' {
+		return true
+	}
+	if raw[0] != '{' {
+		return false
+	}
+	var envelope map[string]json.RawMessage
+	if json.Unmarshal(raw, &envelope) != nil {
+		return false
+	}
+	_, hasSchemaVersion := envelope["schema_version"]
+	_, hasBlocks := envelope["blocks"]
+	return hasSchemaVersion || hasBlocks
 }
 
 func collectCoverage(raw json.RawMessage, coverage map[string]*Coverage) {

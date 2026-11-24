@@ -1,7 +1,9 @@
 package effectmigration
 
 import (
+	"bytes"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -41,6 +43,59 @@ func TestFormatSpecificConverters(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestConvertItemUsesTypedOperationsAndRejectsNoOpAliases(t *testing.T) {
+	r := ConvertItem("legacy-item", []byte(`{"restore_hp":25,"random_race":1,"hunger":10}`))
+	if r.Report.MigrationGate || len(r.Report.Unsupported) != 1 || r.Report.Unsupported[0].Key != "hunger" {
+		t.Fatalf("report should reject the no-op hunger alias: %+v", r.Report)
+	}
+	var envelope struct {
+		Blocks []struct {
+			ID         string      `json:"id"`
+			Operations []operation `json:"operations"`
+		} `json:"blocks"`
+	}
+	if err := json.Unmarshal(r.Envelope, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Blocks) != 2 {
+		t.Fatalf("blocks = %d, want 2", len(envelope.Blocks))
+	}
+	gotByOp := map[string]operation{}
+	for _, block := range envelope.Blocks {
+		for _, op := range block.Operations {
+			gotByOp[op.Op] = op
+		}
+	}
+	if got := gotByOp["HEAL"]; got.Resource != "HP" || got.Value != float64(25) {
+		t.Fatalf("restore_hp conversion = %+v", got)
+	}
+	if got := gotByOp["RANDOMIZE_TRAIT"]; got.SubType != "RACE" {
+		t.Fatalf("random_race conversion = %+v", got)
+	}
+}
+
+func TestConvertGuDreamImmunityToTypedRule(t *testing.T) {
+	r := ConvertGu("legacy-dream-immunity", []byte(`{"passive":{"immune_dream_status":true}}`))
+	if !r.Report.Validated || len(r.Report.Converted) != 1 || len(r.Report.Unsupported) != 0 {
+		t.Fatalf("dream immunity conversion report = %+v", r.Report)
+	}
+	var envelope struct {
+		Blocks []struct {
+			Operations []operation `json:"operations"`
+		} `json:"blocks"`
+	}
+	if err := json.Unmarshal(r.Envelope, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Blocks) != 1 || len(envelope.Blocks[0].Operations) != 1 {
+		t.Fatalf("converted blocks = %+v", envelope.Blocks)
+	}
+	op := envelope.Blocks[0].Operations[0]
+	if op.Op != "SET_RULE" || op.SubType != "IMMUNE_DREAM_STATUS" || op.Enabled == nil || !*op.Enabled {
+		t.Fatalf("converted dream immunity = %+v", op)
 	}
 }
 
@@ -222,6 +277,203 @@ func TestGuDomainMappingsUseRuntimeTriggersAndUnits(t *testing.T) {
 		if got := wantUnit[key]; got != "" && op.Unit != got {
 			t.Errorf("%s unit = %s, want %s", key, op.Unit, got)
 		}
+	}
+}
+
+func TestGuPeriodicResourceAliasesBecomeTypedOperations(t *testing.T) {
+	r := ConvertGu("ticks", []byte(`{"other":[{"event_trigger":"ON_TICK","action_code":"MANA_REGEN_TICK","params":{"value":4}},{"event_trigger":"ON_TICK","action_code":"GENERATE_STONES_TICK","params":{"value":7}}]}`))
+	if !r.Report.Validated {
+		t.Fatalf("candidate did not validate: %s; report=%+v", r.Envelope, r.Report)
+	}
+	var envelope struct {
+		Blocks []struct {
+			Operations []operation `json:"operations"`
+		} `json:"blocks"`
+	}
+	if err := json.Unmarshal(r.Envelope, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]operation{
+		"MANA":           {Op: "PERIODIC_RESOURCE", SubType: "REGEN_PER_HOUR", Resource: "MANA", Value: float64(4)},
+		"PRIMEVAL_STONE": {Op: "PERIODIC_RESOURCE", SubType: "GENERATION_WORKER_TICK", Resource: "PRIMEVAL_STONE", Value: float64(7)},
+	}
+	for _, block := range envelope.Blocks {
+		got := block.Operations[0]
+		wantOp, ok := want[got.Resource]
+		if !ok || got.Op != wantOp.Op || got.SubType != wantOp.SubType || got.Value != wantOp.Value {
+			t.Errorf("periodic operation = %+v; want one of %+v", got, want)
+		}
+		delete(want, got.Resource)
+	}
+	if len(want) != 0 {
+		t.Errorf("missing periodic operations: %+v", want)
+	}
+}
+
+func TestGuConsumeAliasesBecomeTypedOperations(t *testing.T) {
+	r := ConvertGu("consume-resources", []byte(`{"other":[{"event_trigger":"ON_CONSUME","action_code":"ADD_LIFESPAN_YEARS","params":{"value":3}},{"event_trigger":"ON_CONSUME","action_code":"ADD_SOUL_MAX","params":{"value":5}},{"event_trigger":"ON_CONSUME","action_code":"RESTORE_MENTAL","params":{"value":7}},{"event_trigger":"ON_CONSUME","action_code":"RANK_PROGRESS"},{"event_trigger":"ON_CONSUME","action_code":"MAN_BEAST_BURIAL"},{"event_trigger":"ON_CONSUME","action_code":"REDUCE_STRESS","params":{"value":25}},{"event_trigger":"ON_CONSUME","action_code":"INCREASE_TIME_SPEED","params":{"value":0.5}},{"event_trigger":"ON_CONSUME","action_code":"DECREASE_TIME_SPEED","params":{"value":-0.5}},{"event_trigger":"ON_CONSUME","action_code":"THIRD_WATCH"}]}`))
+	if !r.Report.Validated {
+		t.Fatalf("candidate did not validate: %s; report=%+v", r.Envelope, r.Report)
+	}
+	var envelope struct {
+		Blocks []struct {
+			ID         string      `json:"id"`
+			Operations []operation `json:"operations"`
+		} `json:"blocks"`
+	}
+	if err := json.Unmarshal(r.Envelope, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]operation{
+		"LIFESPAN": {Op: "GRANT_RESOURCE", Resource: "LIFESPAN", Value: float64(3)},
+		"SOUL":     {Op: "MODIFY_MAX_RESOURCE", Resource: "SOUL", Value: float64(5)},
+		"THOUGHT":  {Op: "RESTORE_RESOURCE", Resource: "THOUGHT", Value: float64(7)},
+	}
+	wantMajorRealm := false
+	wantAperture := map[string]operation{
+		"REDUCE_STRESS":       {Op: "MODIFY_APERTURE", SubType: "STRESS_REDUCE", Value: float64(25)},
+		"INCREASE_TIME_SPEED": {Op: "MODIFY_APERTURE", SubType: "TIME_RATE_ADD", Value: 0.5},
+		"DECREASE_TIME_SPEED": {Op: "MODIFY_APERTURE", SubType: "TIME_RATE_SUBTRACT", Value: 0.1},
+		"THIRD_WATCH":         {Op: "MODIFY_APERTURE", SubType: "TIME_RATE_MULTIPLY", Value: float64(3)},
+	}
+	for _, block := range envelope.Blocks {
+		got := block.Operations[0]
+		if block.ID == "MAN_BEAST_BURIAL" {
+			if got.Op != "ADVANCE_MAJOR_REALM" {
+				t.Errorf("major realm operation = %+v; want ADVANCE_MAJOR_REALM", got)
+			}
+			wantMajorRealm = true
+			continue
+		}
+		if block.ID == "RANK_PROGRESS" {
+			if got.Op != "ADVANCE_PROGRESSION" {
+				t.Errorf("progression operation = %+v; want ADVANCE_PROGRESSION", got)
+			}
+			continue
+		}
+		if wantOp, ok := wantAperture[block.ID]; ok {
+			gotValue, _ := got.Value.(float64)
+			wantValue, _ := wantOp.Value.(float64)
+			if got.Op != wantOp.Op || got.SubType != wantOp.SubType || math.Abs(gotValue-wantValue) > 1e-9 {
+				t.Errorf("aperture operation = %+v; want %+v", got, wantOp)
+			}
+			delete(wantAperture, block.ID)
+			continue
+		}
+		wantOp, ok := want[got.Resource]
+		if !ok || got.Op != wantOp.Op || got.Value != wantOp.Value {
+			t.Errorf("consume resource operation = %+v; want one of %+v", got, want)
+		}
+		delete(want, got.Resource)
+	}
+	if !wantMajorRealm {
+		t.Error("MAN_BEAST_BURIAL was not converted")
+	}
+	if len(want) != 0 {
+		t.Errorf("missing consume resource operations: %+v", want)
+	}
+	if len(wantAperture) != 0 {
+		t.Errorf("missing aperture operations: %+v", wantAperture)
+	}
+}
+
+func TestGuPathDamageModifierBecomesTypedStatMods(t *testing.T) {
+	r := ConvertGu("path-damage", []byte(`{"other":[{"event_trigger":"ALWAYS_ON","action_code":"PATH_DAMAGE_MODIFIER","params":{"value":{"kill":0.25,"fire":0.1}}}]}`))
+	if !r.Report.Validated {
+		t.Fatalf("candidate did not validate: %s; report=%+v", r.Envelope, r.Report)
+	}
+	var envelope struct {
+		Blocks []struct {
+			Operations []operation `json:"operations"`
+		} `json:"blocks"`
+	}
+	if err := json.Unmarshal(r.Envelope, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Blocks) != 1 || len(envelope.Blocks[0].Operations) != 2 {
+		t.Fatalf("blocks = %+v; want one block with two path stats", envelope.Blocks)
+	}
+	want := []operation{
+		{Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_DAMAGE", Path: "fire", Value: 0.1},
+		{Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_DAMAGE", Path: "kill", Value: 0.25},
+	}
+	for i, got := range envelope.Blocks[0].Operations {
+		if got.Op != want[i].Op || got.SubType != want[i].SubType || got.Stat != want[i].Stat || got.Path != want[i].Path || got.Value != want[i].Value {
+			t.Errorf("operation %d = %+v, want %+v", i, got, want[i])
+		}
+	}
+}
+
+func TestGuStarThoughtRestoreBecomesPercentManaHeal(t *testing.T) {
+	r := ConvertGu("star-thought-restore", []byte(`{"other":[{"event_trigger":"ON_ACTION","action_code":"STAR_THOUGHT_RESTORE"}]}`))
+	if !r.Report.Validated {
+		t.Fatalf("candidate did not validate: %s; report=%+v", r.Envelope, r.Report)
+	}
+	var envelope struct {
+		Blocks []struct {
+			Trigger string      `json:"trigger"`
+			Target  target      `json:"target"`
+			Ops     []operation `json:"operations"`
+		} `json:"blocks"`
+	}
+	if err := json.Unmarshal(r.Envelope, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Blocks) != 1 || len(envelope.Blocks[0].Ops) != 1 {
+		t.Fatalf("blocks = %+v; want one heal block", envelope.Blocks)
+	}
+	b := envelope.Blocks[0]
+	op := b.Ops[0]
+	if b.Trigger != "ON_ACTION" || b.Target.Selector != "TARGET" || op.Target == nil || op.Target.Selector != "SELF" || op.Op != "HEAL" || op.SubType != "RESOURCE" || op.Resource != "MANA" || op.Unit != "PERCENT" || op.Value != float64(30) {
+		t.Fatalf("typed heal = trigger %s block target %+v op %+v; want operation-level self mana restore 30%%", b.Trigger, b.Target, op)
+	}
+}
+
+func TestGuSimpleStatusHooksBecomeTypedStatusOperations(t *testing.T) {
+	raw := []byte(`{"other":[{"event_trigger":"ON_ACTION","action_code":"WOOD_BIND"},{"event_trigger":"ON_ACTION","action_code":"ICE_DEEP_FREEZE"},{"event_trigger":"ON_ACTION","action_code":"LIGHT_BLINDING_FLASH"},{"event_trigger":"ON_ACTION","action_code":"SOUND_DISRUPT_SILENCE"},{"event_trigger":"ON_ACTION","action_code":"SOUND_RESONANCE"},{"event_trigger":"ON_ACTION","action_code":"ICE_FROSTBITE"},{"event_trigger":"ON_ACTION","action_code":"CHARM_GHOST_COME"},{"event_trigger":"ON_ACTION","action_code":"FIVE_RESTRICTION_DEEP_LIGHT"}]}`)
+	r := ConvertGu("simple-status-hooks", raw)
+	if !r.Report.Validated {
+		t.Fatalf("candidate did not validate: %s; report=%+v", r.Envelope, r.Report)
+	}
+	var envelope struct {
+		Blocks []struct {
+			Trigger string      `json:"trigger"`
+			Target  target      `json:"target"`
+			Ops     []operation `json:"operations"`
+		} `json:"blocks"`
+	}
+	if err := json.Unmarshal(r.Envelope, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]struct {
+		id    string
+		value float64
+		turns int
+	}{
+		"WOOD_BIND": {"BIND", 0, 2}, "ICE_DEEP_FREEZE": {"FREEZE", 0, 1},
+		"LIGHT_BLINDING_FLASH": {"BLIND", 60, 2}, "SOUND_DISRUPT_SILENCE": {"SILENCE", 0, 2},
+		"SOUND_RESONANCE": {"SOUL_WOUND", 25, 3}, "ICE_FROSTBITE": {"SLOW_DAMAGE", 35, 3},
+		"CHARM_GHOST_COME": {"CHARM", 0, 2}, "FIVE_RESTRICTION_DEEP_LIGHT": {"GU_SEAL", 0, 3},
+	}
+	if len(envelope.Blocks) != len(want) {
+		t.Fatalf("blocks = %d, want %d", len(envelope.Blocks), len(want))
+	}
+	for i, b := range envelope.Blocks {
+		code := []string{"WOOD_BIND", "ICE_DEEP_FREEZE", "LIGHT_BLINDING_FLASH", "SOUND_DISRUPT_SILENCE", "SOUND_RESONANCE", "ICE_FROSTBITE", "CHARM_GHOST_COME", "FIVE_RESTRICTION_DEEP_LIGHT"}[i]
+		w := want[code]
+		if b.Trigger != "ON_ACTION" || b.Target.Selector != "TARGET" || len(b.Ops) != 1 || b.Ops[0].Op != "STATUS" || b.Ops[0].StatusID != w.id || b.Ops[0].Value != w.value || b.Ops[0].Turns != float64(w.turns) || b.Ops[0].Chance != float64(0) || b.Ops[0].ApplicationMode != "DIRECT" {
+			t.Errorf("%s converted block = %+v; want guaranteed STATUS %s value %v turns %d on TARGET", code, b, w.id, w.value, w.turns)
+		}
+	}
+}
+
+func TestGuSummonAliasBecomesTypedOperation(t *testing.T) {
+	r := ConvertGu("summoner", []byte(`{"other":[{"event_trigger":"ON_BATTLE_START","action_code":"SUMMON_MONSTER","params":{"monster_id":"monster_wolf_leader","hp_scale":0.5,"damage_scale":0.33,"position":"frontline"}}]}`))
+	if !r.Report.Validated {
+		t.Fatalf("summon candidate did not validate: %s; report=%+v", r.Envelope, r.Report)
+	}
+	if !bytes.Contains(r.Envelope, []byte(`"op":"SUMMON"`)) || bytes.Contains(r.Envelope, []byte(`"code":"SUMMON_MONSTER"`)) {
+		t.Fatalf("summon alias was not converted to typed operation: %s", r.Envelope)
 	}
 }
 

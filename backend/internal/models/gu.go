@@ -508,31 +508,66 @@ func guRaceModifiers(spec GuDictionaryItem, code string) map[string]float64 {
 }
 
 // GuImmuneDream reports whether the spec carries the compiled Block v2
-// UNIQUE IMMUNE_DREAM_STATUS mechanic. This replaces the legacy
-// PassiveEffect.ImmuneDreamStatus flat read.
+// IMMUNE_DREAM_STATUS rule, retaining support for older UNIQUE definitions.
 func GuImmuneDream(spec GuDictionaryItem) bool {
 	compiled := CompiledGuEffects(spec)
 	if compiled == nil {
 		return false
 	}
-	for _, op := range compiled.NativeMechanics() {
-		if len(op.Conditions) == 0 && op.Trigger == gameplayeffects.TriggerAlwaysOn && op.Code == "IMMUNE_DREAM_STATUS" {
+	for _, op := range compiled.Operations(gameplayeffects.TriggerAlwaysOn) {
+		if len(op.Conditions) != 0 || op.Target == nil || op.Target.Selector != gameplayeffects.TargetSelf {
+			continue
+		}
+		if op.Type == gameplayeffects.OpSetRule && op.SubType == "IMMUNE_DREAM_STATUS" && op.Enabled {
 			return true
+		}
+		if op.Type == gameplayeffects.OpUnique && op.Code == "IMMUNE_DREAM_STATUS" {
+			return true // persisted Block v2/native compatibility
 		}
 	}
 	return false
 }
 
+// PersistentHitStatusSpec is the data needed by the post-combat status grant.
+// Configured distinguishes typed CSV values from legacy hooks that rely on the
+// historical status policy.
+type PersistentHitStatusSpec struct {
+	StatusKey     string
+	PvPOnly       bool
+	MaxStacks     int
+	DurationHours float64
+	DispelRule    string
+	TierScaling   []gameplayeffects.StackingStatusTier
+	Configured    bool
+}
+
 // GuPersistentHitStatus reads the data-driven post-combat persistent status
-// declared on a Gu spec via the UNIQUE PERSIST_STATUS_ON_HIT native hook
-// (ON_HIT or ON_ACTION trigger, params: status_key + optional pvp_only).
-// Returns the gamefx status key (e.g. "sinh_khi_tan") and whether the grant is
-// restricted to real PvP hits. The second return is false when the Gu carries
-// no such hook, so future Gus only need CSV data, no code change.
-func GuPersistentHitStatus(spec GuDictionaryItem) (statusKey string, pvpOnly bool, ok bool) {
+// declared on a Gu spec via APPLY_STACKING_STATUS or the legacy
+// UNIQUE PERSIST_STATUS_ON_HIT hook.
+func GuPersistentHitStatus(spec GuDictionaryItem) (PersistentHitStatusSpec, bool) {
 	compiled := CompiledGuEffects(spec)
 	if compiled == nil {
-		return "", false, false
+		return PersistentHitStatusSpec{}, false
+	}
+	for _, op := range compiled.AllOperations() {
+		if op.Type != gameplayeffects.OpApplyStackingStatus {
+			continue
+		}
+		if len(op.Conditions) > 0 {
+			continue
+		}
+		if op.Trigger != gameplayeffects.TriggerOnHit {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(op.StatusKey))
+		if key == "" {
+			continue
+		}
+		return PersistentHitStatusSpec{
+			StatusKey: key, PvPOnly: op.PvPOnly, MaxStacks: op.MaxStacks,
+			DurationHours: op.DurationHours, DispelRule: op.DispelRule,
+			TierScaling: append([]gameplayeffects.StackingStatusTier(nil), op.TierScaling...), Configured: true,
+		}, true
 	}
 	for _, op := range compiled.NativeMechanics() {
 		if op.Code != "PERSIST_STATUS_ON_HIT" {
@@ -563,9 +598,9 @@ func GuPersistentHitStatus(spec GuDictionaryItem) (statusKey string, pvpOnly boo
 		if key == "" {
 			continue
 		}
-		return key, pvp, true
+		return PersistentHitStatusSpec{StatusKey: key, PvPOnly: pvp}, true
 	}
-	return "", false, false
+	return PersistentHitStatusSpec{}, false
 }
 
 // GuNativeMechanic returns the first compiled native operation with code.
@@ -575,6 +610,43 @@ func GuNativeMechanic(spec GuDictionaryItem, code string) (gameplayeffects.Compi
 		return gameplayeffects.CompiledOperation{}, false
 	}
 	return compiled.NativeMechanic(code)
+}
+
+// GuDeductionFinishChance returns the typed rank-scaled completion chance for
+// recipe deduction. The result is a copy of the compiled params map.
+func GuDeductionFinishChance(spec GuDictionaryItem) (map[string]any, bool) {
+	compiled := CompiledGuEffects(spec)
+	if compiled == nil {
+		return nil, false
+	}
+	for _, operation := range compiled.Operations(gameplayeffects.TriggerAlwaysOn) {
+		if operation.Type != gameplayeffects.OpDeductionFinishChance || len(operation.Conditions) > 0 {
+			continue
+		}
+		values := make(map[string]any, len(operation.Values))
+		for key, value := range operation.Values {
+			values[key] = value
+		}
+		return values, true
+	}
+	return nil, false
+}
+
+// GuHasAptitudeSacrifice reports whether consuming this Gu raises aptitude and
+// therefore pays the additional hunger cost. It reads both typed and legacy
+// definitions while the CSV migration rolls out.
+func GuHasAptitudeSacrifice(spec GuDictionaryItem) bool {
+	compiled := CompiledGuEffects(spec)
+	if compiled == nil {
+		return false
+	}
+	for _, op := range compiled.Operations(gameplayeffects.TriggerOnConsume) {
+		if op.Type == gameplayeffects.OpModifyAptitude && op.SubType == "ADD_FLAT" {
+			return true
+		}
+	}
+	_, ok := compiled.NativeMechanic("SACRIFICE_APTITUDE")
+	return ok
 }
 
 // GuAlwaysOnValue sums the "value" param of ALWAYS_ON UNIQUE operations with
@@ -635,7 +707,7 @@ func GrowthProfile(spec GuDictionaryItem) (GuGrowthProfile, bool) {
 		MaxHP:      compiled.StatValue(gameplayeffects.TriggerAlwaysOn, "HP", "GROWTH_CAP"),
 		MaxSpeed:   compiled.StatValue(gameplayeffects.TriggerAlwaysOn, "SPEED", "GROWTH_CAP"),
 	}
-	if hours, ok := compiled.LastNativeParamFloat(gameplayeffects.TriggerAlwaysOn, "GROWTH_DURATION_HOURS", "value"); ok {
+	if hours, ok := compiled.GrowthDurationHours(); ok {
 		profile.HoursToMax = hours
 	}
 	return profile, profile.HoursToMax > 0
@@ -1343,12 +1415,21 @@ func ManaRegenTickFactor(playerRank, guRank int) float64 {
 
 // resourceRegenTickPerHour sums the per-hour contribution of every equipped
 // ACTIVE Gu carrying an ON_TICK action in the given set. It is the shared
-// engine behind mana/thought/soul regen; defaultValue applies when a mechanic
-// omits params.value.
+// engine behind mana/thought/soul regen; defaultValue applies when a typed
+// operation or legacy hook omits a positive amount.
 func resourceRegenTickPerHour(inventory []GuInstance, playerRank int, defaultValue float64, actions ...string) float64 {
 	wanted := make(map[string]bool, len(actions))
+	wantedResources := make(map[string]bool, len(actions))
 	for _, action := range actions {
 		wanted[action] = true
+		switch action {
+		case "MANA_REGEN_TICK":
+			wantedResources["MANA"] = true
+		case "THOUGHT_REGEN_TICK":
+			wantedResources["THOUGHT"] = true
+		case "SOUL_REGEN_TICK":
+			wantedResources["SOUL"] = true
+		}
 	}
 	var total float64
 	for _, gu := range inventory {
@@ -1359,11 +1440,21 @@ func resourceRegenTickPerHour(inventory []GuInstance, playerRank int, defaultVal
 		if !ok {
 			continue
 		}
-		// Block v2 only: read compiled ON_TICK native mechanics, never the
-		// legacy Other flat list.
+		// Block v2 only: prefer typed periodic resource operations and retain
+		// native hooks for persisted definitions that have not been migrated.
 		compiled := CompiledGuEffects(spec)
 		if compiled == nil {
 			continue
+		}
+		for _, op := range compiled.Operations(gameplayeffects.TriggerOnTick) {
+			if op.Type != gameplayeffects.OpPeriodicResource || op.SubType != "REGEN_PER_HOUR" || !wantedResources[op.Resource] {
+				continue
+			}
+			value := op.Value
+			if value <= 0 {
+				value = defaultValue
+			}
+			total += value * ManaRegenTickFactor(playerRank, gu.Rank)
 		}
 		for _, mech := range compiled.NativeMechanics() {
 			if mech.Trigger != gameplayeffects.TriggerOnTick || !wanted[mech.Code] {

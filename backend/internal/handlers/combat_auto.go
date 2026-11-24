@@ -196,6 +196,15 @@ func publishCombatClearedCell(region string, x, y int, playerID, enemyName, enem
 // used by buildSimCombatant for player combatants.
 func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *models.CombatState) *simulator.CombatantAuto {
 	enemyShield := enemy.VirtualShield
+	var passiveDamageModifiers []simulator.DamageModifier
+	var damageMitigations []simulator.DamageMitigation
+	var passiveOperationEffects []simulator.SimActionOperation
+	var turnStartCounterAdds []simulator.CounterAdd
+	var beforeHitCounterAdds []simulator.CounterAdd
+	var beforeHitCounterStatModifiers []simulator.CounterStatModifier
+	var beforeHitCounterNotifications []simulator.CombatNotification
+	var beforeHitRecoveries []simulator.ThresholdRecovery
+	var battleStartEndCommands []simulator.BattleEndCommand
 	for _, guInst := range enemy.GuInventory {
 		if !guInst.Equipped || guInst.Status != "ACTIVE" {
 			continue
@@ -204,6 +213,16 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 		if !ok {
 			continue
 		}
+		passiveDamageModifiers = append(passiveDamageModifiers, combatPassiveDamageModifiers(spec)...)
+		damageMitigations = append(damageMitigations, combatDamageMitigations(spec)...)
+		passiveOperationEffects = append(passiveOperationEffects, combatPassiveOperationEffects(spec)...)
+		passiveOperationEffects = append(passiveOperationEffects, combatBeforeEnemyAttackOperationEffects(spec)...)
+		turnStartCounterAdds = append(turnStartCounterAdds, combatTurnStartCounterAdds(spec)...)
+		beforeHitCounterAdds = append(beforeHitCounterAdds, combatBeforeHitCounterAdds(spec)...)
+		beforeHitCounterStatModifiers = append(beforeHitCounterStatModifiers, combatBeforeHitCounterStatModifiers(spec)...)
+		beforeHitCounterNotifications = append(beforeHitCounterNotifications, combatBeforeHitCounterNotifications(spec)...)
+		beforeHitRecoveries = append(beforeHitRecoveries, combatBeforeHitRecoveries(spec)...)
+		battleStartEndCommands = append(battleStartEndCommands, combatBattleStartEndCommands(spec)...)
 		if spec.Effects.Active != nil && spec.Effects.Active.ShieldFlat > 0 {
 			enemyShield += spec.Effects.Active.ShieldFlat
 		} else {
@@ -250,25 +269,34 @@ func buildSimEnemyCombatant(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 	}
 
 	simEnemy := &simulator.CombatantAuto{
-		ID:              enemy.ID,
-		Name:            enemy.Name,
-		Kind:            enemyKind,
-		Race:            enemy.Race,
-		Rank:            enemy.Rank,
-		SubRank:         enemy.SubRank,
-		GridX:           enemy.GridX,
-		GridY:           enemy.GridY,
-		MaxHP:           enemy.MaxHP,
-		HP:              eHP,
-		MaxMana:         enemy.MaxMana,
-		Mana:            enemyMana,
-		BaseDmg:         enemy.BaseAttack,
-		BaseDef:         enemy.BaseDefense,
-		Speed:           enemy.Speed,
-		RaceDamageBonus: raceDamageBonus,
-		RaceResistance:  raceResistance,
-		AIProfile:       enemy.AIProfile,
-		VirtualShield:   enemyShield,
+		ID:                            enemy.ID,
+		Name:                          enemy.Name,
+		Kind:                          enemyKind,
+		Race:                          enemy.Race,
+		Rank:                          enemy.Rank,
+		SubRank:                       enemy.SubRank,
+		GridX:                         enemy.GridX,
+		GridY:                         enemy.GridY,
+		MaxHP:                         enemy.MaxHP,
+		HP:                            eHP,
+		MaxMana:                       enemy.MaxMana,
+		Mana:                          enemyMana,
+		BaseDmg:                       enemy.BaseAttack,
+		BaseDef:                       enemy.BaseDefense,
+		Speed:                         enemy.Speed,
+		RaceDamageBonus:               raceDamageBonus,
+		RaceResistance:                raceResistance,
+		PassiveDamageModifiers:        passiveDamageModifiers,
+		DamageMitigations:             damageMitigations,
+		PassiveOperationEffects:       passiveOperationEffects,
+		TurnStartCounterAdds:          turnStartCounterAdds,
+		BeforeHitCounterAdds:          beforeHitCounterAdds,
+		BeforeHitCounterStatModifiers: beforeHitCounterStatModifiers,
+		BeforeHitCounterNotifications: beforeHitCounterNotifications,
+		BeforeHitRecoveries:           beforeHitRecoveries,
+		BattleStartEndCommands:        battleStartEndCommands,
+		AIProfile:                     enemy.AIProfile,
+		VirtualShield:                 enemyShield,
 		DaoMarks: func() simulator.DaoMarks {
 			dm := make(simulator.DaoMarks)
 			for k, v := range enemy.DaoMarks {
@@ -779,10 +807,11 @@ func compositionBlockID(node composition.Node) string {
 }
 
 func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInitiator bool, reqLoadout *simulator.CombatLoadout) (*simulator.CombatantAuto, error) {
-	// Cổ mang CLEANSE_REGIONAL_WALL: gỡ Áp Chế Giới Vực khỏi bản thân trước
-	// khi tính stat để trận không kế thừa debuff thế giới. player ở đây luôn là
-	// nhân vật được build (initiator/ally/defender), scan qua loadout của chính nó.
-	maybeCleanseRegionalWall(player)
+	// Apply player-persistent Gu status operations before deriving combat stats;
+	// successful revocations are persisted in the same combat transaction.
+	if err := applyBattleStartStatusEffects(tx, player, isVirtual); err != nil {
+		return nil, fmt.Errorf("apply Gu battle-start status effects: %w", err)
+	}
 	playerStats := CalculatePlayerStats(player)
 	actor := models.CombatantFromPlayer(player, playerStats)
 
@@ -832,6 +861,15 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 
 	allActions := append([]simulator.SimAction(nil), guHouseActions...)
 	var combatantMechanics []simulator.CombatMechanic
+	var passiveDamageModifiers []simulator.DamageModifier
+	var damageMitigations []simulator.DamageMitigation
+	var passiveOperationEffects []simulator.SimActionOperation
+	var turnStartCounterAdds []simulator.CounterAdd
+	var beforeHitCounterAdds []simulator.CounterAdd
+	var beforeHitCounterStatModifiers []simulator.CounterStatModifier
+	var beforeHitCounterNotifications []simulator.CombatNotification
+	var beforeHitRecoveries []simulator.ThresholdRecovery
+	var battleStartEndCommands []simulator.BattleEndCommand
 
 	// Build owned equipped+ACTIVE Gu sets and lookup maps
 	ownedGuTypeSet := make(map[string]bool)                  // gu_id → true
@@ -945,6 +983,16 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 			continue
 		}
 		combatantMechanics = append(combatantMechanics, combatMechanicsForSpec(spec, false)...)
+		passiveDamageModifiers = append(passiveDamageModifiers, combatPassiveDamageModifiers(spec)...)
+		damageMitigations = append(damageMitigations, combatDamageMitigations(spec)...)
+		passiveOperationEffects = append(passiveOperationEffects, combatPassiveOperationEffects(spec)...)
+		passiveOperationEffects = append(passiveOperationEffects, combatBeforeEnemyAttackOperationEffects(spec)...)
+		turnStartCounterAdds = append(turnStartCounterAdds, combatTurnStartCounterAdds(spec)...)
+		beforeHitCounterAdds = append(beforeHitCounterAdds, combatBeforeHitCounterAdds(spec)...)
+		beforeHitCounterStatModifiers = append(beforeHitCounterStatModifiers, combatBeforeHitCounterStatModifiers(spec)...)
+		beforeHitCounterNotifications = append(beforeHitCounterNotifications, combatBeforeHitCounterNotifications(spec)...)
+		beforeHitRecoveries = append(beforeHitRecoveries, combatBeforeHitRecoveries(spec)...)
+		battleStartEndCommands = append(battleStartEndCommands, combatBattleStartEndCommands(spec)...)
 	}
 
 	// Status suppression/enhancement factors scale the whole action output of
@@ -1186,7 +1234,7 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 			continue
 		}
 		// Block v2 only: per-path resistance + dream immunity come from
-		// compiled STAT_MOD PATH_RESISTANCE / UNIQUE IMMUNE_DREAM_STATUS.
+		// compiled STAT_MOD PATH_RESISTANCE / SET_RULE IMMUNE_DREAM_STATUS.
 		// Legacy PassiveEffect.Anti* flat fields are never read.
 		for path, pct := range models.GuPathResistance(spec) {
 			pathResistance[path] += pct
@@ -1325,10 +1373,19 @@ func buildSimCombatant(tx *sql.Tx, player *models.Player, isVirtual bool, isInit
 			}
 			return gh
 		}(),
-		GuUsedCounts:         make(map[string]int),
-		KillerMoveUsedCounts: make(map[string]int),
-		Mechanics:            combatantMechanics,
-		GuHouse:              guHouseState,
+		GuUsedCounts:                  make(map[string]int),
+		KillerMoveUsedCounts:          make(map[string]int),
+		Mechanics:                     combatantMechanics,
+		PassiveDamageModifiers:        passiveDamageModifiers,
+		DamageMitigations:             damageMitigations,
+		PassiveOperationEffects:       passiveOperationEffects,
+		TurnStartCounterAdds:          turnStartCounterAdds,
+		BeforeHitCounterAdds:          beforeHitCounterAdds,
+		BeforeHitCounterStatModifiers: beforeHitCounterStatModifiers,
+		BeforeHitCounterNotifications: beforeHitCounterNotifications,
+		BeforeHitRecoveries:           beforeHitRecoveries,
+		BattleStartEndCommands:        battleStartEndCommands,
+		GuHouse:                       guHouseState,
 	}
 	simCombatant.StatProvenance = buildStatProvenance(player, playerStats, charFX.HealingReceivedBonus)
 

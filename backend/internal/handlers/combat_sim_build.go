@@ -115,13 +115,12 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 
 	// Áp Chế Giới Vực giả (FAKE_REGIONAL_WALL): chỉ PvP player-vs-player; giảm
 	// công/thủ/tốc của địch theo rank của địch (formula RegionalWallDebuff nhưng giảm 1 nửa).
-	if player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" && playerHasBattleStartMechanic(player, "FAKE_REGIONAL_WALL") {
+	if rankDebuff, configured := playerRankScaledDebuff(player); player.ActiveCombat != nil && player.ActiveCombat.EnemyType == "PVP" && configured {
 		for i := range player.ActiveCombat.Enemies {
 			if i >= len(simState.Enemies) || simState.Enemies[i] == nil {
 				continue
 			}
-			pct, _ := gamefx.RegionalWallDebuff(player.ActiveCombat.Enemies[i].Rank, player.ActiveCombat.Enemies[i].SubRank)
-			debuffPct := pct * 0.5
+			debuffPct, _ := rankScaledDebuffValues(rankDebuff, player.ActiveCombat.Enemies[i].Rank, player.ActiveCombat.Enemies[i].SubRank)
 			factor := 1 + debuffPct
 			simState.Enemies[i].BaseDmg *= factor
 			simState.Enemies[i].BaseDef *= factor
@@ -187,17 +186,18 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 		if !hasSatKhiMechanic(c) {
 			continue
 		}
+		threshold := satKhiThreshold(c)
 		level := 0
 		if c.CustomState != nil {
 			level = c.CustomState["sat_khi_level"]
 		}
-		if level > 10 {
+		if level > threshold {
 			simState.InitialLogs = append(simState.InitialLogs, simulator.CombatLog{
 				Turn:      0,
 				ActorId:   c.ID,
 				ActorName: c.Name,
 				Action:    "SAT_KHI_ACTIVE",
-				Detail:    fmt.Sprintf("[Tất Sát Cổ] của %s đã kích hoạt: sát khí %d > 10, đòn tấn công xuyên khiên/bỏ qua né trong trận này!", c.Name, level),
+				Detail:    fmt.Sprintf("[Tất Sát Cổ] của %s đã kích hoạt: sát khí %d > %d, đòn tấn công xuyên khiên/bỏ qua né trong trận này!", c.Name, level, threshold),
 			})
 		} else {
 			simState.InitialLogs = append(simState.InitialLogs, simulator.CombatLog{
@@ -205,7 +205,7 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 				ActorId:   c.ID,
 				ActorName: c.Name,
 				Action:    "SAT_KHI_INACTIVE",
-				Detail:    fmt.Sprintf("[Tất Sát Cổ] của %s không đủ điều kiện kích hoạt: sát khí %d <= 10 (cần > 10).", c.Name, level),
+				Detail:    fmt.Sprintf("[Tất Sát Cổ] của %s không đủ điều kiện kích hoạt: sát khí %d <= %d (cần > %d).", c.Name, level, threshold, threshold),
 			})
 		}
 	}
@@ -292,6 +292,15 @@ func applyPveTitleDamage(combatant *simulator.CombatantAuto, activeCombat *model
 func buildSimVariantNPC(actor *models.Combatant) *simulator.CombatantAuto {
 	actions := []simulator.SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh thường", Damage: actor.BaseAttack, DamageMult: 1}}
 	mechanics := []simulator.CombatMechanic{}
+	var passiveDamageModifiers []simulator.DamageModifier
+	var damageMitigations []simulator.DamageMitigation
+	var passiveOperationEffects []simulator.SimActionOperation
+	var turnStartCounterAdds []simulator.CounterAdd
+	var beforeHitCounterAdds []simulator.CounterAdd
+	var beforeHitCounterStatModifiers []simulator.CounterStatModifier
+	var beforeHitCounterNotifications []simulator.CombatNotification
+	var beforeHitRecoveries []simulator.ThresholdRecovery
+	var battleStartEndCommands []simulator.BattleEndCommand
 	hunger := map[string]int{}
 	raceFX := gamefx.Get(&models.Player{CharacterState: models.CharacterState{Race: actor.Race}})
 	raceDamageBonus, raceResistance := equippedGuRaceModifiers(actor.GuInventory)
@@ -307,6 +316,16 @@ func buildSimVariantNPC(actor *models.Combatant) *simulator.CombatantAuto {
 			continue
 		}
 		mechanics = append(mechanics, combatMechanicsForSpec(spec, false)...)
+		passiveDamageModifiers = append(passiveDamageModifiers, combatPassiveDamageModifiers(spec)...)
+		damageMitigations = append(damageMitigations, combatDamageMitigations(spec)...)
+		passiveOperationEffects = append(passiveOperationEffects, combatPassiveOperationEffects(spec)...)
+		passiveOperationEffects = append(passiveOperationEffects, combatBeforeEnemyAttackOperationEffects(spec)...)
+		turnStartCounterAdds = append(turnStartCounterAdds, combatTurnStartCounterAdds(spec)...)
+		beforeHitCounterAdds = append(beforeHitCounterAdds, combatBeforeHitCounterAdds(spec)...)
+		beforeHitCounterStatModifiers = append(beforeHitCounterStatModifiers, combatBeforeHitCounterStatModifiers(spec)...)
+		beforeHitCounterNotifications = append(beforeHitCounterNotifications, combatBeforeHitCounterNotifications(spec)...)
+		beforeHitRecoveries = append(beforeHitRecoveries, combatBeforeHitRecoveries(spec)...)
+		battleStartEndCommands = append(battleStartEndCommands, combatBattleStartEndCommands(spec)...)
 		hunger[gu.InstanceID] = gu.Hunger
 		if hasCombatActiveEffects(&spec) {
 			if act, err := buildSimActionFromGu(actor, &spec, "GU_SKILL"); err == nil {
@@ -319,14 +338,14 @@ func buildSimVariantNPC(actor *models.Combatant) *simulator.CombatantAuto {
 	return &simulator.CombatantAuto{ID: actor.ID, Name: actor.Name, Kind: "VariantNPC", Race: actor.Race, Rank: actor.Rank, SubRank: actor.SubRank, AIProfile: actor.AIProfile,
 		GridX: actor.GridX, GridY: actor.GridY, HP: actor.HP, MaxHP: actor.MaxHP, Mana: actor.CurrentMana, MaxMana: actor.MaxMana,
 		BaseDmg: actor.BaseAttack, BaseDef: actor.BaseDefense, Speed: actor.Speed, Actions: actions, Mechanics: mechanics, GuHunger: hunger,
-		RaceDamageBonus: raceDamageBonus, RaceResistance: raceResistance}
+		RaceDamageBonus: raceDamageBonus, RaceResistance: raceResistance, PassiveDamageModifiers: passiveDamageModifiers, DamageMitigations: damageMitigations, PassiveOperationEffects: passiveOperationEffects, TurnStartCounterAdds: turnStartCounterAdds, BeforeHitCounterAdds: beforeHitCounterAdds, BeforeHitCounterStatModifiers: beforeHitCounterStatModifiers, BeforeHitCounterNotifications: beforeHitCounterNotifications, BeforeHitRecoveries: beforeHitRecoveries, BattleStartEndCommands: battleStartEndCommands}
 }
 
 // buildSimPlayerDefender rebuilds a real-player PVP defender with the same
 // buildSimCombatant pipeline used for the initiator, so passive mechanics,
 // killer moves and global buffs load identically on both sides. Returns
-// ok=false for monsters, pets, masked arena opponents (ARENA_IDENTITY_MASK)
-// and tx-less callers, which fall back to buildSimEnemyCombatant.
+// ok=false for monsters, pets and tx-less callers, which fall back to
+// buildSimEnemyCombatant.
 func buildSimPlayerDefender(tx *sql.Tx, enemy *models.Combatant, activeCombat *models.CombatState, isVirtual bool) (*simulator.CombatantAuto, bool) {
 	if tx == nil || enemy == nil || activeCombat == nil {
 		return nil, false
@@ -523,11 +542,35 @@ func hasSatKhiMechanic(c *simulator.CombatantAuto) bool {
 		return false
 	}
 	for _, m := range c.Mechanics {
-		if m.Trigger == "ON_BATTLE_START" && m.ActionCode == "SAT_KHI_GUARANTEE" {
+		if m.Trigger == "ON_BATTLE_START" && (m.ActionCode == "SAT_KHI_GUARANTEE" || m.ActionCode == "HIT_RULE_COUNTER_THRESHOLD") {
 			return true
 		}
 	}
 	return false
+}
+
+func satKhiThreshold(c *simulator.CombatantAuto) int {
+	if c == nil {
+		return 10
+	}
+	for _, mechanic := range c.Mechanics {
+		if mechanic.Trigger != "ON_BATTLE_START" {
+			continue
+		}
+		if mechanic.ActionCode == "HIT_RULE_COUNTER_THRESHOLD" {
+			if key, _ := mechanic.Values["key"].(string); key == "sat_khi_level" {
+				if threshold, ok := mechanic.Values["threshold"].(float64); ok {
+					return int(threshold)
+				}
+			}
+		}
+		if mechanic.ActionCode == "SAT_KHI_GUARANTEE" {
+			if threshold, ok := mechanic.Values["sat_khi_threshold"].(float64); ok {
+				return int(threshold)
+			}
+		}
+	}
+	return 10
 }
 
 // combatTypeLabel returns the human-readable enemy-type label used in the

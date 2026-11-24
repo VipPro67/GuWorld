@@ -23,6 +23,28 @@ type DeduceRecipeRequest struct {
 	RecipeID string `json:"recipe_id" binding:"required"`
 }
 
+func deductionFinishChance(spec models.GuDictionaryItem, guRank, targetRank int) (float64, bool) {
+	params, ok := models.GuDeductionFinishChance(spec)
+	if !ok {
+		mech, legacyOK := models.GuNativeMechanic(spec, "DEDUCTION_INSTANT_FINISH")
+		if !legacyOK || mech.Trigger != gameplayeffects.TriggerAlwaysOn {
+			return 0, false
+		}
+		params = mech.Values
+	}
+	base, _ := params["base_chance"].(float64)
+	step, _ := params["per_rank_step"].(float64)
+	minC, _ := params["min_chance"].(float64)
+	maxC, _ := params["max_chance"].(float64)
+	if base == 0 && step == 0 && minC == 0 && maxC == 0 {
+		base, step, maxC = 0.05, 0.02, 0.5
+	}
+	if maxC <= 0 {
+		maxC = 1.0
+	}
+	return gamefx.InstantDeductionChance(guRank, targetRank, base, step, minC, maxC), true
+}
+
 // DeduceRecipe allows players to spend Mana (Chân Nguyên) and Primeval Stones to improve recipe completion rate
 func DeduceRecipe(c *gin.Context) {
 	var req DeduceRecipeRequest
@@ -105,21 +127,10 @@ func DeduceRecipe(c *gin.Context) {
 		if !ok {
 			continue
 		}
-		mech, ok := models.GuNativeMechanic(spec, "DEDUCTION_INSTANT_FINISH")
-		if !ok || mech.Trigger != gameplayeffects.TriggerAlwaysOn {
+		chance, ok := deductionFinishChance(spec, gu.Rank, targetRank)
+		if !ok {
 			continue
 		}
-		base, _ := mech.Values["base_chance"].(float64)
-		step, _ := mech.Values["per_rank_step"].(float64)
-		minC, _ := mech.Values["min_chance"].(float64)
-		maxC, _ := mech.Values["max_chance"].(float64)
-		if base == 0 && step == 0 && minC == 0 && maxC == 0 {
-			base, step, maxC = 0.05, 0.02, 0.5
-		}
-		if maxC <= 0 {
-			maxC = 1.0
-		}
-		chance := gamefx.InstantDeductionChance(gu.Rank, targetRank, base, step, minC, maxC)
 		if chance > bestInstantChance {
 			bestInstantChance = chance
 			bestInstantGu = spec.Name

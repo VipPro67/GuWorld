@@ -524,6 +524,10 @@ func AnchorAperture(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể chuyển dịch thân thể vào Tiên Khiếu: "+err.Error(), err))
 		return
 	}
+	if _, err := tx.Exec(`UPDATE player_travel_journeys SET status='cancelled',revision=revision+1,next_step_at=NULL,last_event='Hành trình dừng do tiến vào Tiên Khiếu',reason_code='instance_transition',updated_at=NOW() WHERE player_id=$1 AND status IN ('running','paused_manual_combat','paused_condition')`, player.ID); err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể đồng bộ hành trình", err))
+		return
+	}
 
 	if err := tx.Commit(); err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi lưu dữ liệu Hạ Khiếu", err))
@@ -710,6 +714,10 @@ func UnanchorAperture(c *gin.Context) {
 	`, destRegion, destX, destY, playerID)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi hoàn nguyên thân thể về thế giới: "+err.Error(), err))
+		return
+	}
+	if _, err := tx.Exec(`UPDATE player_travel_journeys SET status='cancelled',revision=revision+1,next_step_at=NULL,last_event='Hành trình dừng do rời Tiên Khiếu',reason_code='instance_transition',updated_at=NOW() WHERE player_id=$1 AND status IN ('running','paused_manual_combat','paused_condition')`, playerID); err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể đồng bộ hành trình", err))
 		return
 	}
 

@@ -17,7 +17,6 @@ import (
 type ItemEffects map[string]float64
 
 var itemBlockCodeToKey = map[string]string{
-	"RESTORE_HUNGER":              "hunger",
 	"RESTORE_HP":                  "restore_hp",
 	"RESTORE_MANA":                "restore_mana",
 	"INCREASE_HUMAN_QI":           "increase_human_qi",
@@ -83,9 +82,12 @@ func (e *ItemEffects) scanBlocks(data []byte) error {
 	}
 	*e = make(ItemEffects)
 	type blockOp struct {
-		Op     string          `json:"op"`
-		Code   string          `json:"code"`
-		Params json.RawMessage `json:"params"`
+		Op       string          `json:"op"`
+		Code     string          `json:"code"`
+		SubType  string          `json:"sub_type"`
+		Value    float64         `json:"value"`
+		Resource string          `json:"resource"`
+		Params   json.RawMessage `json:"params"`
 	}
 	type blockItem struct {
 		Operations []blockOp `json:"operations"`
@@ -96,6 +98,66 @@ func (e *ItemEffects) scanBlocks(data []byte) error {
 	}
 	for _, b := range rawBlocks {
 		for _, op := range b.Operations {
+			if op.Op == string(gameplayeffects.OpRequire) {
+				(*e)["immortal_only"] = 1
+				continue
+			}
+			if op.Op == string(gameplayeffects.OpGrantResource) {
+				key := "add_dao_marks"
+				if strings.EqualFold(op.Resource, "HUMAN_QI") {
+					key = "increase_human_qi"
+				}
+				(*e)[key] = op.Value
+				continue
+			}
+			if op.Op == string(gameplayeffects.OpRestoreResource) {
+				key := "restore_earth_qi"
+				if strings.EqualFold(op.Resource, "HEAVEN_QI") {
+					key = "restore_heaven_qi"
+				}
+				(*e)[key] = op.Value
+				continue
+			}
+			if op.Op == string(gameplayeffects.OpModifyAperture) {
+				key := "increase_aperture_area"
+				if strings.EqualFold(op.SubType, "TIME_RATE") {
+					key = "increase_aperture_time_rate"
+				}
+				(*e)[key] = op.Value
+				continue
+			}
+			if op.Op == string(gameplayeffects.OpRandomizeTrait) {
+				key := "random_constitution"
+				if strings.EqualFold(op.SubType, "RACE") {
+					key = "random_race"
+				}
+				(*e)[key] = 1
+				continue
+			}
+			if op.Op == string(gameplayeffects.OpRepairAperture) {
+				(*e)["heal_aperture"] = op.Value
+				continue
+			}
+			if op.Op == string(gameplayeffects.OpOpenRewardContainer) {
+				key := "open_mine_chest"
+				if strings.EqualFold(op.SubType, "IMMORTAL_MINE") {
+					key = "open_immortal_mine_chest"
+				}
+				(*e)[key] = 1
+				continue
+			}
+			if op.Op == string(gameplayeffects.OpPlaceWorldObject) {
+				(*e)["spring_egg_hatch"] = 1
+				continue
+			}
+			if op.Op == string(gameplayeffects.OpHeal) {
+				if strings.EqualFold(op.Resource, "MANA") {
+					(*e)["restore_mana"] = op.Value
+				} else {
+					(*e)["restore_hp"] = op.Value
+				}
+				continue
+			}
 			code := strings.ToUpper(op.Code)
 			key, ok := itemBlockCodeToKey[code]
 			if !ok {
@@ -120,6 +182,11 @@ func ValidateItemEffectBlocks(raw []byte) error {
 	if err != nil {
 		return err
 	}
+	return ValidateItemBlocks(blocks)
+}
+
+// ValidateItemBlocks applies the same item policy to imported and runtime blocks.
+func ValidateItemBlocks(blocks gameplayeffects.BlockSet) error {
 	if err := gameplayeffects.ValidateContextSupport(gameplayeffects.DomainItemUse, blocks); err != nil {
 		return err
 	}
@@ -133,15 +200,9 @@ func validateItemBlockSet(blocks gameplayeffects.BlockSet) error {
 			return fmt.Errorf("item effect block %q requires unconditional ON_CONSUME SELF execution", block.ID)
 		}
 		for _, operation := range block.Operations {
-			if operation.Op != gameplayeffects.OpUnique || (operation.Target != nil && operation.Target.Selector != gameplayeffects.TargetSelf) {
-				return fmt.Errorf("item effect block %q requires a SELF UNIQUE native action", block.ID)
-			}
-			key, ok := itemBlockCodeToKey[strings.ToUpper(strings.TrimSpace(operation.Code))]
-			if !ok {
-				key = strings.ToLower(strings.TrimSpace(operation.Code))
-			}
-			if !itemEffectCodes[key] {
-				return fmt.Errorf("item effect block %q has unsupported native action %q", block.ID, operation.Code)
+			key, err := ValidateItemEffectOperation(operation)
+			if err != nil {
+				return fmt.Errorf("item effect block %q: %w", block.ID, err)
 			}
 			if seenCodes[key] {
 				return fmt.Errorf("item effect defines native action %q more than once", key)
@@ -150,6 +211,97 @@ func validateItemBlockSet(blocks gameplayeffects.BlockSet) error {
 		}
 	}
 	return nil
+}
+
+// ValidateItemEffectOperation is the shared item-use operation policy for
+// import validation and Admin compatibility reporting.
+func ValidateItemEffectOperation(operation gameplayeffects.Operation) (string, error) {
+	if operation.Target != nil && operation.Target.Selector != gameplayeffects.TargetSelf {
+		return "", fmt.Errorf("item operation requires SELF target")
+	}
+	if operation.Op == gameplayeffects.OpHeal {
+		if operation.SubType != "" && operation.SubType != "FLAT" || operation.Value <= 0 || operation.StackPolicy != "" || operation.Resource != "" && !strings.EqualFold(operation.Resource, "HP") && !strings.EqualFold(operation.Resource, "MANA") {
+			return "", fmt.Errorf("unsupported item HEAL parameters")
+		}
+		if strings.EqualFold(operation.Resource, "MANA") {
+			return "restore_mana", nil
+		}
+		return "restore_hp", nil
+	}
+	if operation.Op == gameplayeffects.OpRequire {
+		if operation.SubType != "IMMORTAL" || operation.Resource != "" || operation.Value != 0 || operation.Code != "" || len(operation.Params) > 0 || operation.Path != "" || operation.Unit != "" || operation.Stat != "" || operation.StackPolicy != "" || operation.StatusID != "" || operation.Turns != 0 || operation.Chance != 0 {
+			return "", fmt.Errorf("unsupported item REQUIRE parameters")
+		}
+		return "immortal_only", nil
+	}
+	if operation.Op == gameplayeffects.OpGrantResource {
+		if operation.Resource != "DAO_MARK" && operation.Resource != "HUMAN_QI" || operation.Value <= 0 || operation.SubType != "" || operation.Code != "" || len(operation.Params) > 0 || operation.Path != "" || operation.Unit != "" || operation.Stat != "" || operation.StackPolicy != "" || operation.StatusID != "" || operation.Turns != 0 || operation.Chance != 0 {
+			return "", fmt.Errorf("unsupported item GRANT_RESOURCE parameters")
+		}
+		if operation.Resource == "HUMAN_QI" {
+			return "increase_human_qi", nil
+		}
+		return "add_dao_marks", nil
+	}
+	if operation.Op == gameplayeffects.OpRestoreResource {
+		if operation.Resource != "EARTH_QI" && operation.Resource != "HEAVEN_QI" || operation.Value <= 0 || operation.SubType != "" || operation.Code != "" || len(operation.Params) > 0 || operation.Path != "" || operation.Unit != "" || operation.Stat != "" || operation.StackPolicy != "" || operation.StatusID != "" || operation.Turns != 0 || operation.Chance != 0 {
+			return "", fmt.Errorf("unsupported item RESTORE_RESOURCE parameters")
+		}
+		if operation.Resource == "EARTH_QI" {
+			return "restore_earth_qi", nil
+		}
+		return "restore_heaven_qi", nil
+	}
+	if operation.Op == gameplayeffects.OpModifyAperture {
+		if operation.SubType != "AREA_SIZE" && operation.SubType != "TIME_RATE" || operation.Value <= 0 || operation.Resource != "" || operation.Code != "" || len(operation.Params) > 0 || operation.Path != "" || operation.Unit != "" || operation.Stat != "" || operation.StackPolicy != "" || operation.StatusID != "" || operation.Turns != 0 || operation.Chance != 0 {
+			return "", fmt.Errorf("unsupported item MODIFY_APERTURE parameters")
+		}
+		if operation.SubType == "AREA_SIZE" {
+			return "increase_aperture_area", nil
+		}
+		return "increase_aperture_time_rate", nil
+	}
+	if operation.Op == gameplayeffects.OpRandomizeTrait {
+		if operation.SubType != "CONSTITUTION" && operation.SubType != "RACE" || operation.Value != 0 || operation.Resource != "" || operation.Code != "" || len(operation.Params) > 0 || operation.Path != "" || operation.Unit != "" || operation.Stat != "" || operation.StackPolicy != "" || operation.StatusID != "" || operation.Turns != 0 || operation.Chance != 0 {
+			return "", fmt.Errorf("unsupported item RANDOMIZE_TRAIT parameters")
+		}
+		if operation.SubType == "CONSTITUTION" {
+			return "random_constitution", nil
+		}
+		return "random_race", nil
+	}
+	if operation.Op == gameplayeffects.OpRepairAperture {
+		if operation.Value <= 0 || operation.SubType != "" || operation.Resource != "" || operation.Code != "" || len(operation.Params) > 0 || operation.Path != "" || operation.Unit != "" || operation.Stat != "" || operation.StackPolicy != "" || operation.StatusID != "" || operation.Turns != 0 || operation.Chance != 0 {
+			return "", fmt.Errorf("unsupported item REPAIR_APERTURE parameters")
+		}
+		return "heal_aperture", nil
+	}
+	if operation.Op == gameplayeffects.OpOpenRewardContainer {
+		if operation.SubType != "MORTAL_MINE" && operation.SubType != "IMMORTAL_MINE" || operation.Value != 0 || operation.Resource != "" || operation.Code != "" || len(operation.Params) > 0 || operation.Path != "" || operation.Unit != "" || operation.Stat != "" || operation.StackPolicy != "" || operation.StatusID != "" || operation.Turns != 0 || operation.Chance != 0 {
+			return "", fmt.Errorf("unsupported item OPEN_REWARD_CONTAINER parameters")
+		}
+		if operation.SubType == "MORTAL_MINE" {
+			return "open_mine_chest", nil
+		}
+		return "open_immortal_mine_chest", nil
+	}
+	if operation.Op == gameplayeffects.OpPlaceWorldObject {
+		if operation.SubType != "PRIMEVAL_SPRING" || operation.Value != 0 || operation.Resource != "" || operation.Code != "" || len(operation.Params) > 0 || operation.Path != "" || operation.Unit != "" || operation.Stat != "" || operation.StackPolicy != "" || operation.StatusID != "" || operation.Turns != 0 || operation.Chance != 0 {
+			return "", fmt.Errorf("unsupported item PLACE_WORLD_OBJECT parameters")
+		}
+		return "spring_egg_hatch", nil
+	}
+	if operation.Op != gameplayeffects.OpUnique {
+		return "", fmt.Errorf("unsupported item operation %q", operation.Op)
+	}
+	key, ok := itemBlockCodeToKey[strings.ToUpper(strings.TrimSpace(operation.Code))]
+	if !ok {
+		key = strings.ToLower(strings.TrimSpace(operation.Code))
+	}
+	if !itemEffectCodes[key] {
+		return "", fmt.Errorf("unsupported item native action %q", operation.Code)
+	}
+	return key, nil
 }
 
 // Value implements the driver.Valuer interface for ItemEffects
@@ -222,7 +374,7 @@ var itemEffectCodes = map[string]bool{
 	"lifespan_boost": true, "open_mine_chest": true, "open_immortal_mine_chest": true, "heal_aperture": true,
 	"increase_aperture_area": true, "increase_aperture_time_rate": true,
 	"increase_human_qi": true, "restore_earth_qi": true, "restore_heaven_qi": true, "random_constitution": true, "random_race": true,
-	"change_race": true, "hunger": true, "exit_spatial_realm": true,
+	"change_race": true, "exit_spatial_realm": true,
 	"add_dao_marks": true, "spring_egg_hatch": true,
 }
 
@@ -306,10 +458,17 @@ func LoadItemRegistry(db *sql.DB) error {
 
 		item.ItemType = item.Type // align for backward compatibility
 		if blocks, err := gameplayeffects.DecodeBlockSet(rawEffects); err == nil && len(blocks) > 0 {
+			if err := ValidateItemBlocks(blocks); err != nil {
+				return fmt.Errorf("item %s: %w", item.ID, err)
+			}
 			item.Blocks = blocks
-			_ = item.compile()
+			if err := item.compile(); err != nil {
+				return fmt.Errorf("compile item %s effects: %w", item.ID, err)
+			}
 		}
-		_ = item.Effects.Scan(rawEffects)
+		if err := item.Effects.Scan(rawEffects); err != nil {
+			return fmt.Errorf("scan item %s effects: %w", item.ID, err)
+		}
 
 		if _, compileErr := CompileItemEffects(item.Effects); compileErr != nil {
 			return fmt.Errorf("compile item %s effects: %w", item.ID, compileErr)

@@ -414,6 +414,10 @@ func EnterSpatialRealm(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Không thể chuyển nhân vật vào bí cảnh", err))
 		return
 	}
+	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE player_travel_journeys SET status='cancelled',revision=revision+1,next_step_at=NULL,last_event='Hành trình dừng do vào Bí Cảnh',reason_code='instance_transition',updated_at=NOW() WHERE player_id=$1 AND status IN ('running','paused_manual_combat','paused_condition')`, playerID); err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể đồng bộ hành trình", err))
+		return
+	}
 	if err := tx.Commit(); err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể lưu trạng thái vào bí cảnh", err))
 		return
@@ -486,6 +490,10 @@ func ExitSpatialRealm(c *gin.Context) {
 	updated, err := result.RowsAffected()
 	if err != nil || updated != 1 {
 		c.JSON(http.StatusConflict, gin.H{"error": "Vị trí nhân vật không khớp với phiên bí cảnh"})
+		return
+	}
+	if _, err = tx.ExecContext(c.Request.Context(), `UPDATE player_travel_journeys SET status='cancelled',revision=revision+1,next_step_at=NULL,last_event='Hành trình dừng do rời Bí Cảnh',reason_code='instance_transition',updated_at=NOW() WHERE player_id=$1 AND status IN ('running','paused_manual_combat','paused_condition')`, playerID); err != nil {
+		httperr.Respond(c, httperr.Internal("Không thể đồng bộ hành trình", err))
 		return
 	}
 	if _, err = tx.ExecContext(c.Request.Context(), `UPDATE shared_spatial_instance_members SET exited_at=NOW(),exit_reason='PORTAL' WHERE player_id=$1 AND exited_at IS NULL`, playerID); err != nil {
@@ -702,7 +710,7 @@ func syncSpatialPlayer(playerID uuid.UUID, region string, x, y int, instanceID u
 		inst = instanceID.String()
 	}
 	broadcastWorldPos(WorldPosEvent{ID: playerID.String(), Username: username, AvatarURL: avatar, X: x, Y: y, Region: region, MapID: worldMapIDForRegion(region), InstanceID: inst, TS: time.Now().UnixMilli(), ScopeResolved: true})
-	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, PlayerDomain, SpatialRealmDomain)
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, PlayerDomain, SpatialRealmDomain, TravelJourneyDomain)
 }
 
 // ClaimAltarRequest specifies the altar being claimed by the player.

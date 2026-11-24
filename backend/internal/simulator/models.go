@@ -118,31 +118,64 @@ func TierToDuration(effectType string, tier int) int {
 // SimAction is a pre-computed action from a Gu, killer move, or basic attack.
 // It is produced by the handler using CalculateGuEffectForCombatant + BuildCombatAction
 // and consumed by the simulator engine.
+// CombatNotification is a configured combat-log entry emitted by a typed
+// effect operation after the operation's state changes have resolved.
+type CombatNotification struct {
+	Action     string
+	Message    string
+	CounterKey string
+	Phase      string
+	EffectID   string
+}
+
 type SimAction struct {
-	ActionType     string   // "BASIC_ATTACK" | "GU_SKILL" | "KILLER_MOVE" | "HEAL" | "SHIELD"
-	Name           string   // display name
-	SourceID       string   // GuID or KillerMoveID for tactic matching
-	InstanceID     string   // Gu instance ID (player_gu.id) when ActionType == "GU_SKILL"
-	KillerMoveID   string   // persisted player killer-move id for mastery tracking
-	ComponentGuIDs []string // Gu instances that lose hunger when this killer move is attempted
-	SuccessChance  float64  // 0..1; only used by KILLER_MOVE
-	Path           []string // dao paths used to compute the dao mark bonus in the engine
-	Rank           int      // rank of the Gu/Skill
-	Damage         float64  // raw damage before defense mitigation (excludes dao bonus; engine applies it)
-	DamageMult     float64  // damage multiplier (applied on top of Damage)
-	ShieldMult     float64  // shield multiplier (applied on top of Defense)
-	Defense        float64  // shield value granted to self (excludes dao bonus)
-	Healing        float64  // HP restored to self (excludes dao bonus)
-	Reason         string   // explanation for scaling/reduction (e.g. "Lưu phái chưa đạt Sơ Thông (uy lực x0.70)")
-	ManaCost       float64  // mana consumed on use
-	ManaRestore    float64  // mana restored to self
-	CleanseDebuffs bool     // purges debuffs/DoTs from self
-	BleedPerTurn   float64  // bleed DoT per turn (applied to target)
-	PoisonPerTurn  float64  // poison DoT per turn (applied to target)
-	LifeStealPct   float64  // percentage of damage dealt healed back (0-1)
-	MultiHit       int      // number of hits (chain_damage compound)
-	PhantomDmg     float64  // bonus phantom damage
-	ThornsDmg      float64  // reflect damage to attacker
+	ActionType                string   // "BASIC_ATTACK" | "GU_SKILL" | "KILLER_MOVE" | "HEAL" | "SHIELD"
+	Name                      string   // display name
+	SourceID                  string   // GuID or KillerMoveID for tactic matching
+	InstanceID                string   // Gu instance ID (player_gu.id) when ActionType == "GU_SKILL"
+	KillerMoveID              string   // persisted player killer-move id for mastery tracking
+	ComponentGuIDs            []string // Gu instances that lose hunger when this killer move is attempted
+	SuccessChance             float64  // 0..1; only used by KILLER_MOVE
+	Path                      []string // dao paths used to compute the dao mark bonus in the engine
+	Rank                      int      // rank of the Gu/Skill
+	Damage                    float64  // raw damage before defense mitigation (excludes dao bonus; engine applies it)
+	DamageMult                float64  // damage multiplier (applied on top of Damage)
+	BonusStrikes              []BonusStrike
+	ChainDamages              []ChainDamage
+	DamageModifiers           []DamageModifier
+	PreChainDamageModifiers   []PhaseDamageModifier
+	DefensePenetration        float64
+	TargetDamageModifiers     []TargetDamageModifier
+	StatusDetonations         []StatusDetonation
+	HPCosts                   []HPCost
+	CounterAdds               []CounterAdd
+	CounterHeals              []CounterHeal
+	ShieldMult                float64 // shield multiplier (applied on top of Defense)
+	Defense                   float64 // shield value granted to self (excludes dao bonus)
+	Healing                   float64 // HP restored to self (excludes dao bonus)
+	Reason                    string  // explanation for scaling/reduction (e.g. "Lưu phái chưa đạt Sơ Thông (uy lực x0.70)")
+	ManaCost                  float64 // mana consumed on use
+	ManaRestore               float64 // mana restored to self
+	ManaRestoreTargetFlat     float64
+	ManaRestoreTargetPercent  float64
+	ManaRestoreSuppressLog    bool
+	ManaRestoreSuppressLogSet bool
+	CombatNotifications       []CombatNotification
+	PreAppliedEffectIDs       map[string]bool
+	ResourceTransfers         []ResourceTransfer
+	ResourceConversions       []ResourceConversion
+	CleanseDebuffs            bool // purges debuffs/DoTs from self
+	CleanseStatusIDs          []string
+	DispelBuffs               int  // removes at most this many buffs from the selected combat target
+	DispelProtections         bool // clears shield, invincibility, and last-stand protection from the selected combat target
+	DispelLogAction           string
+	DispelMessage             string
+	BleedPerTurn              float64 // bleed DoT per turn (applied to target)
+	PoisonPerTurn             float64 // poison DoT per turn (applied to target)
+	LifeStealPct              float64 // percentage of damage dealt healed back (0-1)
+	MultiHit                  int     // number of hits (chain_damage compound)
+	PhantomDmg                float64 // bonus phantom damage
+	ThornsDmg                 float64 // reflect damage to attacker
 
 	// ── New status effect fields (tier-based) ──
 	StunTier       int // tier (1-5) for stun on target
@@ -165,12 +198,14 @@ type SimAction struct {
 
 	// Percent-based direct effects (0..1), from active.damage_hp_percent etc.
 	// Generic: any Gu may set them; engine applies them after normal damage.
-	DamageHPPercent    float64 // % target MaxHP as direct HP damage (bypasses shield)
-	ShieldStripPercent float64 // % target current shield stripped
-	ProcChance         float64 // 0 = always; >0 = gate status ops + bonus effects
-	TargetWeakPct      float64 // WEAK intensity 0..1 applied to target
-	BonusTurns         int     // duration for TargetWeakPct effects
-	DisableGuTurns     int     // GU_SEAL turns applied to target (disable_gu_next_turn)
+	DamageHPPercent                  float64 // % target MaxHP as direct HP damage (bypasses shield)
+	ShieldStripPercent               float64 // % target current shield stripped
+	ShieldStripIgnoreRankSuppression bool    // authored direct strip that is not reduced by target rank
+	ProcChance                       float64 // 0 = always; >0 = gate status ops + bonus effects
+	TargetWeakPct                    float64 // WEAK intensity 0..1 applied to target
+	BonusTurns                       int     // duration for TargetWeakPct effects
+	DisableGuTurns                   int     // GU_SEAL turns applied to target (disable_gu_next_turn)
+	GuaranteedHit                    bool    // skips hit-avoidance checks for this action
 
 	// Backlash from using Gu rank > actor rank
 	BacklashDamage float64 // HP damage taken by caster from Gu backlash
@@ -208,7 +243,12 @@ type SimAction struct {
 	// by handlers at combat build time. Empty means no persistent effect.
 	PersistentStatusKey string
 	// PersistentPvPOnly restricts the persistent grant to real PvP hits.
-	PersistentPvPOnly bool
+	PersistentPvPOnly             bool
+	PersistentStatusConfigured    bool
+	PersistentStatusMaxStacks     int
+	PersistentStatusDurationHours float64
+	PersistentStatusDispelRule    string
+	PersistentStatusTierScaling   []gameplayeffects.StackingStatusTier
 
 	// OperationEffects is the authoritative operation-level adapter for Block v2
 	// combat actions and composed Killer Moves. Each entry keeps its compiled
@@ -224,12 +264,151 @@ type SimAction struct {
 	IsEffectOperation bool
 }
 
+// BonusStrike describes a probabilistic follow-up hit based on this action's
+// raw damage. It runs at the authored action-rider phase and uses direct HP
+// damage for legacy BEAST_PHANTOM_STRIKE compatibility.
+type BonusStrike struct {
+	Chance         float64
+	DamageModifier float64
+	MinDamage      float64
+	LogAction      string
+	Message        string
+}
+
+// ChainDamage applies a bounded fraction of a parent action's damage to living secondary targets.
+type ChainDamage struct {
+	Fraction    float64
+	MinDamage   float64
+	TargetCount int
+	LogAction   string
+	Message     string
+}
+
+// DamageModifier applies a deterministic multiplier from combat context. It is
+// evaluated in the combat action rider phase before damage.
+type DamageModifier struct {
+	SubType         string
+	BaseMultiplier  float64
+	PerMissingHP    float64
+	PerTargetDebuff float64
+	PerMinion       float64
+	CounterKey      string
+	PerCounter      float64
+	StatusID        string
+	Phase           string
+	LogAction       string
+	Message         string
+}
+
+// TargetDamageModifier changes an affected target's outgoing damage for the
+// rest of combat. REDUCE subtracts Value and clamps at MinMultiplier.
+type TargetDamageModifier struct {
+	Value         float64
+	MinMultiplier float64
+	LogAction     string
+	Message       string
+}
+
+type PhaseDamageModifier struct {
+	Multiplier float64
+	EffectID   string
+}
+
+// DamageMitigation applies a reusable incoming-damage conversion during the
+// BEFORE_HIT stage of the normal strike pipeline.
+type DamageMitigation struct {
+	BlockID         string
+	Ratio           float64
+	ConvertToShield bool
+	LogAction       string
+	Message         string
+}
+
+// StatusDetonation consumes all stacks of a registered combat status and
+// applies the configured direct HP damage formula.
+type StatusDetonation struct {
+	StatusID     string
+	PerStack     float64
+	PerStrength  float64
+	MaxHPPercent float64
+	MinDamage    float64
+	Phase        string
+	LogAction    string
+	Message      string
+}
+
+// HPCost charges the actor a bounded amount of current HP during its action.
+type HPCost struct {
+	CurrentHPPercent float64
+	MinCost          float64
+	MinRemaining     float64
+	Phase            string
+	LogAction        string
+	Message          string
+}
+
+// CounterAdd updates one named combatant counter when its effect operation runs.
+type CounterAdd struct {
+	Key   string
+	Delta int
+	Min   int
+	Max   int
+}
+
+// CounterStatModifier grants a permanent combat-stat increase for each point
+// added to a named counter at the incoming-hit phase.
+type CounterStatModifier struct {
+	Key        string
+	Stat       string
+	PerCounter float64
+}
+
+// ThresholdRecovery heals and cleanses a combatant when its HP reaches a
+// configured threshold, with a bounded number of activations per source.
+type ThresholdRecovery struct {
+	SourceID       string
+	OperationID    string
+	HPThreshold    float64
+	HealPercent    float64
+	MaxUses        int
+	CleanseDebuffs bool
+	LogAction      string
+	Message        string
+}
+
+// CounterHeal restores a percentage of the actor MaxHP for each counter unit.
+type CounterHeal struct {
+	Key        string
+	PerCounter float64
+}
+
+// ResourceTransfer describes a bounded combat resource transfer from the
+// selected target to the acting combatant.
+type ResourceTransfer struct {
+	Resource  string
+	SubType   string
+	Value     float64
+	MinAmount float64
+	Phase     string
+	Message   string
+	LogAction string
+}
+
+// ResourceConversion converts a fraction of the actor's current HP to shield.
+type ResourceConversion struct {
+	Fraction     float64
+	MinRemaining float64
+	Message      string
+	LogAction    string
+}
+
 // SimActionOperation is the stable operation-level carrier for composed
 // Killer Move effects. Action is an adapter for the simulator's existing
 // effect pipeline; it can be removed as operation execution gains parity.
 type SimActionOperation struct {
 	Compiled             gameplayeffects.CompiledOperation
 	SourceGuID           string
+	SourcePaths          []string
 	SourceInstanceID     string
 	SourceRank           int
 	PlayerATKCoefficient float64
@@ -251,6 +430,21 @@ type CombatMechanic struct {
 	Path []string
 }
 
+type GuSealOperation struct {
+	CounterKey      string
+	Chance          float64
+	Turns           int
+	MaxActivations  int
+	BackfireAtLimit bool
+	BackfireTurns   int
+}
+
+type BattleEndCommand struct {
+	Outcome   string
+	LogAction string
+	Message   string
+}
+
 // NewCombatMechanic compiles native mechanic parameters before simulation.
 func NewCombatMechanic(trigger, actionCode string, params []byte) CombatMechanic {
 	m := CombatMechanic{Trigger: trigger, ActionCode: actionCode, Params: append([]byte(nil), params...)}
@@ -258,19 +452,51 @@ func NewCombatMechanic(trigger, actionCode string, params []byte) CombatMechanic
 	return m
 }
 
-// CompiledCombatMechanics adapts registry-compiled native mechanics without
-// parsing JSON during combat construction or simulation.
+// CompiledCombatMechanics adapts native mechanics and the typed SUMMON
+// operation without parsing JSON during combat construction or simulation.
 func CompiledCombatMechanics(compiled *gameplayeffects.Compiled, action bool) []CombatMechanic {
 	if compiled == nil {
 		return nil
 	}
 	var result []CombatMechanic
-	for _, op := range compiled.NativeMechanics() {
+	for _, op := range compiled.AllOperations() {
 		isAction := op.Trigger == gameplayeffects.TriggerOnCast || op.Trigger == gameplayeffects.TriggerOnHit || op.Trigger == gameplayeffects.TriggerOnAction
 		if isAction != action {
 			continue
 		}
-		result = append(result, CombatMechanic{Trigger: string(op.Trigger), ActionCode: op.Code, Params: append([]byte(nil), op.Params...), Values: op.Values})
+		switch op.Type {
+		case gameplayeffects.OpUnique:
+			result = append(result, CombatMechanic{Trigger: string(op.Trigger), ActionCode: op.Code, Params: append([]byte(nil), op.Params...), Values: op.Values})
+		case gameplayeffects.OpSummon:
+			result = append(result, CombatMechanic{Trigger: string(op.Trigger), ActionCode: "SUMMON_MONSTER", Params: append([]byte(nil), op.Params...), Values: op.Values})
+		case gameplayeffects.OpRevive:
+			code := "REBORN"
+			if op.SubType == "NIRVANA_FIRE" {
+				code = op.SubType
+			}
+			result = append(result, CombatMechanic{Trigger: string(op.Trigger), ActionCode: code, Params: append([]byte(nil), op.Params...), Values: op.Values})
+		case gameplayeffects.OpDisplace:
+			if op.Trigger == gameplayeffects.TriggerOnBattleStart && (op.SubType == "RETREAT" || op.SubType == "SET_ROW") && op.Target != nil && op.Target.Selector == gameplayeffects.TargetSelf {
+				result = append(result, CombatMechanic{Trigger: string(op.Trigger), ActionCode: "DISPLACE", Values: map[string]any{"direction": op.SubType, "steps": op.Value}})
+			}
+		case gameplayeffects.OpHitRule:
+			if op.SubType == "COUNTER_THRESHOLD" && op.Trigger == gameplayeffects.TriggerOnBattleStart && op.Target != nil && op.Target.Selector == gameplayeffects.TargetSelf {
+				result = append(result, CombatMechanic{Trigger: string(op.Trigger), ActionCode: "HIT_RULE_COUNTER_THRESHOLD", Values: op.Values})
+			} else if op.SubType == "FIRST_TURN_EVADE" || op.SubType == "LETHAL_LUCK_WARD" {
+				result = append(result, CombatMechanic{Trigger: string(op.Trigger), ActionCode: op.SubType, Values: op.Values})
+			}
+		case gameplayeffects.OpTurnOrderRule:
+			code := ""
+			switch op.SubType {
+			case "SEIZE_INITIATIVE":
+				code = "SEIZE_INITIATIVE"
+			case "SUPPRESS_ENEMY_PRIORITY":
+				code = "SUPPRESS_PRIORITY"
+			}
+			if code != "" {
+				result = append(result, CombatMechanic{Trigger: string(op.Trigger), ActionCode: code, Values: op.Values})
+			}
+		}
 	}
 	return result
 }
@@ -355,6 +581,8 @@ type CombatantAuto struct {
 	HealingReceivedPenalty  float64                  // additive healing reduction from active effects
 	MentalResistance        float64                  // chance (0-1) to resist control effects
 	Tenacity                float64                  // generic self-dispel chance + CC duration reduction (0-1)
+	tenacityBase            float64                  // Tenacity before status/passive bonuses, so recomputes stay idempotent
+	tenacityBaseSet         bool                     // true once tenacityBase captured
 	CCResist                float64                  // generic proc resist vs all debuffs (0-1)
 	SoulDefenseBonus        float64                  // percentage reduction of soul damage taken
 	LuckBonus               float64                  // flat increase of luck stat
@@ -382,15 +610,16 @@ type CombatantAuto struct {
 	ActiveDoT []DoTEffect
 
 	// ── Derived combat stats (computed each turn from active effects) ──
-	EffectiveSpeed    float64 // speed after slow debuff
-	DamageMultiplier  float64 // multiplier from weak debuff / atk_up buff (default 1.0)
-	DefenseMultiplier float64 // multiplier from def_up buff (default 1.0)
-	ThornsDamage      float64 // % of damage reflected back (from thorns buff)
-	IsSilenced        bool    // cannot use skills, only basic attack
-	IsStunned         bool    // loses turn (STUN)
-	IsFrozen          bool    // loses turn like stun, can break on damage
-	HasTaunt          bool    // forces enemies to attack this unit
-	TaunterID         string  // ID of the taunter (for target redirection)
+	EffectiveSpeed        float64 // speed after slow debuff
+	DamageMultiplier      float64 // multiplier from weak debuff / atk_up buff (default 1.0)
+	DamageOutputModifiers []TargetDamageModifier
+	DefenseMultiplier     float64 // multiplier from def_up buff (default 1.0)
+	ThornsDamage          float64 // % of damage reflected back (from thorns buff)
+	IsSilenced            bool    // cannot use skills, only basic attack
+	IsStunned             bool    // loses turn (STUN)
+	IsFrozen              bool    // loses turn like stun, can break on damage
+	HasTaunt              bool    // forces enemies to attack this unit
+	TaunterID             string  // ID of the taunter (for target redirection)
 
 	// ── New status-derived flags (driven by statusfx registry) ──
 	IsSleeping     bool // loses turn, breaks on damage (SLEEP)
@@ -460,6 +689,24 @@ type CombatantAuto struct {
 
 	// Mechanics contains equipped/passive mechanics compiled at combat start.
 	Mechanics []CombatMechanic
+	// BattleStartEndCommands are validated typed battle-control operations.
+	BattleStartEndCommands []BattleEndCommand
+	// PassiveDamageModifiers are typed COMBAT_PASSIVE modifiers projected from equipped Gu data.
+	PassiveDamageModifiers []DamageModifier
+	DamageMitigations      []DamageMitigation
+	// PassiveOperationEffects are conditional or phase-bound COMBAT_PASSIVE operations.
+	PassiveOperationEffects []SimActionOperation
+	// TurnStartCounterAdds are typed counters applied once at the combatant's
+	// start-of-turn event, before native compatibility hooks at that phase.
+	TurnStartCounterAdds []CounterAdd
+	// BeforeHitCounterAdds run after hit avoidance and mitigation conversion,
+	// at the incoming-hit passive boundary before immunity and HP damage checks.
+	BeforeHitCounterAdds []CounterAdd
+	// BeforeHitCounterStatModifiers scale with the effective counter delta.
+	BeforeHitCounterStatModifiers []CounterStatModifier
+	// BeforeHitCounterNotifications are emitted after a matching counter grows.
+	BeforeHitCounterNotifications []CombatNotification
+	BeforeHitRecoveries           []ThresholdRecovery
 
 	// Internal action index for round-robin
 	nextActionIdx int

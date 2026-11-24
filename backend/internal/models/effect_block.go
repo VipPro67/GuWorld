@@ -56,15 +56,17 @@ type EffectCondition struct {
 type AtomicOpType string
 
 const (
-	OpDamage   AtomicOpType = "DAMAGE"
-	OpShield   AtomicOpType = "SHIELD"
-	OpHeal     AtomicOpType = "HEAL"
-	OpDirectHP AtomicOpType = "DIRECT_HP"
-	OpStatMod  AtomicOpType = "STAT_MOD"
-	OpStatus   AtomicOpType = "STATUS"
-	OpBarrier  AtomicOpType = "BARRIER"
-	OpCleanse  AtomicOpType = "CLEANSE"
-	OpUnique   AtomicOpType = "UNIQUE"
+	OpDamage            AtomicOpType = "DAMAGE"
+	OpShield            AtomicOpType = "SHIELD"
+	OpHeal              AtomicOpType = "HEAL"
+	OpDirectHP          AtomicOpType = "DIRECT_HP"
+	OpStatMod           AtomicOpType = "STAT_MOD"
+	OpStatus            AtomicOpType = "STATUS"
+	OpBarrier           AtomicOpType = "BARRIER"
+	OpCleanse           AtomicOpType = "CLEANSE"
+	OpTargetRedirection AtomicOpType = "TARGET_REDIRECTION"
+	OpOutcomeRoulette   AtomicOpType = "OUTCOME_ROULETTE"
+	OpUnique            AtomicOpType = "UNIQUE"
 )
 
 // AtomicOperation is a single granular action within a ComposableEffectBlock.

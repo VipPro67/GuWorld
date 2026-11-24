@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
@@ -52,13 +53,14 @@ func applyLethalLuckWard(target *CombatantAuto, logs *[]CombatLog, turn int, rng
 		return false
 	}
 
-	luckChance := 0.25 // Base 25%
+	luckChance := mechanicFloat(target.Mechanics, "BEFORE_HIT", "LETHAL_LUCK_WARD", "chance", 0.25)
 	if rng.Float64() < luckChance {
 		target.CustomState["lethal_luck_used"] = 1
 		target.HP = 1.0
-		shieldGain := target.MaxHP * 0.35
-		if shieldGain < 100 {
-			shieldGain = 100
+		shieldGain := target.MaxHP * mechanicFloat(target.Mechanics, "BEFORE_HIT", "LETHAL_LUCK_WARD", "shield_percent", 0.35)
+		shieldMin := mechanicFloat(target.Mechanics, "BEFORE_HIT", "LETHAL_LUCK_WARD", "shield_min", 100)
+		if shieldGain < shieldMin {
+			shieldGain = shieldMin
 		}
 		target.VirtualShield += shieldGain
 		if logs != nil {
@@ -97,28 +99,40 @@ func applyNirvanaRebirth(state *CombatState, target *CombatantAuto, logs *[]Comb
 	}
 	target.CustomState["nirvana_fire_used"] = 1
 
-	reviveHP := target.MaxHP * 0.40
-	if reviveHP < 20 {
-		reviveHP = 20
+	revivePercent := actorMechanicFloat(target, "NIRVANA_FIRE", "revive_hp_percent", 0.40)
+	minimumReviveHP := actorMechanicFloat(target, "NIRVANA_FIRE", "minimum_revive_hp", 20)
+	retaliationPercent := actorMechanicFloat(target, "NIRVANA_FIRE", "retaliation_damage_percent", 0.80)
+	minimumRetaliationDamage := actorMechanicFloat(target, "NIRVANA_FIRE", "minimum_retaliation_damage", 30)
+	clearDebuffs := actorMechanicBool(target, "NIRVANA_FIRE", "clear_debuffs", true)
+	reviveHP := target.MaxHP * revivePercent
+	if reviveHP < minimumReviveHP {
+		reviveHP = minimumReviveHP
 	}
 	target.HP = reviveHP
 
-	// Cleanse debuffs
-	var cleanedEffects []Effect
-	for _, eff := range target.ActiveEffects {
-		if eff.Type != "debuff" {
-			cleanedEffects = append(cleanedEffects, eff)
+	if clearDebuffs {
+		var cleanedEffects []Effect
+		for _, eff := range target.ActiveEffects {
+			if eff.Type != "debuff" {
+				cleanedEffects = append(cleanedEffects, eff)
+			}
 		}
+		target.ActiveEffects = cleanedEffects
 	}
-	target.ActiveEffects = cleanedEffects
 
 	if logs != nil {
+		detail := fmt.Sprintf("[Viêm Đạo - Niết Bàn Hỏa] Thân thể bốc cháy ngút trời, %s dục hỏa trùng sinh hồi sinh với %.0f HP", target.Name, reviveHP)
+		if clearDebuffs {
+			detail += " và tẩy trừ toàn bộ hiệu ứng bất lợi!"
+		} else {
+			detail += "!"
+		}
 		*logs = append(*logs, CombatLog{
 			Turn:      turn,
 			ActorId:   target.ID,
 			ActorName: target.Name,
 			Action:    "NIRVANA_FIRE",
-			Detail:    fmt.Sprintf("[Viêm Đạo - Niết Bàn Hỏa] Thân thể bốc cháy ngút trời, %s dục hỏa trùng sinh hồi sinh với %.0f HP và tẩy trừ toàn bộ hiệu ứng bất lợi!", target.Name, reviveHP),
+			Detail:    detail,
 		})
 	}
 
@@ -135,9 +149,9 @@ func applyNirvanaRebirth(state *CombatState, target *CombatantAuto, logs *[]Comb
 		if !isAlly {
 			opponents = state.Allies
 		}
-		blastDmg := target.BaseDmg * 0.80
-		if blastDmg < 30 {
-			blastDmg = 30
+		blastDmg := target.BaseDmg * retaliationPercent
+		if blastDmg < minimumRetaliationDamage {
+			blastDmg = minimumRetaliationDamage
 		}
 		for _, opp := range opponents {
 			if opp != nil && opp.HP > 0 {
@@ -162,6 +176,58 @@ func applyNirvanaRebirth(state *CombatState, target *CombatantAuto, logs *[]Comb
 	return true
 }
 
+func actorMechanicFloat(actor *CombatantAuto, code, key string, fallback float64) float64 {
+	if actor == nil {
+		return fallback
+	}
+	read := func(mechanics []CombatMechanic) (float64, bool) {
+		for _, mechanic := range mechanics {
+			if mechanic.ActionCode != code {
+				continue
+			}
+			if value, ok := mechanic.Values[key].(float64); ok {
+				return value, true
+			}
+		}
+		return 0, false
+	}
+	if value, ok := read(actor.Mechanics); ok {
+		return value
+	}
+	for _, action := range actor.Actions {
+		if value, ok := read(action.Mechanics); ok {
+			return value
+		}
+	}
+	return fallback
+}
+
+func actorMechanicBool(actor *CombatantAuto, code, key string, fallback bool) bool {
+	if actor == nil {
+		return fallback
+	}
+	read := func(mechanics []CombatMechanic) (bool, bool) {
+		for _, mechanic := range mechanics {
+			if mechanic.ActionCode != code {
+				continue
+			}
+			if value, ok := mechanic.Values[key].(bool); ok {
+				return value, true
+			}
+		}
+		return false, false
+	}
+	if value, ok := read(actor.Mechanics); ok {
+		return value
+	}
+	for _, action := range actor.Actions {
+		if value, ok := read(action.Mechanics); ok {
+			return value
+		}
+	}
+	return fallback
+}
+
 // isImmuneToDamage reports whether Bất Hoại blocks damage entirely. Covers the
 // registry buff, the raw "invulnerable" effect CHAOS_GAMBLE grants
 // (engine.go:1492), and the legacy DamageTakenReduction == 1 sentinel from
@@ -184,15 +250,16 @@ func isImmuneToDamage(target *CombatantAuto, satKhiPierce bool) bool {
 // satKhiPiercesImmunity reports whether the actor's Sát Khí is high enough to
 // ignore both Bất Hoại and Bất Tử (Tất Sát Cổ, threshold > 10).
 func satKhiPiercesImmunity(actor *CombatantAuto) bool {
-	return actor != nil && actor.CustomState != nil &&
-		hasMechanic(actor.Mechanics, "ON_BATTLE_START", "SAT_KHI_GUARANTEE") &&
-		actor.CustomState["sat_khi_level"] > 10
+	return counterThresholdHitRule(actor, "bypass_immunity")
 }
 
 // isGuaranteedHit reports whether an action or actor possesses the GUARANTEED_HIT
 // mechanic (bypasses evasion, blindness, and first-turn evade).
 func isGuaranteedHit(actor *CombatantAuto, a *SimAction) bool {
 	if a != nil {
+		if a.GuaranteedHit {
+			return true
+		}
 		if hasMechanic(a.Mechanics, "ON_HIT", "GUARANTEED_HIT") ||
 			hasMechanic(a.Mechanics, "ON_ACTION", "GUARANTEED_HIT") ||
 			hasMechanic(a.Mechanics, "ON_CAST", "GUARANTEED_HIT") ||
@@ -303,6 +370,57 @@ func TryTenacityDispel(c *CombatantAuto, turn int, rng *rand.Rand) []CombatLog {
 // tickDoTs applies damage-over-time effects and returns log entries.
 func tickDoTs(c *CombatantAuto, turn int) []CombatLog {
 	return appendTickDoTs(nil, c, turn)
+}
+
+// normalizeLegacyDoTStatuses moves damage/heal-over-time statuses that legacy
+// native hooks appended to ActiveEffects into ActiveDoT, where the tick loop
+// actually applies them. Typed STATUS operations already route these
+// behaviours into ActiveDoT, so normalizing makes both authoring paths
+// behave identically instead of leaving legacy rows as inert markers.
+//
+// Entries without a positive value or duration stay in ActiveEffects: a bare
+// status marker must never invent damage that the authored row never declared.
+func normalizeLegacyDoTStatuses(c *CombatantAuto) {
+	if c == nil || len(c.ActiveEffects) == 0 {
+		return
+	}
+	kept := c.ActiveEffects[:0]
+	for _, eff := range c.ActiveEffects {
+		spec, ok := statusfx.Spec(eff.ID)
+		if !ok || eff.Value <= 0 || eff.Duration <= 0 {
+			kept = append(kept, eff)
+			continue
+		}
+		switch spec.Behaviour {
+		case statusfx.BehaviourDot:
+			c.ActiveDoT = append(c.ActiveDoT, DoTEffect{
+				Type:       dotType(eff.ID),
+				Value:      float64(eff.Value),
+				Turns:      eff.Duration,
+				DirectHP:   spec.DirectHP,
+				SourcePath: spec.Path,
+			})
+		case statusfx.BehaviourRegen:
+			c.ActiveDoT = append(c.ActiveDoT, DoTEffect{
+				Type:  "regen",
+				Value: float64(eff.Value),
+				Turns: eff.Duration,
+			})
+		default:
+			kept = append(kept, eff)
+		}
+	}
+	c.ActiveEffects = kept
+}
+
+// applyDamageOutputModifier stores a battle-persistent target-side modifier and
+// refreshes the derived multiplier so it remains active after effect recompute.
+func applyDamageOutputModifier(target *CombatantAuto, modifier TargetDamageModifier) {
+	if target == nil {
+		return
+	}
+	target.DamageOutputModifiers = append(target.DamageOutputModifiers, modifier)
+	ComputeEffectMultipliers(target)
 }
 
 func appendTickDoTs(logs []CombatLog, c *CombatantAuto, turn int) []CombatLog {
@@ -478,7 +596,16 @@ func tickStatusEffects(c *CombatantAuto, turn int) []CombatLog {
 
 // ComputeEffectMultipliers calculates derived combat stats from active effects.
 // Call this after tickStatusEffects and before action execution.
+//
+// The function is idempotent: it rebuilds every derived field from scratch on
+// each call, so the engine may recompute mid-action (status application,
+// shields, seals) without the additive bonuses drifting.
 func ComputeEffectMultipliers(c *CombatantAuto) {
+	if !c.tenacityBaseSet {
+		c.tenacityBase = c.Tenacity
+		c.tenacityBaseSet = true
+	}
+	c.Tenacity = c.tenacityBase
 	c.DamageMultiplier = 1.0
 	c.DefenseMultiplier = 1.0
 	c.ThornsDamage = 0.0
@@ -658,10 +785,36 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 	if hasMechanic(c.Mechanics, "COMBAT_PASSIVE", "BERSERK_STATE") {
 		if c.HP < c.MaxHP && c.MaxHP > 0 {
 			missingPct := (c.MaxHP - c.HP) / c.MaxHP
-			c.DamageMultiplier += missingPct * 0.80
+			if !mechanicBool(c.Mechanics, "COMBAT_PASSIVE", "BERSERK_STATE", "damage_modifier_in_primitive", false) {
+				c.DamageMultiplier += missingPct * 0.80
+			}
 			c.Tenacity += missingPct * 0.50
 			if missingPct >= 0.70 { // HP < 30%: Enraged kháng choáng/đóng băng
 				c.IsStunned = false
+				c.IsFrozen = false
+			}
+		}
+	}
+	for _, effect := range c.PassiveOperationEffects {
+		op := effect.Compiled
+		switch op.Type {
+		case gameplayeffects.OpTenacityModifier:
+			if c.MaxHP > 0 && c.HP < c.MaxHP {
+				missingPct := (c.MaxHP - c.HP) / c.MaxHP
+				c.Tenacity += op.Value + missingPct*op.PerMissingHP
+			}
+		case gameplayeffects.OpStatusImmunity:
+			if c.MaxHP <= 0 || len(op.Conditions) == 0 {
+				continue
+			}
+			matches, err := gameplayeffects.ConditionsMatch(op.Conditions, gameplayeffects.ConditionValues{"HP_PERCENT": c.HP / c.MaxHP})
+			if err != nil || !matches {
+				continue
+			}
+			switch op.SubType {
+			case "STUN":
+				c.IsStunned = false
+			case "FREEZE":
 				c.IsFrozen = false
 			}
 		}
@@ -674,6 +827,10 @@ func ComputeEffectMultipliers(c *CombatantAuto) {
 			stacks = 5
 		}
 		c.DamageMultiplier += float64(stacks) * 0.10
+	}
+
+	for _, modifier := range c.DamageOutputModifiers {
+		c.DamageMultiplier = math.Max(modifier.MinMultiplier, c.DamageMultiplier-modifier.Value)
 	}
 
 	c.EffectiveSpeed = c.Speed * speedMult

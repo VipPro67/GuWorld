@@ -77,7 +77,7 @@ Các biến client `NEXT_PUBLIC_*` được nhúng vào frontend lúc build. C�
 
 ## Worker nền
 
-Worker hiện là goroutine polling loop, không phải queue. Mọi ticker lặp phải dùng `internal/worker/runner.go` (`RunEvery`/`RunEveryE`); công việc một lần hoặc cần flush khi dừng dùng `SafeRun`/`SafeRunE`. Nhận `context.Context`, giới hạn thời gian/khối lượng mỗi tick và ghi log lỗi. Worker gồm xử lý đói/tăng trưởng Gu và pet, độ kiếp, phiên luyện Cổ/combat, mỏ, auction, tournament, daily mission, sect maintenance/mission/territory, trạng thái hết hạn và mô phỏng xã hội tiên khiếu.
+Worker hiện là goroutine polling loop, không phải queue. Mọi ticker lặp phải dùng `internal/worker/runner.go` (`RunEvery`/`RunEveryE`); công việc một lần hoặc cần flush khi dừng dùng `SafeRun`/`SafeRunE`. Nhận `context.Context`, giới hạn thời gian/khối lượng mỗi tick và ghi log lỗi. Worker gồm xử lý đói/tăng trưởng Gu và pet, giải phóng Tiên Cổ vô chủ/hết độ no (Immortal Gu Release), độ kiếp, phiên luyện Cổ/combat, mỏ, auction, tournament, daily mission, sect maintenance/mission/territory, trạng thái hết hạn, mô phỏng xã hội tiên khiếu và hành trình tự động (catch-up theo từng bước, tối đa 32 player mỗi tick).
 
 ## Quan sát lỗi
 

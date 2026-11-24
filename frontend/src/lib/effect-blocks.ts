@@ -12,18 +12,44 @@ export interface EffectCondition {
   value: number | string;
 }
 
+export interface StackingStatusTier {
+  tier: number;
+  stat_percent: number;
+}
+
 export interface EffectOperation {
   op: string;
   sub_type?: string;
   target?: EffectTarget;
   value?: number;
+  key?: string;
+  per_missing_hp?: number;
+  per_target_debuff?: number;
+  per_minion?: number;
+  per_stack?: number;
+  min_multiplier?: number;
+  min_cost?: number;
+  min_remaining?: number;
+  min_amount?: number;
+  min_damage?: number;
+  target_count?: number;
+  phase?: string;
+  log_action?: string;
+  message?: string;
+  suppress_log?: boolean;
+  resource?: string;
   unit?: string;
   turns?: number;
   chance?: number;
   path?: string;
   status_id?: string;
+  status_key?: string;
+  max_stacks?: number;
+  duration_hours?: number;
+  dispel_rule?: "DECREMENT_ONE" | "CLEAR_ALL";
+  pvp_only?: boolean;
+  tier_scaling?: StackingStatusTier[];
   stat?: string;
-  resource?: string;
   stack_policy?: string;
   code?: string;
   params?: Record<string, unknown>;

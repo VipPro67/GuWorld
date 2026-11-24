@@ -138,7 +138,7 @@ func ChooseRespawn(c *gin.Context) {
 	middleware.FinishRealtimeHandoff(playerID)
 	finished = true
 	PublishRespawnWorldPosition(c.Request.Context(), playerID, chosen.Region, chosen.X, chosen.Y)
-	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated)
+	PublishPlayerRealtimeEvent(playerID, PlayerEventUpdated, TravelJourneyDomain)
 	c.JSON(http.StatusOK, gin.H{"success": true, "region": chosen.Region, "x": chosen.X, "y": chosen.Y})
 }
 

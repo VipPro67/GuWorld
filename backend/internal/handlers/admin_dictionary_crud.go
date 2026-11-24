@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
@@ -168,6 +169,7 @@ func nullableJSON(raw json.RawMessage) interface{} {
 
 func validateAndNormalizeAdminGuEffects(c *gin.Context, key string, raw *json.RawMessage) bool {
 	issues := effectcatalog.ValidateBlockV2(*raw, effectcatalog.Location{Source: "gu", Key: key})
+	issues = append(issues, effectcatalog.ValidatePersistentStatusKeys(*raw, gamefx.ValidStatuses(), effectcatalog.Location{Source: "gu", Key: key})...)
 	if len(issues) != 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":  "Effect Block v2 không hợp lệ",
@@ -180,6 +182,9 @@ func validateAndNormalizeAdminGuEffects(c *gin.Context, key string, raw *json.Ra
 
 func validateAdminEffects(c *gin.Context, source, key string, raw json.RawMessage) bool {
 	issues := effectcatalog.ValidateBlockV2(raw, effectcatalog.Location{Source: source, Key: key})
+	if source == "gu" {
+		issues = append(issues, effectcatalog.ValidatePersistentStatusKeys(raw, gamefx.ValidStatuses(), effectcatalog.Location{Source: source, Key: key})...)
+	}
 	if len(issues) > 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Effect Block v2 không hợp lệ", "issues": issues})
 		return false

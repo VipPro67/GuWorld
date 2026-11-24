@@ -77,6 +77,14 @@ Map/region và portal data quyết định địa hình, vùng, ô vào và đi�
 - Frontend: `frontend/src/components/ExplorationMap.tsx`, `frontend/src/store/slices/worldSlice.ts`.
 - UI: `frontend/src/app/page.tsx`, `frontend/src/components/ExplorationMap.tsx`; asset nền: `frontend/public/assets/world/great-regions-atlas.png`, `ground-moss.webp`; cài đặt: `frontend/src/components/LobbySettingsPanel.tsx`, `frontend/src/store/slices/combatSlice.ts`; API `GET/PUT /api/player/combat-settings`.
 
+### Hành trình tự động
+
+Trong bản đồ khám phá, người chơi có thể chọn ô đích, xem đường vùng/khoảng cách/ETA do `POST /api/explore/travel/preview` tính và xem tuyến ô ước tính trên map, rồi bắt đầu hành trình. Server lưu một journey cho mỗi player và worker bước từng ô theo `movement`; hành trình tiếp tục khi offline. Có thể dừng, thay đích, hoặc tiếp tục sau combat thủ công. Journey kết thúc khi tới đích, thất bại hoặc một thao tác di chuyển khác đổi vị trí; các tab đồng bộ snapshot qua player event `travel_journey` và polling dự phòng. Encounter, loot tự nhận và kiểm tra vùng vẫn đi qua flow movement hiện hành.
+
+- UI/store: `frontend/src/components/ExplorationMap.tsx`, `frontend/src/store/slices/worldSlice.ts`, realtime resync trong `frontend/src/store/useGameStore.ts`.
+- API/worker/schema: `GET/POST /api/explore/travel`, `POST /api/explore/travel/stop`, `POST /api/explore/travel/resume`; `backend/internal/handlers/travel_journey.go`; bảng `player_travel_journeys` trong `backend/internal/db/schema_players.go`.
+- Worker kiểm tra tuyến qua các vùng kề cùng Đại Vực/tầng, chạy một ô trong mỗi tick; nhịp là `clamp(10s × stepLength / movement, 1s, 60s)`. ETA là ước tính theo tuyến hiện tại và có thể đổi khi tốc độ, quyền vào vùng hoặc encounter thay đổi.
+
 ## Đồng bộ realtime
 
 Vị trí người chơi tiếp tục đi qua kênh `world:pos`; map subscribe kênh này và cập nhật marker trong viewport ngay sau delta, không chờ lần tải grid kế tiếp. Event được giới hạn theo `world_map_id`/`map_instance_id`; khi người chơi rời map hoặc instance, backend gửi event rời scope đến người xem ở vị trí cũ. Snapshot grid cung cấp scope tương ứng để client bỏ event ngoài map/instance hiện tại.

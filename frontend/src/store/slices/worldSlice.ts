@@ -26,10 +26,40 @@ export interface GroundDropViewport {
   radius: number;
 }
 
+export interface TravelJourney {
+  journey_id: string;
+  revision: number;
+  status: "running" | "paused_manual_combat" | "paused_condition" | "completed" | "cancelled" | "failed";
+  target_region: string;
+  target_x: number;
+  target_y: number;
+  next_step_at?: string;
+  last_event: string;
+  reason_code: string;
+}
+
+export interface TravelJourneyPreview {
+  target_region: string;
+  target_x: number;
+  target_y: number;
+  region_path: string[];
+  distance: number;
+  eta_seconds: number | null;
+  movement: number;
+  first_step: { x: number; y: number };
+}
+
 export interface WorldSlice {
   groundDrops: GroundDrop[];
   lastDropViewport: GroundDropViewport | null;
   fetchGroundDrops: (viewport?: GroundDropViewport) => Promise<void>;
+  travelJourney: TravelJourney | null;
+  travelPreview: TravelJourneyPreview | null;
+  previewTravelJourney: (region: string, x: number, y: number) => Promise<boolean>;
+  fetchTravelJourney: () => Promise<void>;
+  startTravelJourney: (region: string, x: number, y: number) => Promise<boolean>;
+  stopTravelJourney: () => Promise<boolean>;
+  resumeTravelJourney: () => Promise<boolean>;
   applyWorldDropsEvent: (event: { region_id?: string; map_instance_id?: string; scope?: { region_id?: string; map_instance_id?: string } }) => void;
   lootGroundDrop: (dropId: string) => Promise<{ success: boolean; message: string; looted?: string[] } | null>;
   movePlayer: (x: number, y: number, attackTargetId?: string) => Promise<{ player: Player; log: string; combat_triggered: boolean; skip_result?: ApiResponseData } | null>;
@@ -40,6 +70,63 @@ export interface WorldSlice {
 export const createWorldSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, WorldSlice> = (set, get) => ({
   groundDrops: [],
   lastDropViewport: null,
+  travelJourney: null,
+  travelPreview: null,
+
+  previewTravelJourney: async (region, x, y) => {
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/explore/travel/preview`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ region_id: region, x, y }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không thể lập tuyến hành trình");
+      set({ travelPreview: data });
+      return true;
+    } catch (error) { set({ travelPreview: null }); get().addToast(error instanceof Error ? error.message : "Không thể lập tuyến hành trình", "error"); return false; }
+  },
+
+  fetchTravelJourney: async () => {
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/explore/travel`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const current = get().travelJourney;
+      const changed = current?.journey_id !== data.journey?.journey_id || current?.revision !== data.journey?.revision;
+      set({ travelJourney: data.journey || null, ...(changed ? { travelPreview: null } : {}) });
+    } catch (error) { console.error("fetchTravelJourney error:", error); }
+  },
+
+  startTravelJourney: async (region, x, y) => {
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/explore/travel`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ region_id: region, x, y }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không thể bắt đầu hành trình");
+      set({ travelJourney: data.journey || null, travelPreview: null });
+      return true;
+    } catch (error) { get().addToast(error instanceof Error ? error.message : "Không thể bắt đầu hành trình", "error"); return false; }
+  },
+
+  stopTravelJourney: async () => {
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/explore/travel/stop`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không thể dừng hành trình");
+      set({ travelJourney: data.journey || null }); return true;
+    } catch (error) { get().addToast(error instanceof Error ? error.message : "Không thể dừng hành trình", "error"); return false; }
+  },
+
+  resumeTravelJourney: async () => {
+    try {
+      const res = await authFetch(`${BACKEND_URL}/api/explore/travel/resume`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không thể tiếp tục hành trình");
+      set({ travelJourney: data.journey || null }); return true;
+    } catch (error) { get().addToast(error instanceof Error ? error.message : "Không thể tiếp tục hành trình", "error"); return false; }
+  },
 
   fetchGroundDrops: async (viewport) => {
     if (viewport) set({ lastDropViewport: viewport });

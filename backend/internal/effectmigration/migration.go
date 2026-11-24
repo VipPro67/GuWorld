@@ -201,18 +201,21 @@ type target struct {
 	BypassFrontline bool   `json:"bypass_frontline,omitempty"`
 }
 type operation struct {
-	Op       string          `json:"op"`
-	SubType  string          `json:"sub_type,omitempty"`
-	Value    any             `json:"value,omitempty"`
-	Stat     string          `json:"stat,omitempty"`
-	Resource string          `json:"resource,omitempty"`
-	StatusID string          `json:"status_id,omitempty"`
-	Turns    any             `json:"turns,omitempty"`
-	Chance   any             `json:"chance,omitempty"`
-	Path     string          `json:"path,omitempty"`
-	Code     string          `json:"code,omitempty"`
-	Unit     string          `json:"unit,omitempty"`
-	Params   json.RawMessage `json:"params,omitempty"`
+	Op              string          `json:"op"`
+	SubType         string          `json:"sub_type,omitempty"`
+	Enabled         *bool           `json:"enabled,omitempty"`
+	Target          *target         `json:"target,omitempty"`
+	ApplicationMode string          `json:"application_mode,omitempty"`
+	Value           any             `json:"value,omitempty"`
+	Stat            string          `json:"stat,omitempty"`
+	Resource        string          `json:"resource,omitempty"`
+	StatusID        string          `json:"status_id,omitempty"`
+	Turns           any             `json:"turns,omitempty"`
+	Chance          any             `json:"chance,omitempty"`
+	Path            string          `json:"path,omitempty"`
+	Code            string          `json:"code,omitempty"`
+	Unit            string          `json:"unit,omitempty"`
+	Params          json.RawMessage `json:"params,omitempty"`
 }
 
 func Convert(format Format, sourceID string, raw []byte) Result {
@@ -234,8 +237,8 @@ var guFlat = map[string]operation{
 	"active.damage_flat": {Op: "DAMAGE", SubType: "FLAT"}, "active.damage_mult": {Op: "DAMAGE", SubType: "MULTIPLIER"},
 	"active.heal_flat": {Op: "HEAL", SubType: "FLAT"}, "active.shield_flat": {Op: "SHIELD", SubType: "FLAT"}, "active.shield_mult": {Op: "SHIELD", SubType: "MULTIPLIER"},
 	"active.damage_hp_percent": {Op: "DIRECT_HP", SubType: "MAX_HP_PERCENT"}, "active.speed_boost_flat": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "SPEED"},
-	"active.crit_rate_boost": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "CRIT_RATE"}, "active.capture_bonus": {Op: "UNIQUE", Code: "CAPTURE_BONUS"},
-	"active.portal_create": {Op: "UNIQUE", Code: "PORTAL_CREATE"}, "active.random_portal": {Op: "UNIQUE", Code: "RANDOM_PORTAL"},
+	"active.crit_rate_boost": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "CRIT_RATE"}, "active.capture_bonus": {Op: "GRANT_CAPABILITY", SubType: "CAPTURE_BONUS"},
+	"active.portal_create": {Op: "GRANT_CAPABILITY", SubType: "PORTAL_CREATE"}, "active.random_portal": {Op: "GRANT_CAPABILITY", SubType: "RANDOM_PORTAL"},
 	"passive.stat_base_attack": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "ATTACK"}, "passive.stat_base_defense": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "DEFENSE"},
 	"passive.stat_base_hp": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "HP"}, "passive.stat_base_speed": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "SPEED"},
 	"passive.movement": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "MOVEMENT"}, "passive.investigation": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "INVESTIGATION"},
@@ -245,10 +248,10 @@ var guFlat = map[string]operation{
 	"passive.luck":     {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "LUCK"},
 	"passive.tenacity": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "TENACITY"}, "passive.cc_resist": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "CC_RESIST"},
 	"passive.dao_mark_multiplier": {Op: "STAT_MOD", SubType: "MULTIPLY_PERCENT", Stat: "DAO_MARK", Unit: "RATIO"}, "passive.path_conflict_reduction": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_CONFLICT_REDUCTION", Unit: "PERCENT"},
-	"passive.anti_heaven_damage_reduction_percent": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_RESISTANCE", Path: "heaven", Unit: "PERCENT"}, "passive.anti_earth_damage_reduction_percent": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_RESISTANCE", Path: "earth", Unit: "PERCENT"}, "passive.anti_dream_damage_reduction_percent": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_RESISTANCE", Path: "dream", Unit: "PERCENT"}, "passive.immune_dream_status": {Op: "UNIQUE", Code: "IMMUNE_DREAM_STATUS"},
+	"passive.anti_heaven_damage_reduction_percent": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_RESISTANCE", Path: "heaven", Unit: "PERCENT"}, "passive.anti_earth_damage_reduction_percent": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_RESISTANCE", Path: "earth", Unit: "PERCENT"}, "passive.anti_dream_damage_reduction_percent": {Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_RESISTANCE", Path: "dream", Unit: "PERCENT"}, "passive.immune_dream_status": {Op: "SET_RULE", SubType: "IMMUNE_DREAM_STATUS"},
 	"growth.max_attack": {Op: "STAT_MOD", SubType: "GROWTH_CAP", Stat: "ATTACK"}, "growth.max_defense": {Op: "STAT_MOD", SubType: "GROWTH_CAP", Stat: "DEFENSE"},
 	"growth.max_hp": {Op: "STAT_MOD", SubType: "GROWTH_CAP", Stat: "HP"}, "growth.max_speed": {Op: "STAT_MOD", SubType: "GROWTH_CAP", Stat: "SPEED"},
-	"growth.hours_to_max": {Op: "UNIQUE", Code: "GROWTH_DURATION_HOURS"},
+	"growth.hours_to_max": {Op: "GROWTH_DURATION"},
 }
 
 var ambiguousGu = map[string]string{
@@ -333,13 +336,25 @@ func ConvertGu(id string, raw []byte) Result {
 			}
 			seen[bid] = true
 			value := decodeAny(fields[key])
-			if tmpl.Op == "UNIQUE" {
-				if (tmpl.Code == "PORTAL_CREATE" || tmpl.Code == "RANDOM_PORTAL" || tmpl.Code == "IMMUNE_DREAM_STATUS") && value == false {
+			if tmpl.Op == "UNIQUE" || tmpl.Op == "GRANT_CAPABILITY" {
+				if (tmpl.SubType == "PORTAL_CREATE" || tmpl.SubType == "RANDOM_PORTAL" || tmpl.Code == "IMMUNE_DREAM_STATUS") && value == false {
 					continue
 				}
-				if tmpl.Code == "CAPTURE_BONUS" || tmpl.Code == "GROWTH_DURATION_HOURS" {
+				if tmpl.SubType == "CAPTURE_BONUS" {
 					tmpl.Params, _ = json.Marshal(map[string]any{"value": value})
 				}
+			} else if tmpl.Op == "SET_RULE" {
+				enabled, ok := value.(bool)
+				if !ok {
+					f.Reason = "expected a boolean value"
+					f.SuggestedMapping = suggest("manual", fq)
+					unsupported = append(unsupported, f)
+					continue
+				}
+				if !enabled {
+					continue
+				}
+				tmpl.Enabled = &enabled
 			} else {
 				tmpl.Value = value
 			}
@@ -368,7 +383,118 @@ func ConvertGu(id string, raw []byte) Result {
 			continue
 		}
 		seen[key] = true
-		blocks = append(blocks, block{ID: m.ActionCode, Trigger: m.EventTrigger, Target: target{Selector: "SELF"}, Operations: []operation{{Op: "UNIQUE", Code: m.ActionCode, Params: m.Params}}})
+		if strings.EqualFold(m.EventTrigger, "ALWAYS_ON") && strings.EqualFold(strings.TrimSpace(m.ActionCode), "PATH_DAMAGE_MODIFIER") {
+			var params struct {
+				Value map[string]float64 `json:"value"`
+			}
+			if err := json.Unmarshal(m.Params, &params); err != nil || len(params.Value) == 0 {
+				unsupported = append(unsupported, f)
+				continue
+			}
+			paths := make([]string, 0, len(params.Value))
+			for path := range params.Value {
+				paths = append(paths, path)
+			}
+			sort.Strings(paths)
+			operations := make([]operation, 0, len(paths))
+			for _, path := range paths {
+				operations = append(operations, operation{Op: "STAT_MOD", SubType: "ADD_FLAT", Stat: "PATH_DAMAGE", Path: strings.ToLower(path), Value: params.Value[path]})
+			}
+			blocks = append(blocks, block{ID: "PATH_DAMAGE_MODIFIER", Trigger: m.EventTrigger, Target: target{Selector: "SELF"}, Operations: operations})
+			converted = append(converted, f)
+			continue
+		}
+		if strings.EqualFold(m.EventTrigger, "ON_ACTION") && strings.EqualFold(strings.TrimSpace(m.ActionCode), "STAR_THOUGHT_RESTORE") {
+			self := target{Selector: "SELF"}
+			blocks = append(blocks, block{
+				ID: m.ActionCode, Trigger: m.EventTrigger, Target: target{Selector: "TARGET"},
+				Operations: []operation{{Op: "HEAL", SubType: "RESOURCE", Resource: "MANA", Unit: "PERCENT", Value: 30, Target: &self}},
+			})
+			converted = append(converted, f)
+			continue
+		}
+		if statusID, value, turns, ok := legacyStatusOperation(m.ActionCode); ok &&
+			(strings.EqualFold(m.EventTrigger, "ON_ACTION") || strings.EqualFold(m.EventTrigger, "ON_HIT")) {
+			blocks = append(blocks, block{
+				ID: m.ActionCode, Trigger: m.EventTrigger, Target: target{Selector: "TARGET"},
+				Operations: []operation{{Op: "STATUS", StatusID: statusID, Value: value, Turns: turns, Chance: float64(0), ApplicationMode: "DIRECT"}},
+			})
+			converted = append(converted, f)
+			continue
+		}
+		op := operation{Op: "UNIQUE", Code: m.ActionCode, Params: m.Params}
+		resource, subtype, defaultValue := "", "", 1.0
+		resourceOperation := ""
+		if (strings.EqualFold(m.EventTrigger, "ON_BATTLE_START") || strings.EqualFold(m.EventTrigger, "ON_CAST")) && strings.EqualFold(strings.TrimSpace(m.ActionCode), "SUMMON_MONSTER") {
+			op = operation{Op: "SUMMON", Params: m.Params}
+		}
+		if strings.EqualFold(m.EventTrigger, "ON_TICK") {
+			switch strings.ToUpper(strings.TrimSpace(m.ActionCode)) {
+			case "MANA_REGEN_TICK":
+				resource, subtype, defaultValue = "MANA", "REGEN_PER_HOUR", 0.5
+			case "THOUGHT_REGEN_TICK":
+				resource, subtype = "THOUGHT", "REGEN_PER_HOUR"
+			case "SOUL_REGEN_TICK":
+				resource, subtype = "SOUL", "REGEN_PER_HOUR"
+			case "GENERATE_STONES_TICK":
+				resource, subtype = "PRIMEVAL_STONE", "GENERATION_WORKER_TICK"
+			case "GENERATE_IMMORTAL_STONES_TICK":
+				resource, subtype = "IMMORTAL_STONE", "GENERATION_WORKER_TICK"
+			}
+		}
+		if strings.EqualFold(m.EventTrigger, "ON_CONSUME") {
+			switch strings.ToUpper(strings.TrimSpace(m.ActionCode)) {
+			case "MAN_BEAST_BURIAL":
+				op = operation{Op: "ADVANCE_MAJOR_REALM"}
+			case "RANK_PROGRESS":
+				op = operation{Op: "ADVANCE_PROGRESSION"}
+			case "STONE_APERTURE", "APERTURE_PETRIFICATION":
+				op = operation{Op: "PETRIFY_APERTURE"}
+			case "REDUCE_STRESS", "INCREASE_TIME_SPEED", "DECREASE_TIME_SPEED", "THIRD_WATCH", "TIME_ACCELERATION":
+				value := 0.1
+				var params map[string]float64
+				if json.Unmarshal(m.Params, &params) == nil && params["value"] > 0 {
+					value = params["value"]
+				} else if strings.EqualFold(m.ActionCode, "REDUCE_STRESS") {
+					value = 5
+				} else if strings.EqualFold(m.ActionCode, "THIRD_WATCH") || strings.EqualFold(m.ActionCode, "TIME_ACCELERATION") {
+					value = 3
+				}
+				subType := map[string]string{
+					"REDUCE_STRESS":       "STRESS_REDUCE",
+					"INCREASE_TIME_SPEED": "TIME_RATE_ADD",
+					"DECREASE_TIME_SPEED": "TIME_RATE_SUBTRACT",
+					"THIRD_WATCH":         "TIME_RATE_MULTIPLY",
+					"TIME_ACCELERATION":   "TIME_RATE_MULTIPLY",
+				}[strings.ToUpper(strings.TrimSpace(m.ActionCode))]
+				op = operation{Op: "MODIFY_APERTURE", SubType: subType, Value: value}
+			case "ADD_LIFESPAN_YEARS":
+				resource, resourceOperation = "LIFESPAN", "GRANT_RESOURCE"
+			case "ADD_SOUL_MAX":
+				resource, resourceOperation = "SOUL", "MODIFY_MAX_RESOURCE"
+			case "ADD_THOUGHT_MAX":
+				resource, resourceOperation = "THOUGHT", "MODIFY_MAX_RESOURCE"
+			case "RESTORE_SOUL_HP":
+				resource, resourceOperation = "SOUL", "RESTORE_RESOURCE"
+			case "RESTORE_MENTAL":
+				resource, resourceOperation = "THOUGHT", "RESTORE_RESOURCE"
+			}
+		}
+		if resource != "" {
+			value := defaultValue
+			var params map[string]float64
+			if json.Unmarshal(m.Params, &params) == nil && params["value"] > 0 {
+				value = params["value"]
+			} else if resourceOperation != "" {
+				resource = ""
+			}
+			if resource != "" && resourceOperation != "" {
+				op = operation{Op: resourceOperation, Resource: resource, Value: value}
+			} else if resource != "" {
+				op = operation{Op: "PERIODIC_RESOURCE", SubType: subtype, Resource: resource, Value: value}
+			}
+		}
+		blocks = append(blocks, block{ID: m.ActionCode, Trigger: m.EventTrigger, Target: target{Selector: "SELF"}, Operations: []operation{op}})
 		converted = append(converted, f)
 	}
 	envelope, _ := json.Marshal(struct {
@@ -397,10 +523,77 @@ func ConvertGu(id string, raw []byte) Result {
 	return result
 }
 
-var itemMappings = map[string]string{"restore_hp": "RESTORE_HP", "increase_human_qi": "INCREASE_HUMAN_QI", "heal_aperture": "HEAL_APERTURE", "increase_aperture_area": "INCREASE_APERTURE_AREA", "increase_aperture_time_rate": "INCREASE_APERTURE_TIME_RATE", "random_constitution": "RANDOM_CONSTITUTION", "random_race": "RANDOM_RACE", "open_mine_chest": "OPEN_MINE_CHEST", "open_immortal_mine_chest": "OPEN_IMMORTAL_MINE_CHEST", "hunger": "RESTORE_HUNGER"}
+func legacyStatusOperation(code string) (statusID string, value float64, turns int, ok bool) {
+	switch strings.ToUpper(strings.TrimSpace(code)) {
+	case "WOOD_BIND":
+		return "BIND", 0, 2, true
+	case "ICE_DEEP_FREEZE":
+		return "FREEZE", 0, 1, true
+	case "LIGHT_BLINDING_FLASH":
+		return "BLIND", 60, 2, true
+	case "SOUND_DISRUPT_SILENCE":
+		return "SILENCE", 0, 2, true
+	case "SOUND_RESONANCE":
+		return "SOUL_WOUND", 25, 3, true
+	case "ICE_FROSTBITE":
+		return "SLOW_DAMAGE", 35, 3, true
+	case "CHARM_GHOST_COME":
+		return "CHARM", 0, 2, true
+	case "FIVE_RESTRICTION_DEEP_LIGHT":
+		return "GU_SEAL", 0, 3, true
+	default:
+		return "", 0, 0, false
+	}
+}
+
+var itemMappings = map[string]operation{
+	"restore_hp":                  {Op: "HEAL", SubType: "FLAT", Resource: "HP"},
+	"restore_mana":                {Op: "HEAL", SubType: "FLAT", Resource: "MANA"},
+	"increase_human_qi":           {Op: "GRANT_RESOURCE", Resource: "HUMAN_QI"},
+	"restore_earth_qi":            {Op: "RESTORE_RESOURCE", Resource: "EARTH_QI"},
+	"restore_heaven_qi":           {Op: "RESTORE_RESOURCE", Resource: "HEAVEN_QI"},
+	"heal_aperture":               {Op: "REPAIR_APERTURE"},
+	"increase_aperture_area":      {Op: "MODIFY_APERTURE", SubType: "AREA_SIZE"},
+	"increase_aperture_time_rate": {Op: "MODIFY_APERTURE", SubType: "TIME_RATE"},
+	"random_constitution":         {Op: "RANDOMIZE_TRAIT", SubType: "CONSTITUTION"},
+	"random_race":                 {Op: "RANDOMIZE_TRAIT", SubType: "RACE"},
+	"open_mine_chest":             {Op: "OPEN_REWARD_CONTAINER", SubType: "MORTAL_MINE"},
+	"open_immortal_mine_chest":    {Op: "OPEN_REWARD_CONTAINER", SubType: "IMMORTAL_MINE"},
+	"spring_egg_hatch":            {Op: "PLACE_WORLD_OBJECT", SubType: "PRIMEVAL_SPRING"},
+}
 
 func ConvertItem(id string, raw []byte) Result {
-	return convertFlatNative(FormatItem, id, raw, "ON_CONSUME", itemMappings)
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return finalize(nil, []Finding{{Format: FormatItem, SourceID: id, Reason: err.Error()}}, nil, nil, nil, nil)
+	}
+	blocks := []block{}
+	var converted, unsupported []Finding
+	for _, key := range sortedKeys(fields) {
+		if emptyJSON(fields[key]) {
+			continue
+		}
+		finding := Finding{Format: FormatItem, SourceID: id, Key: key}
+		template, ok := itemMappings[key]
+		if !ok {
+			finding.Reason = "no exact typed item operation mapping"
+			finding.SuggestedMapping = suggest("manual", "typed item operation")
+			unsupported = append(unsupported, finding)
+			continue
+		}
+		op := template
+		if op.Op == "HEAL" || op.Op == "GRANT_RESOURCE" || op.Op == "RESTORE_RESOURCE" || op.Op == "REPAIR_APERTURE" || op.Op == "MODIFY_APERTURE" {
+			op.Value = decodeAny(fields[key])
+		}
+		blockID := strings.ToUpper(key)
+		blocks = append(blocks, block{ID: blockID, Trigger: "ON_CONSUME", Target: target{Selector: "SELF"}, Operations: []operation{op}})
+		converted = append(converted, finding)
+	}
+	envelope, _ := json.Marshal(struct {
+		SchemaVersion int     `json:"schema_version"`
+		Blocks        []block `json:"blocks"`
+	}{2, blocks})
+	return finalize(envelope, unsupported, nil, nil, nil, converted)
 }
 
 var gameFXMappings = map[string]string{"stat_mods": "STAT_MODS", "refine": "REFINE_SUCCESS", "dao_mark": "DAO_MARK_MODIFIER", "path_damage": "PATH_DAMAGE_MODIFIER", "path_resistance": "PATH_RESISTANCE_MODIFIER", "luck": "LUCK", "max_mana": "MAX_MANA", "mana_regen": "MANA_REGEN", "cultivation_efficiency": "CULTIVATION_EFFICIENCY", "dao_mark_gain": "DAO_MARK_GAIN", "healing_received": "HEALING_RECEIVED", "hp_regen": "HP_REGEN", "mental_resistance": "MENTAL_RESISTANCE", "soul_defense": "SOUL_DEFENSE", "soul_regen": "SOUL_REGEN", "tenacity": "TENACITY", "cc_resist": "CC_RESIST", "aperture_stress_bonus": "APERTURE_STRESS", "non_conflicting_dao_marks": "NON_CONFLICTING_DAO_MARKS", "immortal": "IMMORTAL", "disable_hp_regen": "DISABLE_HP_REGEN", "disable_mana_regen": "DISABLE_MANA_REGEN", "disable_resource_regen": "DISABLE_RESOURCE_REGEN", "disable_soul_regen": "DISABLE_SOUL_REGEN"}

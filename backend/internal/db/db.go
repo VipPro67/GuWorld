@@ -19,6 +19,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
+	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
@@ -944,10 +945,56 @@ func normalizedGuCompositionJSON(raw string, blocks []gameplayeffects.Block, row
 
 type effectCSVSource struct{ source, filename, keyColumn string }
 
+func persistentStatusRegistryForPreflight(useStagedStatus bool) (map[string]bool, error) {
+	keys := gamefx.ValidStatuses()
+	if !useStagedStatus {
+		return keys, nil
+	}
+	f, reader, header, err := openCSV("Status.csv")
+	if err != nil {
+		return keys, nil
+	}
+	defer f.Close()
+	keyIdx := colIndex(header, "key")
+	if keyIdx < 0 {
+		return nil, fmt.Errorf("Status.csv missing required key column")
+	}
+	for {
+		row, readErr := reader.Read()
+		if readErr == io.EOF {
+			return keys, nil
+		}
+		if readErr != nil {
+			return nil, fmt.Errorf("Status.csv: %w", readErr)
+		}
+		if keyIdx < len(row) {
+			if key := strings.TrimSpace(row[keyIdx]); key != "" {
+				keys[key] = true
+			}
+		}
+	}
+}
+
 // preflightEffectCSVs completes validation for the whole requested batch
 // before any seeder can issue its first INSERT/UPDATE.
 func preflightEffectCSVs(sources []effectCSVSource) error {
 	all := make([]effectcatalog.ValidationIssue, 0)
+	useStagedStatus := false
+	for _, source := range sources {
+		if source.source == "status" {
+			useStagedStatus = true
+			break
+		}
+	}
+	// Import plans install overrides for every dataset in the same batch,
+	// while ordinary Gu-only imports install no Status.csv override.
+	if _, staged := csvImportState.override["Status.csv"]; staged {
+		useStagedStatus = true
+	}
+	persistentStatusKeys, err := persistentStatusRegistryForPreflight(useStagedStatus)
+	if err != nil {
+		return err
+	}
 	for _, source := range sources {
 		f, reader, header, err := openCSV(source.filename)
 		if err != nil {
@@ -983,7 +1030,11 @@ func preflightEffectCSVs(sources []effectCSVSource) error {
 			if raw == "" {
 				raw = `[]`
 			}
-			all = append(all, effectcatalog.ValidateBlockV2([]byte(raw), effectcatalog.Location{Source: source.source, Row: rowNumber, Key: key})...)
+			location := effectcatalog.Location{Source: source.source, Row: rowNumber, Key: key}
+			all = append(all, effectcatalog.ValidateBlockV2([]byte(raw), location)...)
+			if source.source == "gu" {
+				all = append(all, effectcatalog.ValidatePersistentStatusKeys([]byte(raw), persistentStatusKeys, location)...)
+			}
 		}
 		f.Close()
 	}

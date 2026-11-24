@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -83,6 +84,24 @@ func TestGuSpringEggHatchDispatch(t *testing.T) {
 	})
 	if err == nil || strings.Contains(err.Error(), "Chưa hỗ trợ") {
 		t.Fatalf("SPRING_EGG_HATCH chưa được dispatch: %v", err)
+	}
+}
+
+func TestGuTypedWorldPlacementUsesSharedConsumeDispatcher(t *testing.T) {
+	player := &models.Player{}
+	spec := models.GuDictionaryItem{
+		ID: "GU_SPRING_EGG", Name: "Tuyền Đản Cổ", Rank: 5,
+		Effects: models.GuEffects{Blocks: []gameplayeffects.Block{{
+			ID: "PLACE_SPRING", Trigger: gameplayeffects.TriggerOnConsume,
+			Target: gameplayeffects.Target{Selector: gameplayeffects.TargetSelf},
+			Operations: []gameplayeffects.Operation{{
+				Op: gameplayeffects.OpPlaceWorldObject, SubType: "PRIMEVAL_SPRING",
+			}},
+		}}},
+	}
+	_, err := HandleGuEventTx(nil, player, spec, models.GuInstance{GuID: spec.ID}, "ON_CONSUME")
+	if err == nil || !strings.Contains(err.Error(), "chỉ có thể cấy Nguyên Tuyền khi tiêu hao trực tiếp") {
+		t.Fatalf("typed placement should reach its transaction guard, got %v", err)
 	}
 }
 

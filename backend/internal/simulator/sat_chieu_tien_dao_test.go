@@ -906,3 +906,32 @@ func TestNirvanaFire(t *testing.T) {
 		t.Fatalf("expected defender to be revived by Nirvana Fire, got HP: %f", defender.HP)
 	}
 }
+
+func TestNirvanaFireReadsCSVParameters(t *testing.T) {
+	defender := newTestCombatant("p1", "Phượng Hoàng", 100, 100)
+	defender.HP = 0
+	defender.BaseDmg = 100
+	defender.ActiveEffects = []Effect{{ID: "test_debuff", Type: "debuff", Duration: 2}}
+	defender.Mechanics = []CombatMechanic{mech("ON_DEATH", "NIRVANA_FIRE", `{"revive_hp_percent":0.6,"minimum_revive_hp":10,"clear_debuffs":false,"retaliation_damage_percent":0.5,"minimum_retaliation_damage":20}`)}
+	attacker := newTestCombatant("e1", "Kẻ Giết", 60, 100)
+	state := &CombatState{Allies: []*CombatantAuto{attacker}, Enemies: []*CombatantAuto{defender}}
+	var logs []CombatLog
+	if !applyNirvanaRebirth(state, defender, &logs, 1) {
+		t.Fatal("configured NIRVANA_FIRE did not activate")
+	}
+	if defender.HP != 60 {
+		t.Fatalf("revive HP = %v, want configured 60", defender.HP)
+	}
+	if attacker.HP != 10 {
+		t.Fatalf("retaliation should deal configured 50 damage, attacker HP = %v", attacker.HP)
+	}
+	if len(defender.ActiveEffects) != 1 || defender.ActiveEffects[0].ID != "test_debuff" {
+		t.Fatalf("clear_debuffs=false should preserve debuffs: %+v", defender.ActiveEffects)
+	}
+	if strings.Contains(logs[0].Detail, "tẩy trừ") {
+		t.Fatalf("log should not claim debuffs were cleansed: %q", logs[0].Detail)
+	}
+	if logCount(logs, "NIRVANA_FIRE") == 0 {
+		t.Fatal("expected configured NIRVANA_FIRE logs")
+	}
+}

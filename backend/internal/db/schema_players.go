@@ -493,6 +493,24 @@ func schemaPlayerExtras() error {
 	ON CONFLICT(player_id, achievement_id) DO NOTHING;`); err != nil {
 		return err
 	}
+	if err := execSchema("player_travel_journeys", `
+	CREATE TABLE IF NOT EXISTS player_travel_journeys (
+		player_id UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+		journey_id UUID NOT NULL DEFAULT gen_random_uuid(),
+		revision BIGINT NOT NULL DEFAULT 1,
+		status VARCHAR(32) NOT NULL CHECK (status IN ('running','paused_manual_combat','paused_condition','completed','cancelled','failed')),
+		target_region VARCHAR(50) NOT NULL REFERENCES regions(id),
+		target_x INT NOT NULL,
+		target_y INT NOT NULL,
+		next_step_at TIMESTAMPTZ,
+		last_step_at TIMESTAMPTZ,
+		last_event TEXT NOT NULL DEFAULT '',
+		reason_code VARCHAR(64) NOT NULL DEFAULT '',
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+	CREATE INDEX IF NOT EXISTS idx_player_travel_due ON player_travel_journeys (next_step_at, player_id) WHERE status='running';`); err != nil {
+		return err
+	}
 
 	return nil
 }

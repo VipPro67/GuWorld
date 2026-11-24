@@ -72,8 +72,9 @@ func TestCompileLegacyToBlocks(t *testing.T) {
 		ApplyStatus:       models.StatusApplications{{ID: "POISON", Value: 30, Turns: 2, Chance: 0.8}},
 	}
 	legacyPassive := &models.PassiveEffect{
-		StatBaseAttack:  15,
-		StatBaseDefense: 20,
+		StatBaseAttack:    15,
+		StatBaseDefense:   20,
+		ImmuneDreamStatus: true,
 	}
 	legacyOther := []models.SpecialMechanic{
 		{EventTrigger: "ON_DEATH", ActionCode: "REBORN", Params: []byte(`{"heal_percent": 0.3}`)},
@@ -85,8 +86,11 @@ func TestCompileLegacyToBlocks(t *testing.T) {
 	}
 
 	// Block 0: Passive
-	if blocks[0].Trigger != gameplayeffects.TriggerAlwaysOn || len(blocks[0].Operations) != 2 {
+	if blocks[0].Trigger != gameplayeffects.TriggerAlwaysOn || len(blocks[0].Operations) != 3 {
 		t.Errorf("Passive block mismatch: %+v", blocks[0])
+	}
+	if rule := blocks[0].Operations[2]; rule.Op != gameplayeffects.OpSetRule || rule.SubType != "IMMUNE_DREAM_STATUS" || rule.Enabled == nil || !*rule.Enabled {
+		t.Errorf("legacy dream immunity did not adapt to SET_RULE: %+v", rule)
 	}
 	// Block 1: Active
 	if blocks[1].Trigger != gameplayeffects.TriggerOnAction || !blocks[1].Target.BypassFrontline || len(blocks[1].Operations) != 4 {

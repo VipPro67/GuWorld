@@ -1,0 +1,48 @@
+# Atomic composable effects: current architecture and roadmap
+
+## 1. Hiện trạng đã kiểm chứng
+
+- Gu.csv có 4.713 hàng và hiện còn 0 operation `UNIQUE`. Toàn bộ 4 operation `UNIQUE` cuối cùng (`CHAOS_GAMBLE`, `DREAM_UNRAVEL`, `FORGET_WILL_CONFUSE`, `LUCK_ROULETTE`) đã được chuyển đổi thành các primitive Block v2 (`OUTCOME_ROULETTE`, `RESOURCE_CONVERSION`, `TARGET_REDIRECTION`) với schema chặt chẽ và test parity đầy đủ. `TestCSVNativeUniqueAllowlist` khóa allowlist rỗng (`len == 0`). Không còn `UNIQUE` trong toàn bộ 5 dataset (Item, Gu, Race, Constitution, Status).
+- Các operation typed đã bao phủ phần lớn damage, shield, status, heal, stat modifier, cleanse, dispel, hit rule, resource transfer và một số world-use effect.
+- `backend/internal/gameplay/effects` có compiler/runtime dùng chung; `effectcatalog` kiểm tra schema. Combat, item-use, world, gamefx và simulator vẫn là các consumer theo domain. Operation được catalog chấp nhận không đồng nghĩa mọi consumer đã thực thi nó.
+- Combat runner đã được tách khỏi closure `Simulate.runOne` và có phase registry ban đầu. Các passive `HUMAN_WILL` và `PASSION_OVERLOAD` hiện dùng typed operations tại phase giữ nguyên vị trí hook cũ. Nhiều native hook khác vẫn nằm trong runner lớn.
+- Các `UNIQUE` còn lại có nhiều loại semantics: state nhiều lượt, RNG, slot ownership, battle control, world mutation và persistence. Không thể chuyển chúng hàng loạt thành một nhóm status/counter đơn giản.
+
+## 2. Nguyên tắc phân rã
+
+Một effect nên dùng operation typed khi consumer có thể thực thi chính xác trigger, target, condition, phase, provenance và parameters. CSV điều khiển các giá trị và biến thể đã được hỗ trợ; Go giữ executor cho semantics, state transition, persistence, RNG và battle control.
+
+Không đặt giới hạn cứng 15–20 primitive. Thêm primitive khi nó tái sử dụng được, có schema validate được và có consumer cùng test trong domain tương ứng. Không thêm catalog entry như một lời hứa thực thi nếu chưa nối runtime.
+
+## 3. Nhóm primitive và ranh giới
+
+1. **Combat actions đã có consumer**: `DAMAGE`, `DAMAGE_MODIFIER`, `STATUS`, `SHIELD`, `HEAL`, `CLEANSE`, `DISPEL`, `DIRECT_HP`, `DETONATE_STATUS`, `HP_COST`, `TRANSFER_RESOURCE`, `HIT_RULE`, `DISPLACE`, `SUMMON`.
+2. **Stateful combat primitives cần nối executor**: `APPLY_STACKING_STATUS`, `COUNTER_ADD`, `THRESHOLD_CHECK` hiện có khai báo/helper một phần. Trước khi dùng trong Gu.csv cần định nghĩa owner, lifetime, phase, refresh/dispel, threshold activation và reset policy.
+3. **Slot/world/persistence operations**: theft, seal, portal, terrain và reward cần executor theo domain để giữ ownership, transaction, expiry, authorization và idempotency. Không gộp chúng thành operation chung thiếu semantics.
+4. **Cost/sacrifice**: dùng `HP_COST` hoặc resource operation khi công thức và phase khớp hoàn toàn. Sacrifice Gu, entity hoặc permanent resource cần command chuyên biệt.
+
+## 4. Kết quả kỳ vọng có giới hạn rõ
+
+| Chủ đề | Hướng thực hiện |
+| --- | --- |
+| Author effect trong CSV | Dùng operation typed đã có consumer; validator, compiler và runtime phải đồng ý cùng contract. |
+| Điều chỉnh số liệu | Đưa parameter, condition, target và phase được hỗ trợ vào CSV; giữ policy/state transition trong executor. |
+| Sát Chiêu compose | Chỉ compose các block có consumer, target rule và provenance đã được kiểm tra. Không mặc định mọi tổ hợp đều chạy được. |
+| Tiên Cổ Phòng | Mở rộng product profile theo từng module sau khi chốt context và persistence semantics. |
+
+## 5. Lộ trình triển khai
+
+1. **Giữ validation thống nhất và chặn silent no-op.** Operation phải được kiểm tra ở catalog, compile và consumer phù hợp. Trường chưa được thực thi phải bị từ chối hoặc ghi nhận rõ, không được lặng lẽ bỏ qua.
+2. **Hoàn thiện combat phases theo vị trí hiện tại.** Di chuyển hook tại chỗ, không đổi thứ tự statement hay RNG. Tách sửa damage routing (shield, immunity, thorns, spillover) sang behavior change riêng có test.
+3. **Nối stack/counter executor.** Dùng owner/lifecycle/phase/reset contract để thực thi helper hiện có, rồi chọn một archetype như `POEM_INTENT` hoặc `SOUL_DEVOUR` để migrate với parity.
+4. **Migrate theo nhóm semantics.** Mỗi nhóm cập nhật CSV, tests, `GAME_DATA.md`, glossary và inventory. Giữ executor Go cho battle control và persistence phức tạp.
+5. **Tối ưu có đo lường.** Thêm benchmark/profile trước khi tối ưu hot path; giữ regression coverage cho determinism và output logs.
+6. **Mở rộng composition sau cùng.** API tạo sát chiêu/phòng chỉ ghép các operation có contract hoàn chỉnh, resource policy và quyền sở hữu rõ ràng.
+
+## 6. Ràng buộc kiểm chứng
+
+- Không thay đổi thứ tự tiêu thụ RNG của simulator deterministic.
+- Giữ thứ tự phase, log và state transition trong migration behavior-preserving.
+- Mỗi operation mới cần test validator/compiler parity, consumer combat hoặc out-of-combat, cùng điều kiện target/trigger.
+- Xóa dữ liệu no-op khi không có semantics dự định; không tạo primitive để giữ một dòng CSV vô nghĩa.
+- Số lượng `UNIQUE` phải được tính lại từ CSV hiện hành, không suy ra từ số lượng Gu.

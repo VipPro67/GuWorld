@@ -29,6 +29,8 @@ Tài liệu này mô tả ranh giới sở hữu dữ liệu player để tránh
 
 Player đổi vị trí phải đi qua `handlers/movement.go`, dùng chung kiểm tra quyền/đích, ghi vị trí và phát sự kiện. `world:pos` cập nhật marker lân cận; thay đổi tọa độ của ô map/drop/resource point và vòng đời actor quái/boss dùng World Change Feed, được lọc theo region/map/instance. Snapshot trả `epoch`/`revision`; client resync khi có gap hoặc reconnect. Không tự viết một nhánh cập nhật tọa độ riêng trong handler khác.
 
+Hành trình tự động lưu đích/trạng thái riêng trong `player_travel_journeys`; tọa độ thực vẫn chỉ nằm trong hàng `players` và từng bước phải gọi `ExecuteMovePlayerPath`. Worker kiểm tra `journey_id` sau khi khóa hàng player để lệnh cũ không thể áp dụng bước sau khi journey đã bị thay thế hoặc hủy. Các mutation đi bộ và spatial transition hủy journey trong cùng transaction với thay đổi vị trí; party follow cũng hủy journey của member bị kéo. Player event domain `travel_journey` chỉ báo client tải lại snapshot journey, không thay thế nguồn chuẩn PostgreSQL.
+
 ## Frontend và đồng bộ
 
 `useGameStore` nhận response và player events rồi cập nhật state thông qua `setPlayerFromServer` cùng các helper hiện có. Tái sử dụng luồng này khi API trả snapshot player. `authFetch` xử lý 401 tập trung; slice không thêm chính sách logout riêng.

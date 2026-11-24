@@ -32,3 +32,40 @@ func TestRaceConditionsAreAvailableOnlyInContextsWithRaceValues(t *testing.T) {
 		t.Fatal("unsupportedConditionReason(UNKNOWN_CONTEXT, race) succeeded, want unsupported context")
 	}
 }
+
+func TestGuConsumeCompatibilitySupportsTypedWorldPlacementAndConditions(t *testing.T) {
+	block := gameplayeffects.Block{
+		ID: "PLANT_SPRING", Trigger: gameplayeffects.TriggerOnConsume,
+		Target:     gameplayeffects.Target{Selector: gameplayeffects.TargetSelf},
+		Conditions: []gameplayeffects.Condition{{Field: "RANK", Operator: "GTE", Value: 5}},
+	}
+	op := gameplayeffects.Operation{Op: gameplayeffects.OpPlaceWorldObject, SubType: "PRIMEVAL_SPRING"}
+	status, reason := checkEffectCompatibility("GU_CONSUME_EVENT", block, op)
+	if status != "conditional" || reason == "" {
+		t.Fatalf("consume placement compatibility = (%q, %q), want conditional with explanation", status, reason)
+	}
+
+	block.Trigger = gameplayeffects.TriggerOnUse
+	if status, _ = checkEffectCompatibility("GU_CONSUME_EVENT", block, op); status != "unsupported" {
+		t.Fatalf("ON_USE placement status = %q, want unsupported", status)
+	}
+}
+
+func TestGuConsumeConditionsRejectUnavailableTurnValue(t *testing.T) {
+	conditions := []gameplayeffects.Condition{{Field: "TURN", Operator: "GTE", Value: 1}}
+	if reason := unsupportedConditionReason("GU_CONSUME_EVENT", conditions); reason == "" {
+		t.Fatal("Gu consume compatibility accepted TURN without an event turn")
+	}
+}
+
+func TestRefinementCompatibilityRecognizesDeductionChancePrimitive(t *testing.T) {
+	block := gameplayeffects.Block{ID: "DEDUCTION_FINISH_CHANCE", Trigger: gameplayeffects.TriggerAlwaysOn, Target: gameplayeffects.Target{Selector: gameplayeffects.TargetSelf}}
+	status, reason := checkEffectCompatibility("REFINEMENT", block, gameplayeffects.Operation{Op: gameplayeffects.OpDeductionFinishChance, Params: []byte(`{"base_chance":0.2}`)})
+	if status != "supported" || reason != "" {
+		t.Fatalf("deduction chance compatibility = (%q, %q), want supported", status, reason)
+	}
+	block.Conditions = []gameplayeffects.Condition{{Field: "RANK", Operator: "GTE", Value: 2}}
+	if status, _ := checkEffectCompatibility("REFINEMENT", block, gameplayeffects.Operation{Op: gameplayeffects.OpDeductionFinishChance}); status != "unsupported" {
+		t.Fatalf("conditional deduction chance status = %q, want unsupported", status)
+	}
+}

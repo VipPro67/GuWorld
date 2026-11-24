@@ -2,7 +2,21 @@ package simulator
 
 import (
 	"strings"
+
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 )
+
+func hasNonCastOperationEffects(action *SimAction) bool {
+	if action == nil {
+		return false
+	}
+	for _, effect := range action.OperationEffects {
+		if effect.Compiled.Trigger != gameplayeffects.TriggerOnCast {
+			return true
+		}
+	}
+	return false
+}
 
 // hasEligibleHostileDamage reports whether an action has a hostile damage
 // operation whose target and conditions currently resolve. A Block v2 parent
@@ -53,7 +67,7 @@ func hasEligibleHostileDamage(actor *CombatantAuto, action *SimAction, hostileTa
 }
 
 func isHostileDamageOperation(action *SimAction) bool {
-	if action == nil || strings.EqualFold(strings.TrimSpace(action.TargetType), "SELF") {
+	if action == nil || strings.EqualFold(strings.TrimSpace(action.TargetType), "SELF") || strings.EqualFold(strings.TrimSpace(action.TargetType), "ALL_ALLIES") {
 		return false
 	}
 	return action.Damage > 0 || action.DamageHPPercent > 0 || action.ShieldStripPercent > 0 || action.PhantomDmg > 0

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -74,7 +75,8 @@ func CompileLegacyToBlocksWithGrowth(active *ActiveEffect, passive *PassiveEffec
 			}
 		}
 		if passive.ImmuneDreamStatus {
-			passOps = append(passOps, effects.Operation{Op: effects.OpUnique, Code: "IMMUNE_DREAM_STATUS"})
+			enabled := true
+			passOps = append(passOps, effects.Operation{Op: effects.OpSetRule, SubType: "IMMUNE_DREAM_STATUS", Enabled: &enabled})
 		}
 		if len(passOps) > 0 {
 			blocks = append(blocks, effects.Block{
@@ -97,7 +99,7 @@ func CompileLegacyToBlocksWithGrowth(active *ActiveEffect, passive *PassiveEffec
 			}
 		}
 		if growth.HoursToMax > 0 {
-			ops = append(ops, effects.Operation{Op: effects.OpUnique, Code: "GROWTH_DURATION_HOURS", Params: []byte(fmt.Sprintf(`{"value":%g}`, growth.HoursToMax))})
+			ops = append(ops, effects.Operation{Op: effects.OpGrowthDuration, Value: growth.HoursToMax})
 		}
 		if len(ops) > 0 {
 			blocks = append(blocks, effects.Block{ID: "LEGACY_GROWTH", Trigger: effects.TriggerAlwaysOn, Target: effects.Target{Selector: effects.TargetSelf}, Operations: ops})
@@ -282,6 +284,38 @@ func CompileLegacyToBlocksWithGrowth(active *ActiveEffect, passive *PassiveEffec
 		trigger := effects.Trigger(strings.ToUpper(strings.TrimSpace(sm.EventTrigger)))
 		code := strings.ToUpper(strings.TrimSpace(sm.ActionCode))
 		params := sm.Params
+		resource, subtype := "", ""
+		switch code {
+		case "MANA_REGEN_TICK":
+			resource, subtype = "MANA", "REGEN_PER_HOUR"
+		case "THOUGHT_REGEN_TICK":
+			resource, subtype = "THOUGHT", "REGEN_PER_HOUR"
+		case "SOUL_REGEN_TICK":
+			resource, subtype = "SOUL", "REGEN_PER_HOUR"
+		case "GENERATE_STONES_TICK":
+			resource, subtype = "PRIMEVAL_STONE", "GENERATION_WORKER_TICK"
+		case "GENERATE_IMMORTAL_STONES_TICK":
+			resource, subtype = "IMMORTAL_STONE", "GENERATION_WORKER_TICK"
+		}
+		if resource != "" {
+			value := 1.0
+			if subtype == "REGEN_PER_HOUR" {
+				if resource == "MANA" {
+					value = 0.5
+				}
+			}
+			if len(params) > 0 {
+				var values map[string]float64
+				if json.Unmarshal(params, &values) == nil && values["value"] > 0 {
+					value = values["value"]
+				}
+			}
+			blocks = append(blocks, effects.Block{
+				ID: code, Trigger: trigger, Target: effects.Target{Selector: effects.TargetSelf},
+				Operations: []effects.Operation{{Op: effects.OpPeriodicResource, SubType: subtype, Resource: resource, Value: value}},
+			})
+			continue
+		}
 		if string(params) == "{}" || len(params) == 0 {
 			switch code {
 			case "MANA_REGEN_TICK":

@@ -29,9 +29,10 @@ const (
 	// Progression domains let UI screens replace their polling timers with
 	// event-driven refreshes: clients refetch only when the owning state
 	// actually changed.
-	TribulationDomain  PlayerEventDomain = "tribulation"
-	SpatialRealmDomain PlayerEventDomain = "spatial_realm"
-	AscensionDomain    PlayerEventDomain = "ascension"
+	TribulationDomain   PlayerEventDomain = "tribulation"
+	SpatialRealmDomain  PlayerEventDomain = "spatial_realm"
+	AscensionDomain     PlayerEventDomain = "ascension"
+	TravelJourneyDomain PlayerEventDomain = "travel_journey"
 )
 
 var playerEventRevision atomic.Int64

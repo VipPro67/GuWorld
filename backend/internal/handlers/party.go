@@ -701,6 +701,9 @@ func SyncPartyMembersLocation(tx *sql.Tx, leader *models.Player) []SyncedPartyMe
 			X:          leader.X,
 			Y:          leader.Y,
 		})
+		if _, err := tx.Exec(`UPDATE player_travel_journeys SET status='cancelled',revision=revision+1,next_step_at=NULL,last_event='Hành trình dừng do được đội trưởng di chuyển',reason_code='party_movement',updated_at=NOW() WHERE player_id=$1 AND status IN ('running','paused_manual_combat','paused_condition')`, m.id); err != nil {
+			logger.S.Errorf("SyncPartyMembersLocation: failed to cancel travel journey for member %s: %v", m.id, err)
+		}
 	}
 	return synced
 }

@@ -1538,3 +1538,82 @@ func TestPathBonusUsesPrimaryActionPath(t *testing.T) {
 		t.Fatalf("pathless action bonus = %v, want 0", got)
 	}
 }
+
+func TestBeforeHitCounterFeedsEatingLossNativeRiderOnce(t *testing.T) {
+	target := newTestCombatant("target", "", 1000, 100)
+	target.BeforeHitCounterAdds = []CounterAdd{{Key: "eating_loss_stacks", Delta: 1, Min: 0, Max: 10}}
+	target.BeforeHitCounterStatModifiers = []CounterStatModifier{
+		{Key: "eating_loss_stacks", Stat: "ATTACK", PerCounter: 5},
+		{Key: "eating_loss_stacks", Stat: "DEFENSE", PerCounter: 5},
+	}
+	target.BeforeHitCounterNotifications = []CombatNotification{{
+		Action: "EATING_LOSS_BLESSING", Message: "{actor}: stack {counter_count}", CounterKey: "eating_loss_stacks",
+	}}
+	target.Mechanics = []CombatMechanic{mech("COMBAT_PASSIVE", "EATING_LOSS_BLESSING", `{"counter_add_in_primitive":true}`)}
+	attacker := newTestCombatant("attacker", "", 1000, 100)
+	logs := []CombatLog{}
+	rng := rand.New(rand.NewSource(1))
+
+	applyDamageToTarget(nil, attacker, target, 10, &logs, 1, false, false, false, rng)
+	if got := target.CustomState["eating_loss_stacks"]; got != 1 {
+		t.Fatalf("typed counter after first incoming hit = %d, want 1", got)
+	}
+	if target.BaseDmg != 105 || target.BaseDef != 5 {
+		t.Fatalf("native per-stack stats after first hit = (%v,%v), want (105,5)", target.BaseDmg, target.BaseDef)
+	}
+	if len(logs) != 1 || logs[0].Detail != "target: stack 1" {
+		t.Fatalf("typed stack log after first hit = %+v, want one log for stack 1", logs)
+	}
+
+	for target.CustomState["eating_loss_stacks"] < 9 {
+		applyDamageToTarget(nil, attacker, target, 10, &logs, 1, false, false, false, rng)
+	}
+	applyDamageToTarget(nil, attacker, target, 10, &logs, 1, false, false, false, rng)
+	statsAtCap := target.BaseDmg
+	logsAtCap := len(logs)
+	applyDamageToTarget(nil, attacker, target, 10, &logs, 1, false, false, false, rng)
+	if got := target.CustomState["eating_loss_stacks"]; got != 10 {
+		t.Fatalf("typed counter at cap = %d, want 10", got)
+	}
+	if target.BaseDmg != statsAtCap || len(logs) != logsAtCap {
+		t.Fatalf("counter cap changed stats/logs: damage %v->%v, logs %d->%d", statsAtCap, target.BaseDmg, logsAtCap, len(logs))
+	}
+}
+
+func TestBeforeHitThresholdRecoveryRunsOnceAndCleansesDebuffs(t *testing.T) {
+	target := newTestCombatant("target", "", 1000, 100)
+	target.HP = 250
+	target.ActiveEffects = []Effect{
+		{ID: "STUN", Type: "debuff", Duration: 2},
+		{ID: "ATK_UP", Type: "buff", Duration: 2},
+	}
+	target.BeforeHitRecoveries = []ThresholdRecovery{{
+		SourceID: "GU_QI_JUE_LIFE_I", OperationID: "QI_JUE:0:0", HPThreshold: 0.3,
+		HealPercent: 0.4, MaxUses: 1, CleanseDebuffs: true,
+		LogAction: "QI_JUE_RETURN_LIFE", Message: "{actor} recovers {heal_amount}; removed {cleansed_count}",
+	}}
+	attacker := newTestCombatant("attacker", "", 1000, 100)
+	logs := []CombatLog{}
+	rng := rand.New(rand.NewSource(2))
+	applyDamageToTarget(nil, attacker, target, 50, &logs, 1, false, false, false, rng)
+	if target.HP != 600 {
+		t.Fatalf("HP after recovery and incoming hit = %v, want 600", target.HP)
+	}
+	if len(target.ActiveEffects) != 1 || target.ActiveEffects[0].ID != "ATK_UP" {
+		t.Fatalf("active effects after recovery = %+v, want only the buff", target.ActiveEffects)
+	}
+	if len(logs) == 0 || logs[0].Action != "QI_JUE_RETURN_LIFE" || logs[0].Detail != "target recovers 400; removed 1" {
+		t.Fatalf("recovery log = %+v", logs)
+	}
+	target.HP = 250
+	logs = nil
+	applyDamageToTarget(nil, attacker, target, 50, &logs, 2, false, false, false, rng)
+	if target.HP != 200 {
+		t.Fatalf("HP after exhausted recovery and incoming hit = %v, want 200", target.HP)
+	}
+	for _, log := range logs {
+		if log.Action == "QI_JUE_RETURN_LIFE" {
+			t.Fatalf("recovery repeated after max_uses: %+v", logs)
+		}
+	}
+}

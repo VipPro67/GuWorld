@@ -1,14 +1,60 @@
 package simulator
 
 import (
+	"math/rand"
 	"strings"
 	"testing"
 
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
 func reverseCalamityMech() CombatMechanic {
 	return CombatMechanic{Trigger: "COMBAT_PASSIVE", ActionCode: "REVERSE_CALAMITY"}
+}
+
+func typedHostileEffectImmunity() SimActionOperation {
+	return SimActionOperation{Compiled: gameplayeffects.CompiledOperation{Type: gameplayeffects.OpEffectImmunity, SubType: "HOSTILE_EFFECTS"}}
+}
+
+func TestTypedHostileEffectImmunityPassesDamageAndRejectsStatuses(t *testing.T) {
+	attacker := newTestCombatant("enemy", "Enemy", 1000, 100)
+	target := newTestCombatant("ally", "Player", 1000, 1)
+	target.PassiveOperationEffects = []SimActionOperation{typedHostileEffectImmunity()}
+	var statusLogs []CombatLog
+	applyStatusOps(attacker, []*CombatantAuto{target}, []statusfx.StatusOp{{ID: statusfx.StatusStun, Value: 1, Turns: 1, Chance: 1}}, attacker.Rank, 1, rand.New(rand.NewSource(8)), &statusLogs)
+	attacker.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh", Damage: 100}}
+	Simulate(&CombatState{Seed: 4, Allies: []*CombatantAuto{target}, Enemies: []*CombatantAuto{attacker}})
+	if target.HP >= target.MaxHP {
+		t.Fatal("raw damage should pass through typed hostile effect immunity")
+	}
+	if target.IsStunned {
+		t.Fatal("typed hostile effect immunity should reject hostile status effects")
+	}
+	if logActionCount(statusLogs, "STATUS_REVERSED") == 0 {
+		t.Fatal("expected a status reversal log from the typed passive")
+	}
+}
+
+func TestDirectStatusApplicationPreservesLegacyUnresistableBehavior(t *testing.T) {
+	actor := newTestCombatant("caster", "Player", 1000, 10)
+	actor.Rank = 1
+	target := newTestCombatant("target", "Enemy", 1000, 0)
+	target.Rank = 9
+	target.CCResist = 1
+	target.Mechanics = []CombatMechanic{reverseCalamityMech()}
+	rng := rand.New(rand.NewSource(77))
+	control := rand.New(rand.NewSource(77))
+	logs := []CombatLog{}
+	applyStatusOps(actor, []*CombatantAuto{target}, []statusfx.StatusOp{{
+		ID: statusfx.StatusBind, Turns: 2, ApplicationMode: "DIRECT",
+	}}, actor.Rank, 1, rng, &logs)
+	if !hasStatus(target, statusfx.StatusBind) {
+		t.Fatal("DIRECT application should bypass rank, resistance, and reversal gates")
+	}
+	if got, want := rng.Int63(), control.Int63(); got != want {
+		t.Fatalf("DIRECT status consumed RNG: next draw %d, want unchanged draw %d", got, want)
+	}
 }
 
 func suppressPriorityMech() CombatMechanic {

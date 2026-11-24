@@ -194,11 +194,17 @@ func checkEffectCompatibility(contextID string, block gameplayeffects.Block, ope
 		if target.Selector != gameplayeffects.TargetSelf {
 			return "unsupported", "Item consume adapter chỉ hỗ trợ target SELF."
 		}
-		if operation.Op != gameplayeffects.OpUnique || !isNativeHookFor(operation.Code, string(block.Trigger), "item_use") {
-			return "unsupported", "Item adapter chỉ chạy native item-use hooks đã đăng ký."
-		}
 		if len(block.Conditions) > 0 {
 			return "unsupported", "Item adapter hiện không evaluate Block conditions."
+		}
+		if _, err := models.ValidateItemEffectOperation(operation); err != nil {
+			return "unsupported", err.Error()
+		}
+		if operation.Op == gameplayeffects.OpHeal || operation.Op == gameplayeffects.OpRequire || operation.Op == gameplayeffects.OpGrantResource || operation.Op == gameplayeffects.OpRestoreResource || operation.Op == gameplayeffects.OpModifyAperture || operation.Op == gameplayeffects.OpRandomizeTrait || operation.Op == gameplayeffects.OpRepairAperture || operation.Op == gameplayeffects.OpOpenRewardContainer || operation.Op == gameplayeffects.OpPlaceWorldObject {
+			return "supported", ""
+		}
+		if !isNativeHookFor(operation.Code, string(block.Trigger), "item_use") {
+			return "unsupported", "Item native hook không hỗ trợ trigger/context này."
 		}
 		return "conditional", "Native item-use handler kiểm tra precondition và transaction state khi chạy."
 
@@ -206,11 +212,20 @@ func checkEffectCompatibility(contextID string, block gameplayeffects.Block, ope
 		if block.Trigger != gameplayeffects.TriggerOnConsume && block.Trigger != gameplayeffects.TriggerOnUse {
 			return "unsupported", "Gu event dispatcher chỉ phát ON_CONSUME hoặc ON_USE."
 		}
+		if operation.Op == gameplayeffects.OpPlaceWorldObject {
+			if block.Trigger != gameplayeffects.TriggerOnConsume || target.Selector != gameplayeffects.TargetSelf || operation.SubType != "PRIMEVAL_SPRING" {
+				return "unsupported", "PLACE_WORLD_OBJECT chỉ hỗ trợ PRIMEVAL_SPRING lên SELF khi Gu được tiêu hao."
+			}
+			if len(block.Conditions) > 0 {
+				return "conditional", "Gu event dispatcher evaluate conditions trước khi gọi world placement executor."
+			}
+			return "supported", ""
+		}
 		if operation.Op != gameplayeffects.OpUnique || !isNativeHookFor(operation.Code, string(block.Trigger), "item_use", "world") {
-			return "unsupported", "Event dispatcher chỉ chạy native hook đã đăng ký cho trigger này; không Evaluate operation tổng quát."
+			return "unsupported", "Gu event dispatcher chỉ chạy native hook đã đăng ký hoặc typed world operation được hỗ trợ cho trigger này."
 		}
 		if len(block.Conditions) > 0 {
-			return "unsupported", "Event dispatcher hiện không đánh giá Block conditions cho native hook."
+			return "conditional", "Gu event dispatcher evaluate conditions trước khi gọi native action handler."
 		}
 		return "conditional", "Native action handler kiểm tra precondition và transaction state khi chạy."
 
@@ -236,6 +251,12 @@ func checkEffectCompatibility(contextID string, block gameplayeffects.Block, ope
 		return "unsupported", "Operation không có projection derived/passive hiện hành."
 
 	case "ON_TICK_GROWTH":
+		if block.Trigger == gameplayeffects.TriggerOnTick && operation.Op == gameplayeffects.OpPeriodicResource {
+			if len(block.Conditions) > 0 {
+				return "unsupported", "ON_TICK worker/projection hiện không evaluate Block conditions."
+			}
+			return "supported", ""
+		}
 		if block.Trigger != gameplayeffects.TriggerOnTick || operation.Op != gameplayeffects.OpUnique {
 			return "unsupported", "Worker/projection hiện chỉ đọc native UNIQUE hook ON_TICK cụ thể."
 		}
@@ -250,6 +271,12 @@ func checkEffectCompatibility(contextID string, block gameplayeffects.Block, ope
 		}
 
 	case "REFINEMENT":
+		if block.Trigger == gameplayeffects.TriggerAlwaysOn && operation.Op == gameplayeffects.OpDeductionFinishChance {
+			if len(block.Conditions) > 0 {
+				return "unsupported", "Deduction consumer hiện không evaluate Block conditions."
+			}
+			return "supported", ""
+		}
 		if block.Trigger == gameplayeffects.TriggerAlwaysOn && operation.Op == gameplayeffects.OpStatMod && (strings.EqualFold(operation.Stat, "REFINE_SUCCESS") || strings.EqualFold(operation.Stat, "REFINE_MANA_TIER")) {
 			if len(block.Conditions) > 0 {
 				return "unsupported", "Refinement stat projection hiện không evaluate Block conditions."
@@ -296,7 +323,7 @@ func unsupportedConditionReason(contextID string, conditions []gameplayeffects.C
 		if contextID == "KILLER_MOVE_COMBAT" {
 			values["MASTERY"] = 0
 		}
-	case "WORLD_ON_USE", "KILLER_MOVE_ON_USE", "GU_HOUSE_ON_USE", "TELEPORT_ARRAY_ARRIVAL":
+	case "WORLD_ON_USE", "KILLER_MOVE_ON_USE", "GU_HOUSE_ON_USE", "TELEPORT_ARRAY_ARRIVAL", "GU_CONSUME_EVENT":
 		values["RANK"] = 1
 		values["ACTOR_RACE"] = "human"
 		values["TARGET_RACE"] = "human"

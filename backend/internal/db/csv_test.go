@@ -1,10 +1,12 @@
 package db
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -186,6 +188,52 @@ func TestPreflightSources(t *testing.T) {
 				t.Errorf("%s preflight failed: %v", s.table, err)
 			}
 		})
+	}
+}
+
+func TestGuPreflightUsesStagedStatusCSVRegistry(t *testing.T) {
+	statusPath := filepath.Join(t.TempDir(), "Status.csv")
+	guPath := filepath.Join(t.TempDir(), "Gu.csv")
+	writeRows := func(path string, rows [][]string) {
+		t.Helper()
+		f, err := os.Create(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writer := csv.NewWriter(f)
+		for _, row := range rows {
+			if err := writer.Write(row); err != nil {
+				f.Close()
+				t.Fatal(err)
+			}
+		}
+		writer.Flush()
+		if err := writer.Error(); err != nil {
+			f.Close()
+			t.Fatal(err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const statusKey = "staged_status_for_preflight_test"
+	writeRows(statusPath, [][]string{{"key", "name"}, {statusKey, "Staged"}})
+	effect := `{"schema_version":2,"blocks":[{"id":"STATUS","trigger":"ON_HIT","target":{"selector":"TARGET"},"operations":[{"op":"APPLY_STACKING_STATUS","status_key":"` + statusKey + `","max_stacks":1,"duration_hours":1,"dispel_rule":"CLEAR_ALL","pvp_only":true,"tier_scaling":[{"tier":1,"stat_percent":-10}]}]}]}`
+	writeRows(guPath, [][]string{{"id", "effects"}, {"GU_TEST", effect}})
+
+	csvImportState.Lock()
+	previousOverride := csvImportState.override
+	t.Cleanup(func() {
+		csvImportState.override = previousOverride
+		csvImportState.Unlock()
+	})
+	csvImportState.override = map[string]string{"Gu.csv": guPath}
+	if err := preflightEffectCSVs([]effectCSVSource{{source: "gu", filename: "Gu.csv", keyColumn: "id"}}); err == nil {
+		t.Fatal("Gu-only preflight accepted a status key that exists only in an unstaged local Status.csv")
+	}
+	csvImportState.override = map[string]string{"Status.csv": statusPath, "Gu.csv": guPath}
+	if err := preflightEffectCSVs([]effectCSVSource{{source: "gu", filename: "Gu.csv", keyColumn: "id"}}); err != nil {
+		t.Fatalf("preflight rejected status key staged in the same batch: %v", err)
 	}
 }
 

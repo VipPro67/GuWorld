@@ -84,14 +84,30 @@ func (b BodyModsList) Has(id string) bool {
 // nil for permanent statuses; Source records where it came from ("admin",
 // "combat", "tribulation", ...); Value carries an optional intensity.
 type StatusInstance struct {
-	ID          string     `json:"id"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	Source      string     `json:"source,omitempty"`
-	Value       float64    `json:"value,omitempty"`
-	SourceID    string     `json:"source_id,omitempty"`
-	EffectID    string     `json:"effect_id,omitempty"`
-	Context     string     `json:"context,omitempty"`
-	StackPolicy string     `json:"stack_policy,omitempty"`
+	ID          string                  `json:"id"`
+	ExpiresAt   *time.Time              `json:"expires_at,omitempty"`
+	Source      string                  `json:"source,omitempty"`
+	Value       float64                 `json:"value,omitempty"`
+	SourceID    string                  `json:"source_id,omitempty"`
+	EffectID    string                  `json:"effect_id,omitempty"`
+	Context     string                  `json:"context,omitempty"`
+	StackPolicy string                  `json:"stack_policy,omitempty"`
+	Stacking    *StatusStackingMetadata `json:"stacking,omitempty"`
+}
+
+// StatusStackingMetadata preserves the authored tier policy needed for later
+// increments and cleansing of a persistent stacked status.
+type StatusStackingMetadata struct {
+	CurrentTier   int               `json:"current_tier"`
+	MaxStacks     int               `json:"max_stacks"`
+	DurationHours float64           `json:"duration_hours"`
+	DispelRule    string            `json:"dispel_rule"`
+	TierScaling   []StatusStackTier `json:"tier_scaling"`
+}
+
+type StatusStackTier struct {
+	Tier        int     `json:"tier"`
+	StatPercent float64 `json:"stat_percent"`
 }
 
 // StatusList represents the player's active statuses (trạng thái), e.g.
@@ -126,6 +142,19 @@ func (s *StatusList) Add(id, source string, d time.Duration, value float64) {
 		}
 	}
 	*s = append(*s, StatusInstance{ID: id, ExpiresAt: expiry, Source: source, Value: value})
+}
+
+// AddStacking applies or refreshes one status tier and stores the authored
+// policy so a later hit or cleanse can use the same stack definition.
+func (s *StatusList) AddStacking(id, source string, d time.Duration, value float64, metadata StatusStackingMetadata) {
+	s.Add(id, source, d, value)
+	metadata.TierScaling = append([]StatusStackTier(nil), metadata.TierScaling...)
+	for i := range *s {
+		if (*s)[i].ID == id {
+			(*s)[i].Stacking = &metadata
+			return
+		}
+	}
 }
 
 // ApplyEffect applies a provenance-aware status. The same source/effect/context

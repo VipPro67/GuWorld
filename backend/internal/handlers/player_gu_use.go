@@ -210,7 +210,7 @@ func UseConsumableGu(c *gin.Context) {
 		}
 
 		var hungerCost int = 20
-		_, reduceHunger = models.GuNativeMechanic(specs, "SACRIFICE_APTITUDE")
+		reduceHunger = models.GuHasAptitudeSacrifice(specs)
 
 		if reduceHunger {
 			if guHunger < hungerCost {

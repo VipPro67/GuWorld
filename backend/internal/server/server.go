@@ -1168,6 +1168,11 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 		// World & Exploration
 		api.GET("/explore/grid", middleware.AuthRequired(), handlers.GetGrid)
 		api.POST("/explore/move", middleware.AuthRequired(), middleware.RequireOnboarded(), handlers.MovePlayer)
+		api.GET("/explore/travel", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(120, time.Minute), handlers.GetTravelJourney)
+		api.POST("/explore/travel/preview", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(60, time.Minute), handlers.PreviewTravelJourney)
+		api.POST("/explore/travel", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(30, time.Minute), handlers.StartTravelJourney)
+		api.POST("/explore/travel/stop", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(30, time.Minute), handlers.StopTravelJourney)
+		api.POST("/explore/travel/resume", middleware.AuthRequired(), middleware.RequireOnboarded(), middleware.RateLimitByPlayer(30, time.Minute), handlers.ResumeTravelJourney)
 		api.GET("/explore/regions", middleware.AuthRequired(), handlers.GetRegions)
 		api.GET("/explore/cells/rect", middleware.AuthRequired(), middleware.RateLimitByPlayer(240, time.Minute), handlers.GetCellsRect)
 		api.GET("/world/maps", middleware.AuthRequired(), handlers.GetWorldMaps)

@@ -1,6 +1,8 @@
 package simulator
 
 import (
+	"math"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -60,6 +62,55 @@ func TestPackFrenzyEnslavementDamageScaling(t *testing.T) {
 
 	if !foundPackFrenzy {
 		t.Fatalf("expected PACK_FRENZY log in battle, got: %+v", logs)
+	}
+}
+
+func TestPackFrenzyTypedPassiveScalesActionAndChildDamage(t *testing.T) {
+	actor := newTestCombatant("actor", "Người dùng", 1000, 100)
+	minion := &CombatantAuto{ID: "minion", Name: "Dị thú", Kind: "Minion", HP: 100, MaxHP: 100}
+	actor.PassiveDamageModifiers = []DamageModifier{{
+		SubType: "MINION_COUNT", BaseMultiplier: 1, PerMinion: 0.15,
+		LogAction: "PACK_FRENZY", Message: "{actor} chỉ huy {minion_count} minion (+{damage_percent}%).",
+	}}
+	action := &SimAction{Damage: 100, DamageModifiers: []DamageModifier{{SubType: "MISSING_HP", BaseMultiplier: 1.2}}}
+	logs := []CombatLog{}
+	runner := &combatActionRunner{turn: 1, turnLogs: &logs}
+	damageScale := 1.0
+	runner.applyPassiveDamageModifiers(combatPhaseContext{actor: actor, action: action, damageScale: &damageScale, allies: []*CombatantAuto{actor, minion}})
+	if math.Abs(action.Damage-115) > 1e-9 {
+		t.Fatalf("typed passive action damage = %v, want 115", action.Damage)
+	}
+	if math.Abs(damageScale-1.15) > 1e-9 {
+		t.Fatalf("typed passive child operation scale = %v, want 1.15", damageScale)
+	}
+	if len(logs) != 1 || logs[0].Action != "PACK_FRENZY" || !strings.Contains(logs[0].Detail, "1 minion (+15%)") {
+		t.Fatalf("typed passive log mismatch: %+v", logs)
+	}
+
+	run := func(typed bool) ([]CombatLog, float64) {
+		attacker := newTestCombatant("actor", "Người dùng", 1000, 100)
+		attacker.Speed = 20
+		attacker.Actions = []SimAction{{ActionType: "GU_SKILL", Name: "Đòn phối hợp", Damage: 100}}
+		if typed {
+			attacker.PassiveDamageModifiers = []DamageModifier{{
+				SubType: "MINION_COUNT", BaseMultiplier: 1, PerMinion: 0.15,
+				LogAction: "PACK_FRENZY", Message: "[Nô Đạo - Quân Đoàn Hợp Kích] {actor} chỉ huy {minion_count} dị thú bầy đàn hiệp đồng tác chiến, tăng {damage_percent}% uy lực sát thương!",
+			}}
+		} else {
+			attacker.Mechanics = []CombatMechanic{{Trigger: "COMBAT_PASSIVE", ActionCode: "PACK_FRENZY"}}
+		}
+		livingMinion := &CombatantAuto{ID: "minion", Name: "Dị thú", Kind: "Minion", HP: 100, MaxHP: 100, Speed: 1}
+		defender := newTestCombatant("target", "Mục tiêu", 5000, 10)
+		logs := Simulate(&CombatState{Seed: 11, Allies: []*CombatantAuto{attacker, livingMinion}, Enemies: []*CombatantAuto{defender}})
+		return logs, defender.HP
+	}
+	legacyLogs, legacyHP := run(false)
+	typedLogs, typedHP := run(true)
+	if legacyHP != typedHP {
+		t.Fatalf("typed PACK_FRENZY target HP = %v, legacy = %v", typedHP, legacyHP)
+	}
+	if !reflect.DeepEqual(legacyLogs, typedLogs) {
+		t.Fatalf("typed PACK_FRENZY logs differ from legacy\nlegacy: %+v\ntyped: %+v", legacyLogs, typedLogs)
 	}
 }
 

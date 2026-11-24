@@ -1,5 +1,5 @@
 import { getManifestIconUrl, isValidGameImageUrl } from "./game-icon-manifest.ts";
-import generatedItemIcons from "../data/generated-item-icons.json";
+import generatedItemIcons from "../data/generated-item-icons.json" with { type: "json" };
 
 export interface ItemIconSource {
   id: string;

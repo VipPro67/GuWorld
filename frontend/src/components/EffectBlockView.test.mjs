@@ -23,7 +23,23 @@ const { EffectEnvelopeView, formatOperation } = mod.exports;
 
 test("operation formatter includes path and native params", () => {
   assert.match(formatOperation({ op: "DAMAGE", sub_type: "FLAT", value: 12, path: "fire" }).text, /12.*fire/);
+  assert.match(formatOperation({ op: "BONUS_STRIKE", chance: 0.45, value: 0.75, min_damage: 50 }).text, /Đòn phụ 45% · ×0.75 \(sàn 50\)/);
+  assert.match(formatOperation({ op: "CHAIN_DAMAGE", value: 0.5, min_damage: 30, target_count: 1 }).text, /Sát thương lan ×0.5 · 1 mục tiêu phụ \(sàn 30\)/);
   assert.match(formatOperation({ op: "UNIQUE", code: "CAPTURE_BONUS", params: { value: 0.2 } }).text, /0.2/);
+  assert.match(formatOperation({ op: "REVIVE", params: { chance: 0.5, mode: "in_place" } }).text, /Hồi sinh khi chịu đòn chí tử/);
+  assert.match(formatOperation({ op: "HP_COST", sub_type: "CURRENT_HP_PERCENT", value: 0.2, min_cost: 10, min_remaining: 1 }).text, /Trả 20% HP hiện tại \(tối thiểu 10\), giữ lại 1 HP/);
+  assert.match(formatOperation({ op: "HEAL", sub_type: "LIFESTEAL", value: 50 }).text, /Hút máu 50%/);
+  assert.match(formatOperation({ op: "HEAL", sub_type: "RESOURCE", resource: "MANA", unit: "PERCENT", value: 20 }).text, /Hồi 20% Max Chân Nguyên/);
+  assert.match(formatOperation({ op: "NOTIFY", message: "battle log" }).text, /battle log/);
+  assert.match(formatOperation({ op: "TRANSFER_RESOURCE", sub_type: "PERCENT_OF_MAX_HP", resource: "HP", value: 0.15, min_amount: 30 }).text, /Rút 15% Max HP \(tối thiểu 30\)/);
+  assert.match(formatOperation({ op: "TRANSFER_RESOURCE", sub_type: "PERCENT_OF_TARGET_SHIELD", resource: "HP", value: 0.5 }).text, /Hấp thụ 50% Khiên mục tiêu, hồi HP cho bản thân/);
+  assert.match(formatOperation({ op: "REVOKE_STATUS", status_id: "regional_wall_suppression" }).text, /Gỡ trạng thái người chơi: regional_wall_suppression/);
+  assert.match(formatOperation({ op: "TARGET_DAMAGE_MODIFIER", sub_type: "REDUCE", value: 0.3, min_multiplier: 0.2 }).text, /Giảm 30% sát thương mục tiêu \(sàn ×0.2\)/);
+  assert.match(formatOperation({ op: "DEFENSE_PENETRATION", value: 0.5 }).text, /Xuyên 50% phòng thủ/);
+  assert.match(formatOperation({ op: "RESOURCE_CONVERSION", sub_type: "DISPEL_TO_RESOURCES" }).text, /Giải Mộng/);
+  assert.match(formatOperation({ op: "TARGET_REDIRECTION", sub_type: "CONFUSION" }).text, /Chuyển hướng đòn địch/);
+  assert.match(formatOperation({ op: "OUTCOME_ROULETTE", sub_type: "LUCK" }).text, /Cát Hung Chi Biến/);
+  assert.match(formatOperation({ op: "OUTCOME_ROULETTE", sub_type: "CHAOS" }).text, /Hỗn Độn Đánh Cược/);
 });
 
 test("EffectEnvelopeView renders trigger, target and operation content", () => {

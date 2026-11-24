@@ -823,7 +823,14 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
       const res = await authFetch(`${BACKEND_URL}/api/admin/apertures/${id}`);
       if (res.ok) {
         const data = await res.json();
-        setApertureDetail({ ...data.aperture, resources: data.resources || [] });
+        setApertureDetail({
+          ...data.aperture,
+          resources: data.resources || [],
+          region_name: data.region_name || data.aperture?.region_name,
+          placed_region: data.placed_region || data.aperture?.placed_region,
+          placed_x: data.placed_x ?? data.aperture?.placed_x,
+          placed_y: data.placed_y ?? data.aperture?.placed_y,
+        });
         setApertureForm({
           ...data.aperture,
           dao_marks_array: Object.entries(data.aperture.dao_marks || {}).map(([path, amount]) => ({ path, amount })),
@@ -4857,6 +4864,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                   <thead>
                     <tr className="bg-zinc-900/80 text-zinc-400 font-mono uppercase tracking-wider text-[10px]">
                       <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Người chơi</th>
+                      <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Vị trí / Tọa độ</th>
                       <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Phẩm cấp</th>
                       <th className="px-3 py-2.5 font-semibold whitespace-nowrap">Trạng thái</th>
                       <th className="px-3 py-2.5 font-semibold text-right whitespace-nowrap">Tốc độ TG</th>
@@ -4875,6 +4883,41 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                           <span className={`font-semibold block ${ap.player_id ? "text-zinc-200" : "text-sky-300"}`}>{ap.player_id ? ap.username : "Tiên Khiếu vô chủ"}</span>
                           {!ap.player_id && <span className="text-[10px] text-sky-500">{ap.public_state || "PUBLIC"} · Rank {ap.aperture_rank}</span>}
                           <span className="text-[10px] text-zinc-500 font-mono block max-w-[140px] truncate" title={ap.id}>{ap.id}</span>
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap font-mono text-xs">
+                          {!ap.player_id ? (
+                            ap.placed_region || ap.region_name || ap.placed_x != null ? (
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-amber-400 flex items-center gap-1">
+                                  <MapPin className="w-3 h-3 text-amber-400 shrink-0" />
+                                  {ap.region_name || ap.placed_region || "Chưa xác định"}
+                                </span>
+                                <span className="text-[10px] text-amber-300/80">
+                                  ({Math.round(Number(ap.placed_x ?? 0))}, {Math.round(Number(ap.placed_y ?? 0))})
+                                  {ap.region_name && ap.placed_region && ap.region_name !== ap.placed_region ? (
+                                    <span className="text-zinc-500 ml-1 font-normal">· {ap.placed_region}</span>
+                                  ) : null}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-zinc-500 text-[10px]">Chưa có tọa độ</span>
+                            )
+                          ) : ap.is_placed ? (
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-zinc-200 flex items-center gap-1">
+                                <MapPin className="w-3 h-3 text-zinc-400 shrink-0" />
+                                {ap.region_name || ap.placed_region}
+                              </span>
+                              <span className="text-[10px] text-zinc-500">
+                                ({Math.round(Number(ap.placed_x ?? 0))}, {Math.round(Number(ap.placed_y ?? 0))})
+                                {ap.region_name && ap.placed_region && ap.region_name !== ap.placed_region ? (
+                                  <span className="text-zinc-600 ml-1 font-normal">· {ap.placed_region}</span>
+                                ) : null}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-zinc-600 text-[10px]">Chưa hạ khiếu</span>
+                          )}
                         </td>
                         <td className="px-3 py-2.5 font-bold text-zinc-300 whitespace-nowrap">
                           {ap.grade === "LOW" ? "Hạ Phẩm" : ap.grade === "MID" ? "Trung Phẩm" : ap.grade === "HIGH" ? "Thượng Phẩm" : ap.grade === "EXTREME" ? "Chí Tôn" : ap.grade}
@@ -4952,7 +4995,18 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                 <section className="rounded-xl border border-sky-900/50 bg-sky-950/20 p-4 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-sky-300">Tiên Khiếu vô chủ · {apertureDetail?.public_state || "PUBLIC"}</h4>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-sky-300">Tiên Khiếu vô chủ · {apertureDetail?.public_state || "PUBLIC"}</h4>
+                        {(apertureDetail?.placed_region || apertureDetail?.region_name || apertureDetail?.placed_x != null) && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-mono font-medium">
+                            <MapPin className="w-3 h-3 text-amber-400 shrink-0" />
+                            {apertureDetail?.region_name || apertureDetail?.placed_region || "Chưa xác định"} ({Math.round(Number(apertureDetail?.placed_x ?? 0))}, {Math.round(Number(apertureDetail?.placed_y ?? 0))})
+                            {apertureDetail?.region_name && apertureDetail?.placed_region && apertureDetail?.region_name !== apertureDetail?.placed_region && (
+                              <span className="text-amber-400/60 text-[10px] font-normal">({apertureDetail.placed_region})</span>
+                            )}
+                          </span>
+                        )}
+                      </div>
                       <p className="mt-1 text-[10px] font-mono text-zinc-500">Rank {apertureDetail?.aperture_rank} · {apertureDetail?.grade} · Diện tích {Number(apertureDetail?.area_size || 0).toLocaleString()} mẫu · HP {Number(apertureDetail?.aperture_hp || 0).toLocaleString()}/{Number(apertureDetail?.max_aperture_hp || 0).toLocaleString()}</p>
                     </div>
                     <span className="text-[10px] font-mono text-zinc-500">{String(apertureDetail?.id || "")}</span>
@@ -4981,7 +5035,16 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               <div className="space-y-4">
                 {/* Basic Properties */}
                 <div className="bg-zinc-950/40 border border-zinc-800/60 rounded-xl p-4 space-y-3">
-                  <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Thuộc tính cơ bản</h4>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Thuộc tính cơ bản</h4>
+                    {(apertureDetail?.placed_region || apertureDetail?.region_name || apertureDetail?.placed_x != null) && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-850 text-zinc-300 border border-zinc-700 text-xs font-mono">
+                        <MapPin className="w-3 h-3 text-zinc-400 shrink-0" />
+                        {apertureDetail?.is_placed ? "Đã hạ khiếu: " : "Vị trí portal: "}
+                        {apertureDetail?.region_name || apertureDetail?.placed_region} ({Math.round(Number(apertureDetail?.placed_x ?? 0))}, {Math.round(Number(apertureDetail?.placed_y ?? 0))})
+                      </span>
+                    )}
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                     <div>
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">Phẩm cấp</label>

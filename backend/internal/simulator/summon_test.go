@@ -1,11 +1,34 @@
 package simulator
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
+	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 )
+
+func TestTypedSummonProjectsToCombatMechanic(t *testing.T) {
+	compiled, err := (gameplayeffects.Compiler{}).Compile([]gameplayeffects.Block{{
+		ID: "SUMMON", Trigger: gameplayeffects.TriggerOnBattleStart,
+		Target: gameplayeffects.Target{Selector: gameplayeffects.TargetSelf},
+		Operations: []gameplayeffects.Operation{{
+			Op:     gameplayeffects.OpSummon,
+			Params: json.RawMessage(`{"monster_id":"monster_wolf_leader","hp_scale":0.5,"position":"frontline"}`),
+		}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mechanics := CompiledCombatMechanics(compiled, false)
+	if len(mechanics) != 1 || mechanics[0].Trigger != "ON_BATTLE_START" || mechanics[0].ActionCode != "SUMMON_MONSTER" {
+		t.Fatalf("typed summon projection = %+v", mechanics)
+	}
+	if mechanics[0].Values["monster_id"] != "monster_wolf_leader" || mechanics[0].Values["hp_scale"] != 0.5 {
+		t.Fatalf("typed summon params = %+v", mechanics[0].Values)
+	}
+}
 
 // SUMMON_MONSTER spawns a minion from the injected template stats, scaled by the
 // rank of the summoning Gu, and the minion is clamped to the caster's scale.
@@ -213,12 +236,30 @@ func TestBattleStartSummonMonsterSpawnsOnce(t *testing.T) {
 	}
 }
 
-// ON_BATTLE_START/SUMMON_WOLF_FRONTLINE summons Địa Lang Vương immediately and
-// pulls the caster back to the mid line.
-func TestBattleStartSummonWolfFrontline(t *testing.T) {
+// A data-authored actor-scaled summon plus DISPLACE replaces the wolf-specific hook.
+func TestBattleStartTypedActorScaledSummonAndDisplace(t *testing.T) {
 	ally := newTestCombatant("ally", "Player", 100000, 1000)
-	ally.GridX = 1
-	ally.Mechanics = []CombatMechanic{mech("ON_BATTLE_START", "SUMMON_WOLF_FRONTLINE", `{}`)}
+	ally.GridX = 4
+	ally.BaseDef = 120
+	compiled, err := (gameplayeffects.Compiler{}).Compile([]gameplayeffects.Block{
+		{
+			ID: "SUMMON_WOLF_FRONTLINE", Trigger: gameplayeffects.TriggerOnBattleStart,
+			Target:     gameplayeffects.Target{Selector: gameplayeffects.TargetSelf},
+			Operations: []gameplayeffects.Operation{{Op: gameplayeffects.OpSummon, Params: json.RawMessage(`{"monster_id":"monster_wolf_leader","hp_scale":0.5,"damage_scale":0.3333333333333333,"defense_scale":0.5,"stat_source":"ACTOR","rank_scale":false,"rank":0,"speed":0,"position":"frontline","name":"Địa Lang Vương","id_suffix":"dialang","log_message":"{actor} triệu hồi {summon} ({hp} HP{dao_note}) lên tiền tuyến để đỡ đòn!"}`)}},
+		},
+		{
+			ID: "CASTER_MID_ROW", Trigger: gameplayeffects.TriggerOnBattleStart,
+			Target:     gameplayeffects.Target{Selector: gameplayeffects.TargetSelf},
+			Operations: []gameplayeffects.Operation{{Op: gameplayeffects.OpDisplace, SubType: "SET_ROW", Value: 3}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ally.Mechanics = CompiledCombatMechanics(compiled, false)
+	if len(ally.Mechanics) != 2 || ally.Mechanics[0].ActionCode != "SUMMON_MONSTER" || ally.Mechanics[1].ActionCode != "DISPLACE" {
+		t.Fatalf("typed battle-start mechanics = %+v", ally.Mechanics)
+	}
 	ally.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh", Damage: 10}}
 
 	enemy := newTestCombatant("enemy", "Enemy", 100000, 100)
@@ -232,8 +273,11 @@ func TestBattleStartSummonWolfFrontline(t *testing.T) {
 	for _, c := range state.Allies {
 		if c.ID == "ally_dialang" && c.Kind == "Minion" {
 			found = true
-			if c.MaxHP != 50000 {
-				t.Fatalf("wolf HP = %.0f, want 50000 (50%% caster)", c.MaxHP)
+			if c.MaxHP != 50000 || c.BaseDmg != ally.BaseDmg/3 || c.BaseDef != 60 || c.Rank != 0 || c.Speed != 0 {
+				t.Fatalf("wolf stats = HP %.0f, damage %.2f, defense %.2f, rank %d, speed %.2f; want 50000, %.2f, 60, 0, 0", c.MaxHP, c.BaseDmg, c.BaseDef, c.Rank, c.Speed, ally.BaseDmg/3)
+			}
+			if c.Name != "Địa Lang Vương (Triệu hồi)" {
+				t.Fatalf("wolf name = %q", c.Name)
 			}
 		}
 	}
@@ -245,6 +289,39 @@ func TestBattleStartSummonWolfFrontline(t *testing.T) {
 	}
 	if !hasDetail(logs, "Địa Lang Vương") {
 		t.Fatal("missing SUMMONED log for Địa Lang Vương")
+	}
+	legacyActor := newTestCombatant("ally", "Player", 100000, 1000)
+	legacyActor.GridX, legacyActor.BaseDef = 4, 120
+	legacyActor.Mechanics = []CombatMechanic{mech("ON_BATTLE_START", "SUMMON_WOLF_FRONTLINE", `{}`)}
+	legacyActor.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Đánh", Damage: 10}}
+	legacyEnemy := newTestCombatant("enemy", "Enemy", 100000, 100)
+	legacyEnemy.Speed = 1
+	legacyEnemy.Actions = []SimAction{{ActionType: "BASIC_ATTACK", Name: "Cắn", Damage: 1}}
+	legacyState := &CombatState{Seed: 5, Allies: []*CombatantAuto{legacyActor}, Enemies: []*CombatantAuto{legacyEnemy}}
+	legacyLogs := Simulate(legacyState)
+	var typedSummonLog, legacySummonLog *CombatLog
+	for i := range logs {
+		if logs[i].Action == "SUMMONED" {
+			typedSummonLog = &logs[i]
+			break
+		}
+	}
+	for i := range legacyLogs {
+		if legacyLogs[i].Action == "SUMMONED" {
+			legacySummonLog = &legacyLogs[i]
+			break
+		}
+	}
+	if typedSummonLog == nil || legacySummonLog == nil {
+		t.Fatalf("typed summon log = %+v, legacy log = %+v", typedSummonLog, legacySummonLog)
+	}
+	typedComparable, legacyComparable := *typedSummonLog, *legacySummonLog
+	typedComparable.Snapshot, legacyComparable.Snapshot = nil, nil
+	if typedComparable != legacyComparable {
+		t.Fatalf("typed summon log = %+v, legacy log = %+v", typedComparable, legacyComparable)
+	}
+	if legacyActor.GridX != ally.GridX {
+		t.Fatalf("typed owner row %d differs from legacy row %d", ally.GridX, legacyActor.GridX)
 	}
 }
 

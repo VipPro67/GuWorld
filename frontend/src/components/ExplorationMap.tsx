@@ -46,6 +46,28 @@ interface GridData {
   aperture_owner_name?: string;
 }
 
+function estimateTravelETASeconds(fromX: number, fromY: number, toX: number, toY: number, movement: number): number | null {
+  if (movement <= 0) return null;
+  let x = fromX;
+  let y = fromY;
+  const dx = Math.abs(toX - x);
+  const dy = Math.abs(toY - y);
+  const sx = x < toX ? 1 : -1;
+  const sy = y < toY ? 1 : -1;
+  let error = dx - dy;
+  let eta = 0;
+  while (x !== toX || y !== toY) {
+    const oldX = x;
+    const oldY = y;
+    const doubled = 2 * error;
+    if (doubled > -dy) { error -= dy; x += sx; }
+    if (doubled < dx) { error += dx; y += sy; }
+    const length = oldX !== x && oldY !== y ? Math.SQRT2 : 1;
+    eta += Math.min(60, Math.max(1, 10 * length / movement));
+  }
+  return Math.ceil(eta);
+}
+
 interface MapPlayer {
   id: string;
   username: string;
@@ -70,6 +92,13 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const fetchRegions = useGameStore((state) => state.fetchRegions);
   const fetchGrid = useGameStore((state) => state.fetchGrid);
   const movePlayer = useGameStore((state) => state.movePlayer);
+  const travelJourney = useGameStore((state) => state.travelJourney);
+  const travelPreview = useGameStore((state) => state.travelPreview);
+  const fetchTravelJourney = useGameStore((state) => state.fetchTravelJourney);
+  const previewTravelJourney = useGameStore((state) => state.previewTravelJourney);
+  const startTravelJourney = useGameStore((state) => state.startTravelJourney);
+  const stopTravelJourney = useGameStore((state) => state.stopTravelJourney);
+  const resumeTravelJourney = useGameStore((state) => state.resumeTravelJourney);
   const skyfall = useGameStore((state) => state.skyfall);
   const enterAperturePortal = useGameStore((state) => state.enterPortal);
   const harvestVein = useWorldStore((state) => state.harvestVein);
@@ -121,6 +150,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const [selectedCalamityActor, setSelectedCalamityActor] = useState<WorldMonsterActor | null>(null);
   const [selectedAperturePoint, setSelectedAperturePoint] = useState<ApertureResourcePoint | null>(null);
   const [autoFarmRunning, setAutoFarmRunning] = useState(false);
+  const [selectedTravelTarget, setSelectedTravelTarget] = useState<{ x: number; y: number } | null>(null);
   const autoFarmRunningRef = useRef(false);
   const [showAtlas, setShowAtlas] = useState(false);
   const [showBuildTeleport, setShowBuildTeleport] = useState(false);
@@ -134,6 +164,28 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     && gridSnapshot.y === player.y
     ? gridSnapshot
     : null;
+  const activeTravelTarget = travelJourney?.target_region === player.current_region
+    ? { x: travelJourney.target_x, y: travelJourney.target_y }
+    : null;
+  const displayedTravelTarget = selectedTravelTarget || activeTravelTarget;
+  const travelPathCells = useMemo(() => {
+    const cells = new Set<string>();
+    if (!displayedTravelTarget) return cells;
+    let x = player.x;
+    let y = player.y;
+    const dx = Math.abs(displayedTravelTarget.x - x);
+    const dy = Math.abs(displayedTravelTarget.y - y);
+    const sx = x < displayedTravelTarget.x ? 1 : -1;
+    const sy = y < displayedTravelTarget.y ? 1 : -1;
+    let error = dx - dy;
+    while (x !== displayedTravelTarget.x || y !== displayedTravelTarget.y) {
+      const doubled = 2 * error;
+      if (doubled > -dy) { error -= dy; x += sx; }
+      if (doubled < dx) { error += dx; y += sy; }
+      cells.add(`${x},${y}`);
+    }
+    return cells;
+  }, [displayedTravelTarget, player.x, player.y]);
 
   useEffect(() => () => {
     autoFarmRunningRef.current = false;
@@ -213,6 +265,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     void loadGrid();
   }, [player.current_region, player.x, player.y, mapRevision, loadGrid]);
   usePolling(() => loadGrid().then(() => undefined), 10000);
+  useEffect(() => { void fetchTravelJourney(); }, [fetchTravelJourney, player.id]);
+  usePolling(() => fetchTravelJourney(), 5000);
   usePolling(() => fetchZoneMarkers(player.current_region).then(() => undefined), 10000);
   useEffect(() => { void fetchWorldMonsters(); }, [player.current_region, player.x, player.y, fetchWorldMonsters]);
   usePolling(() => checkWorldRevisions().then(() => undefined), 5000);
@@ -289,7 +343,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
     }
   }, [actionLoading, player.active_combat, currentLayer, skyfall, loadGrid]);
 
-  const handleCellClick = async (x: number, y: number, isMovable: boolean, cell?: GridCell, marker?: { kind: string; id: string; isMine?: boolean; name?: string }, resourcePointId?: string) => {
+  const handleCellClick = async (x: number, y: number, isMovable: boolean, cell?: GridCell, marker?: { kind: string; id: string; isMine?: boolean; name?: string }, resourcePointId?: string, transitionRegion?: Region) => {
     if (autoFarmRunningRef.current) return;
     const monsterActor = worldMonsters.find((actor) => Math.round(actor.x) === x && Math.round(actor.y) === y && actor.monster_template_id === "monster_earth_calamity_boss");
     if (monsterActor) {
@@ -375,16 +429,26 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       return;
     }
 
-    const now = Date.now();
-    if (now - lastMoveTimeRef.current < 600) return;
-    lastMoveTimeRef.current = now;
-
-    setLastLog(null);
-    const res = await movePlayer(x, y);
-    if (res) {
-      setLastLog(res.log);
-      await loadGrid();
+    let targetRegion = player.current_region;
+    let targetX = x;
+    let targetY = y;
+    if (transitionRegion && currentRegion) {
+      targetRegion = transitionRegion.id;
+      const currentMinX = currentRegion.min_x ?? 0;
+      const currentMinY = currentRegion.min_y ?? 0;
+      const currentMaxX = currentRegion.max_x ?? currentMinX + currentRegion.width - 1;
+      const currentMaxY = currentRegion.max_y ?? currentMinY + currentRegion.height - 1;
+      const targetMinX = transitionRegion.min_x ?? 0;
+      const targetMinY = transitionRegion.min_y ?? 0;
+      const targetMaxX = transitionRegion.max_x ?? targetMinX + transitionRegion.width - 1;
+      const targetMaxY = transitionRegion.max_y ?? targetMinY + transitionRegion.height - 1;
+      const dirX = x > currentMaxX ? 1 : x < currentMinX ? -1 : 0;
+      const dirY = y > currentMaxY ? 1 : y < currentMinY ? -1 : 0;
+      targetX = dirX > 0 ? 4 : dirX < 0 ? Math.max(targetMinX, targetMaxX - 4) : Math.min(targetMaxX, Math.max(targetMinX, x));
+      targetY = dirY > 0 ? 4 : dirY < 0 ? Math.max(targetMinY, targetMaxY - 4) : Math.min(targetMaxY, Math.max(targetMinY, y));
     }
+    if (await previewTravelJourney(targetRegion, targetX, targetY)) setSelectedTravelTarget({ x, y });
+    else setSelectedTravelTarget(null);
   };
 
   const stopAutoFarm = () => {
@@ -680,6 +744,25 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          {travelJourney ? (
+            <div className="flex items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-950/50 px-3 py-2 text-xs text-sky-100">
+              <span>
+                {travelJourney.status === "running" ? "Đang tự di chuyển" : travelJourney.status === "paused_manual_combat" ? "Chờ xử lý chiến đấu" : travelJourney.status === "paused_condition" ? "Tạm dừng vì điều kiện di chuyển" : travelJourney.status === "completed" ? "Đã tới đích" : travelJourney.status === "cancelled" ? "Hành trình đã dừng" : "Hành trình thất bại"}
+                {travelJourney.target_region === player.current_region && travelJourney.status === "running" && ` · ETA ${estimateTravelETASeconds(player.x,player.y,travelJourney.target_x,travelJourney.target_y,gridData?.stats.movement || 0) ?? "—"} giây`}
+                {` · (${travelJourney.target_x}, ${travelJourney.target_y})`}
+              </span>
+              {travelJourney.last_event && <span className="hidden max-w-48 truncate text-sky-300 sm:inline">{travelJourney.last_event}</span>}
+              {travelJourney.status === "paused_manual_combat" && <button onClick={() => void resumeTravelJourney()} className="rounded bg-sky-500/20 px-2 py-1">Tiếp tục</button>}
+              {(travelJourney.status === "running" || travelJourney.status.startsWith("paused")) && <button onClick={() => void stopTravelJourney()} className="rounded bg-rose-500/20 px-2 py-1 text-rose-200">Dừng</button>}
+            </div>
+          ) : null}
+          {selectedTravelTarget && (
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-950/50 px-3 py-2 text-xs text-emerald-100">
+              <span>Đích {regions.find((region) => region.id === travelPreview?.target_region)?.name || travelPreview?.target_region || `(${selectedTravelTarget.x}, ${selectedTravelTarget.y})`} ({travelPreview?.target_x ?? selectedTravelTarget.x}, {travelPreview?.target_y ?? selectedTravelTarget.y}) · {travelPreview ? `${travelPreview.distance.toFixed(1)} ô · ETA ${travelPreview.eta_seconds ?? "không khả dụng"} giây` : "Đang tính tuyến…"}{(travelPreview?.region_path.length || 0) > 1 ? ` · ${travelPreview?.region_path.length} khu vực` : ""}</span>
+              <button disabled={!travelPreview} onClick={async () => { if (travelPreview && await startTravelJourney(travelPreview.target_region,travelPreview.target_x,travelPreview.target_y)) setSelectedTravelTarget(null); }} className="rounded bg-emerald-500/20 px-2 py-1 disabled:opacity-50">{travelJourney?.status === "running" || travelJourney?.status.startsWith("paused") ? "Đổi đích" : "Bắt đầu"}</button>
+              <button onClick={() => setSelectedTravelTarget(null)} className="rounded bg-zinc-700/50 px-2 py-1">Bỏ chọn</button>
+            </div>
+          )}
           {isApertureMap && (
             <button
               type="button"
@@ -985,6 +1068,8 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
             {gridArray.map(({ x, y, isOutOfBounds, transitionRegion }) => {
               const cellData = cellMap.get(`${x},${y}`) || { x, y, cell_type: "Empty", content: "" };
               const isPlayerCell = x === player.x && y === player.y;
+              const isTravelTargetCell = displayedTravelTarget?.x === x && displayedTravelTarget.y === y;
+              const isTravelPathCell = travelPathCells.has(`${x},${y}`);
               const isMovable = (!isOutOfBounds || Boolean(transitionRegion)) && !isPlayerCell && !isMemberNotLeader;
               const otherPlayersOnCell = isOutOfBounds
                 ? []
@@ -1060,16 +1145,20 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                   role={isCellInteractive ? "button" : undefined}
                   tabIndex={isCellInteractive ? 0 : undefined}
                   aria-label={isCellInteractive ? cellAccessibleName : undefined}
-                  onClick={isCellInteractive ? () => handleCellClick(x, y, isMovable, cellData, portalMarker || teleportMarker || merchantMarker || primaryMarker, resourcePoint?.id) : undefined}
+                  onClick={isCellInteractive ? () => handleCellClick(x, y, isMovable, cellData, portalMarker || teleportMarker || merchantMarker || primaryMarker, resourcePoint?.id, transitionRegion) : undefined}
                   onKeyDown={isCellInteractive ? (event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      void handleCellClick(x, y, isMovable, cellData, portalMarker || teleportMarker || merchantMarker || primaryMarker, resourcePoint?.id);
+                      void handleCellClick(x, y, isMovable, cellData, portalMarker || teleportMarker || merchantMarker || primaryMarker, resourcePoint?.id, transitionRegion);
                     }
                   } : undefined}
                   className={`aspect-square rounded-md border flex flex-col justify-center items-center relative transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 ${
                     isPlayerCell
                       ? "bg-emerald-500/25 border-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.35)] z-20"
+                    : isTravelTargetCell
+                      ? "bg-amber-400/30 border-amber-300 ring-2 ring-inset ring-amber-300 shadow-[0_0_16px_rgba(252,211,77,0.5)] z-20"
+                    : isTravelPathCell
+                      ? "bg-sky-400/15 border-sky-300/70 ring-1 ring-inset ring-sky-300/40 z-[5]"
                     : isMovable
                       ? `${cellTint || "bg-emerald-950/30 border-emerald-500/40"} hover:bg-emerald-900/50 hover:border-emerald-300 cursor-pointer z-10 shadow-sm`
                       : isOutOfBounds
@@ -1078,6 +1167,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
                   }`}
                   title={cellAccessibleName}
                 >
+                  {isTravelTargetCell && <span className="absolute right-1 top-1 z-30 rounded bg-amber-300 px-1 text-[8px] font-black text-zinc-950">ĐÍCH</span>}
                   <div className="w-full h-full flex items-center justify-center gap-1 relative z-10 pb-3">
                     {isPlayerCell && (
                       <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-500 flex items-center justify-center text-[10px] text-zinc-950 font-bold border-2 border-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.8)] overflow-hidden">

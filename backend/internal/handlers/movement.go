@@ -281,6 +281,9 @@ func ExecuteSpatialTransition(ctx context.Context, tx *sql.Tx, player *models.Pl
 	if errMove := checkMovement(tx, player, spec); errMove != nil {
 		return nil, errMove
 	}
+	if _, err := tx.ExecContext(ctx, `UPDATE player_travel_journeys SET status='cancelled',revision=revision+1,next_step_at=NULL,last_event='Hành trình dừng do chuyển vị trí',reason_code='external_movement',updated_at=NOW() WHERE player_id=$1 AND status IN ('running','paused_manual_combat','paused_condition')`, player.ID); err != nil {
+		return nil, fmt.Errorf("cancel active travel journey: %w", err)
+	}
 
 	debuffMsg := applyDestination(ctx, tx, player, spec.targetRegion, spec.x, spec.y)
 	player.WorldZoneID = player.CurrentRegion
@@ -319,6 +322,9 @@ func ExecuteSpatialTransition(ctx context.Context, tx *sql.Tx, player *models.Pl
 func RelocatePlayerRespawn(ctx context.Context, tx *sql.Tx, playerID uuid.UUID, region string, x, y int) error {
 	if !inWorld(x, y) {
 		return fmt.Errorf("tọa độ hồi sinh vượt ra ngoài ranh giới bản đồ")
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE player_travel_journeys SET status='failed',revision=revision+1,next_step_at=NULL,last_event='Hành trình kết thúc vì nhân vật tử trận và hồi sinh',reason_code='player_dead',updated_at=NOW() WHERE player_id=$1 AND status IN ('running','paused_manual_combat','paused_condition')`, playerID); err != nil {
+		return fmt.Errorf("finish travel journey on respawn: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE players SET hp=1,current_region=$1,world_zone_id=$1,world_instance_id='',map_instance_id=NULL,

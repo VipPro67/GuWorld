@@ -217,6 +217,9 @@ func addEffects(dst *Effects, src Effects) {
 	if src.Immortal {
 		dst.Immortal = true
 	}
+	if src.ImmuneDreamStatus {
+		dst.ImmuneDreamStatus = true
+	}
 	if src.DisableHPRegen {
 		dst.DisableHPRegen = true
 	}
