@@ -18,8 +18,10 @@ Base path: `/api`. Route được đăng ký trong `backend/internal/server/serv
 | GET | `/recipes` | Public |
 | GET | `/gus/:instance_id/history` | Public; rate limited |
 | GET | `/auth/config` | Public |
-| POST | `/auth/send-otp`, `/auth/register`, `/auth/login` | Public; rate limited |
+| POST | `/auth/send-otp`, `/auth/register`, `/auth/login` | Public; rate limited. `/auth/register` yêu cầu `agree_terms: true` để ghi nhận sự đồng thuận pháp lý (phiên bản Điều khoản & Bảo mật, thời gian, IP); `/auth/login` kiểm tra và chặn tài khoản đã xóa bằng `403 Forbidden` |
 | POST | `/auth/logout` | Public |
+| POST | `/auth/delete-account` | Authenticated; yêu cầu xóa tài khoản và dữ liệu cá nhân theo NĐ 13/2023/NĐ-CP (soft-delete, vô danh hóa email thành `deleted_<uuid>@guworld.local`, xóa IP, ghi audit log) |
+| POST | `/auth/reconsent-terms` | Authenticated; cập nhật phiên bản điều khoản và chính sách bảo mật đã đồng thuận |
 | GET | `/auth/google/login`, `/auth/google/callback` | Public; OAuth cấu hình tùy chọn |
 | GET | `/auth/me` | Authenticated |
 | POST | `/auth/claim-tab` | Authenticated; claim gameplay tab |

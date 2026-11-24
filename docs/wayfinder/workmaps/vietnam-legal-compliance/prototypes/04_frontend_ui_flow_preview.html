@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mô Phỏng Trải Nghiệm UI/UX Điều Khoản & Cảnh Báo Sức Khỏe — GuWorld</title>
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --card-bg: #111827;
+      --border-default: #1f293d;
+      --gold: #f59e0b;
+      --gold-hover: #d97706;
+      --emerald: #10b981;
+      --crimson: #ef4444;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow-x: hidden;
+    }
+    .main-wrapper {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+      width: 100%;
+    }
+    .top-controls {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 30px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .top-controls h3 {
+      font-size: 14px;
+      color: var(--gold);
+    }
+    .timer-badge {
+      background: #1e293b;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 14px;
+      color: #38bdf8;
+      border: 1px solid #334155;
+    }
+    .btn-speed {
+      background: #334155;
+      color: #fff;
+      border: none;
+      padding: 5px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-speed:hover {
+      background: #475569;
+    }
+    .auth-card {
+      max-width: 440px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border-default);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+    }
+    .auth-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .game-logo {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--gold);
+      letter-spacing: 2px;
+      margin-bottom: 4px;
+    }
+    .auth-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .tabs-auth {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      background: #090d16;
+      padding: 4px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    .tab-auth-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      padding: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-auth-btn.active {
+      background: #1e293b;
+      color: #fff;
+    }
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      font-family: monospace;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .form-group input {
+      width: 100%;
+      background: #090d16;
+      border: 1px solid var(--border-default);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 13px;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--gold);
+    }
+    .consent-wrapper {
+      margin: 18px 0;
+      padding: 12px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+    }
+    .checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      user-select: none;
+    }
+    .checkbox-row input {
+      margin-top: 3px;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--gold);
+      cursor: pointer;
+    }
+    .legal-link {
+      color: #fbbf24;
+      text-decoration: underline;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .legal-link:hover {
+      color: #f59e0b;
+    }
+    .btn-submit {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      border: none;
+      cursor: not-allowed;
+      background: #1e293b;
+      color: #64748b;
+      transition: all 0.3s;
+    }
+    .btn-submit.active {
+      background: linear-gradient(135deg, #d97706, #b45309);
+      color: #000;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(217, 119, 6, 0.3);
+    }
+    /* Legal Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 20px;
+    }
+    .modal-content {
+      background: #111827;
+      border: 1px solid var(--border-default);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 650px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);
+    }
+    .modal-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border-default);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-header h3 {
+      font-size: 16px;
+      color: var(--gold);
+    }
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 20px;
+      cursor: pointer;
+    }
+    .modal-body {
+      padding: 24px;
+      overflow-y: auto;
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+    .modal-body h4 {
+      color: #fff;
+      margin: 15px 0 8px 0;
+    }
+    .modal-footer {
+      padding: 14px 24px;
+      border-top: 1px solid var(--border-default);
+      display: flex;
+      justify-content: flex-end;
+    }
+    /* Toast Alert */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 99;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .toast-item {
+      background: #172033;
+      border: 1px solid #29384e;
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-size: 13px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      animation: slideIn 0.3s ease;
+      max-width: 350px;
+    }
+    .toast-item.warning {
+      border-left: 4px solid var(--gold);
+      color: #fef08a;
+    }
+    .toast-item.danger {
+      border-left: 4px solid var(--crimson);
+      color: #fca5a5;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    /* Legal Footer */
+    .footer-bar {
+      background: rgba(9, 13, 22, 0.95);
+      border-top: 1px solid #1f293d;
+      padding: 18px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .statutory-tag {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge-age {
+      background: #dc2626;
+      color: #fff;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .footer-links {
+      display: flex;
+      gap: 16px;
+    }
+    .footer-links button {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .footer-links button:hover {
+      color: var(--gold);
+    }
+  </style>
+</head>
+<body>
+
+<div class="toast-container" id="toastBox"></div>
+
+<div class="main-wrapper">
+  <!-- Interactive Controller to Test Features -->
+  <div class="top-controls">
+    <div>
+      <h3>🧪 Bảng Điều Khiển Kiểm Thử UI/UX Tuân Thủ Pháp Luật</h3>
+      <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+        Giả lập thời gian phiên chơi (Session Timer) & Test Checkbox Consent đăng ký
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span class="timer-badge" id="timerDisplay">Thời gian: 0 phút</span>
+      <button class="btn-speed" onclick="addPlaytime(30)">+30m</button>
+      <button class="btn-speed" onclick="addPlaytime(60)">+60m</button>
+      <button class="btn-speed" onclick="addPlaytime(180)">+180m</button>
+      <button class="btn-speed" onclick="resetTimer()">Reset</button>
+    </div>
+  </div>
+
+  <!-- Registration Card Mockup -->
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="game-logo">GUWORLD</div>
+      <div class="auth-subtitle">Thế Giới Tu Tiên & Cổ Trùng</div>
+    </div>
+
+    <div class="tabs-auth">
+      <button class="tab-auth-btn" onclick="toggleAuthTab('login')">Đăng Nhập</button>
+      <button class="tab-auth-btn active" onclick="toggleAuthTab('register')">Đăng Ký</button>
+    </div>
+
+    <form onsubmit="handleRegister(event)">
+      <div class="form-group">
+        <label>Đạo Hiệu (Tên tài khoản)</label>
+        <input type="text" id="regUsername" placeholder="ví dụ: BachNgungBang" value="CoTienPhuong" required>
+      </div>
+
+      <div class="form-group">
+        <label>Thư Điện Tử (Email)</label>
+        <input type="email" id="regEmail" placeholder="email@gmail.com" value="cotien@gmail.com" required>
+      </div>
+
+      <div class="form-group">
+        <label>Mật Mã</label>
+        <input type="password" id="regPassword" value="secret123" required>
+      </div>
+
+      <!-- MANDATORY OPT-IN CHECKBOX (DECREE 13 & 147) -->
+      <div class="consent-wrapper">
+        <label class="checkbox-row">
+          <input type="checkbox" id="agreeCheckbox" onchange="toggleAgreeTerms(this.checked)">
+          <span>
+            Tôi xác nhận từ <strong>đủ 18 tuổi trở lên</strong>, đã đọc kỹ và đồng ý với 
+            <span class="legal-link" onclick="openLegalModal('TOS')">Điều Khoản Dịch Vụ</span> và 
+            <span class="legal-link" onclick="openLegalModal('PRIVACY')">Chính Sách Bảo Mật</span> của GuWorld.
+          </span>
+        </label>
+      </div>
+
+      <button type="submit" id="submitBtn" class="btn-submit" disabled>Thức Tỉnh Không Khiếu (Đăng Ký)</button>
+    </form>
+  </div>
+</div>
+
+<!-- Legal Modal Overlay -->
+<div class="modal-backdrop" id="legalModalBackdrop" onclick="closeLegalModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="modalTitle">Điều Khoản Dịch Vụ</h3>
+      <button class="modal-close" onclick="closeLegalModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody">
+      <!-- Dynamic Legal Content Injected Here -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn-speed" style="background: var(--gold); color: #000; font-weight: 700; padding: 8px 16px;" onclick="closeLegalModal()">
+        Ta Đã Hiểu & Đóng
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 180-Minute Playtime Warning Modal -->
+<div class="modal-backdrop" id="playtimeAlertModal">
+  <div class="modal-content" style="max-width: 500px; border-color: #ef4444;">
+    <div class="modal-header" style="background: rgba(239, 68, 68, 0.1);">
+      <h3 style="color: #fca5a5;">🚨 CẢNH BÁO SỨC KHỎE (NGHỊ ĐỊNH 147/2024/NĐ-CP)</h3>
+      <button class="modal-close" onclick="closePlaytimeAlert()">&times;</button>
+    </div>
+    <div class="modal-body" style="color: #e2e8f0;">
+      <p><strong>Kính gửi Đạo hữu!</strong></p>
+      <p>Đạo hữu đã tu luyện liên tục trong <strong>180 phút (3 giờ)</strong>.</p>
+      <div style="background: rgba(239, 68, 68, 0.15); border-left: 3px solid #ef4444; padding: 10px 14px; margin: 12px 0; font-size: 13px;">
+        ⚠️ <em>"Chơi quá 180 phút một ngày sẽ ảnh hưởng xấu đến sức khỏe."</em>
+      </div>
+      <p>Vận chuyển chân nguyên liên tục khiến tâm trí hao kiệt. Xin hãy tạm ngưng phiên chơi, vận động nhẹ nhàng và nghỉ ngơi để bảo dưỡng nhục thân!</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-speed" style="background: #dc2626; color: #fff; font-weight: 700; padding: 8px 18px;" onclick="closePlaytimeAlert()">
+        Ta Sẽ Tạm Nghỉ Sớm
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- STATUTORY LEGAL FOOTER (DECREE 147 COMPLIANCE) -->
+<footer class="footer-bar">
+  <div class="statutory-tag">
+    <span class="badge-age">18+</span>
+    <span>⚠️ <strong>Cảnh Báo Pháp Định</strong>: Chơi quá 180 phút một ngày sẽ ảnh hưởng xấu đến sức khỏe.</span>
+  </div>
+  <div class="footer-links">
+    <button onclick="openLegalModal('TOS')">Điều Khoản Dịch Vụ</button>
+    <button onclick="openLegalModal('PRIVACY')">Chính Sách Bảo Mật</button>
+    <button onclick="openLegalModal('PAYMENT')">Quy Chế Nạp Tiền & Bản Quyền</button>
+  </div>
+  <div>
+    GuWorld © 2024. Bản thử nghiệm Alpha phi thương mại.
+  </div>
+</footer>
+
+<script>
+  let playtimeMinutes = 0;
+  let warned60 = false;
+  let warned120 = false;
+  let warned180 = false;
+
+  function toggleAgreeTerms(checked) {
+    const btn = document.getElementById('submitBtn');
+    if (checked) {
+      btn.disabled = false;
+      btn.classList.add('active');
+    } else {
+      btn.disabled = true;
+      btn.classList.remove('active');
+    }
+  }
+
+  function handleRegister(e) {
+    e.preventDefault();
+    const isAgree = document.getElementById('agreeCheckbox').checked;
+    if (!isAgree) {
+      alert("Vui lòng tích chọn đồng ý với Điều Khoản Dịch Vụ và Chính Sách Bảo Mật!");
+      return;
+    }
+    showToast("✅ Đăng ký thành công! Dữ liệu Consent (agree_terms: true) đã được gửi sang Backend.", "warning");
+  }
+
+  function addPlaytime(minutes) {
+    playtimeMinutes += minutes;
+    document.getElementById('timerDisplay').innerText = `Thời gian: ${playtimeMinutes} phút`;
+    checkPlaytimeWarnings();
+  }
+
+  function resetTimer() {
+    playtimeMinutes = 0;
+    warned60 = false;
+    warned120 = false;
+    warned180 = false;
+    document.getElementById('timerDisplay').innerText = `Thời gian: 0 phút`;
+    showToast("Đã lập lại bộ đếm thời gian phiên chơi.", "warning");
+  }
+
+  function checkPlaytimeWarnings() {
+    if (playtimeMinutes >= 60 && !warned60) {
+      warned60 = true;
+      showToast("🔔 Đạo hữu đã tu luyện 60 phút. Hãy chớp mắt và uống ngụm nước!", "warning");
+    }
+    if (playtimeMinutes >= 120 && !warned120) {
+      warned120 = true;
+      showToast("⚠️ Đạo hữu đã nhập định 120 phút. Vận chuyển chân nguyên quá lâu tổn hao tinh thần!", "warning");
+    }
+    if (playtimeMinutes >= 180 && !warned180) {
+      warned180 = true;
+      document.getElementById('playtimeAlertModal').style.display = 'flex';
+    }
+  }
+
+  function closePlaytimeAlert() {
+    document.getElementById('playtimeAlertModal').style.display = 'none';
+  }
+
+  function showToast(msg, type = "warning") {
+    const box = document.getElementById('toastBox');
+    const toast = document.createElement('div');
+    toast.className = `toast-item ${type}`;
+    toast.innerText = msg;
+    box.appendChild(toast);
+    setTimeout(() => {
+      toast.remove();
+    }, 4500);
+  }
+
+  function openLegalModal(type) {
+    const modal = document.getElementById('legalModalBackdrop');
+    const title = document.getElementById('modalTitle');
+    const body = document.getElementById('modalBody');
+
+    if (type === 'TOS') {
+      title.innerText = "Điều Khoản Dịch Vụ (Terms of Service) — NĐ 147/2024/NĐ-CP";
+      body.innerHTML = `
+        <h4>1. Độ Tuổi & Đăng Ký</h4>
+        <p>Người chơi cam kết từ đủ 18 tuổi trở lên. Chơi quá 180 phút một ngày sẽ ảnh hưởng xấu đến sức khỏe.</p>
+        <h4>2. Bản Chất Phi Tiền Tệ & Cấm RMT</h4>
+        <p>Mọi Cổ trùng, Ngọc, Tiên Thạch in-game là dữ liệu giải trí số; tuyệt đối không có giá trị quy đổi ra tiền mặt (VND). Nghiêm cấm mua bán tài khoản và vật phẩm bằng tiền thật.</p>
+        <h4>3. Hành Vi Bị Cấm</h4>
+        <p>Cấm hack, cheat, auto macro trái phép; cấm phát ngôn chống phá nhà nước, kích động bạo lực, xúc phạm người khác trên kênh chat.</p>
+      `;
+    } else if (type === 'PRIVACY') {
+      title.innerText = "Chính Sách Bảo Vệ Dữ Liệu Cá Nhân — NĐ 13/2023/NĐ-CP";
+      body.innerHTML = `
+        <h4>1. Dữ Liệu Thu Thập</h4>
+        <p>Chỉ thu thập dữ liệu cơ bản: Email, Đạo hiệu, Mật khẩu Bcrypt, Địa chỉ IP, Mã đơn hàng PayOS. Tuyệt đối không thu thập CCCD, thẻ ngân hàng, GPS vệ tinh.</p>
+        <h4>2. Quyền Của Người Chơi (11 Quyền)</h4>
+        <p>Bao gồm quyền truy cập, quyền trích xuất dữ liệu (JSON) và quyền yêu cầu xóa tài khoản/dữ liệu (Right to be Forgotten) trong vòng 72 giờ.</p>
+      `;
+    } else {
+      title.innerText = "Quy Chế Nạp Tiền & Bản Quyền Tác Phẩm";
+      body.innerHTML = `
+        <h4>1. Nạp Tiền PayOS Là Đóng Góp Tự Nguyện</h4>
+        <p>Các khoản nạp từ 10k đến 200k VND là sự ủng hộ duy trì hạ tầng máy chủ. Không hoàn tiền sau khi đã nhận Ngọc.</p>
+        <h4>2. Cam Kết Bảo Lưu Ngọc Khi Wipe Server</h4>
+        <p>Nếu cập nhật lớn cần Reset dữ liệu Alpha, BQT cam kết bảo lưu 100% số Ngọc đã nạp để hoàn trả vào tài khoản mới.</p>
+        <h4>3. Bản Quyền Tác Phẩm Phái Sinh</h4>
+        <p>Thế giới quan lấy cảm hứng từ tiểu thuyết 'Cổ Chân Nhân' của tác giả Cổ Chân Nhân. Fan-game phi thương mại tôn trọng quyền tác giả.</p>
+      `;
+    }
+    modal.style.display = 'flex';
+  }
+
+  function closeLegalModal() {
+    document.getElementById('legalModalBackdrop').style.display = 'none';
+  }
+</script>
+
+</body>
+</html>

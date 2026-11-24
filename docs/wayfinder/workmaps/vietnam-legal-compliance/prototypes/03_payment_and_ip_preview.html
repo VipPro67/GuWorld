@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quy Chế Nạp Tiền PayOS, Thử Nghiệm & Bản Quyền — GuWorld</title>
+  <style>
+    :root {
+      --bg-dark: #0a0e17;
+      --card-bg: #111827;
+      --border-color: #1f293d;
+      --gold: #f59e0b;
+      --amber: #d97706;
+      --emerald: #10b981;
+      --crimson: #ef4444;
+      --purple: #a855f7;
+      --text-main: #e2e8f0;
+      --text-muted: #94a3b8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      line-height: 1.7;
+      padding: 30px 20px;
+    }
+    .container {
+      max-width: 1020px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 10px 35px rgba(0,0,0,0.6);
+    }
+    .header {
+      border-bottom: 2px solid var(--border-color);
+      padding-bottom: 25px;
+      margin-bottom: 25px;
+    }
+    .game-logo {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .game-logo span {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #000;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 1px;
+    }
+    h1 {
+      font-size: 24px;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+    .meta-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .tag {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .tag.gold {
+      border-color: rgba(245, 158, 11, 0.4);
+      color: #fbbf24;
+      background: rgba(245, 158, 11, 0.08);
+    }
+    .tag.purple {
+      border-color: rgba(168, 85, 247, 0.4);
+      color: #c084fc;
+      background: rgba(168, 85, 247, 0.08);
+    }
+    .tag.law {
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.08);
+    }
+    .tabs {
+      display: flex;
+      gap: 10px;
+      border-bottom: 1px solid var(--border-color);
+      margin: 25px 0;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover {
+      color: #fff;
+    }
+    .tab-btn.active {
+      color: var(--gold);
+      border-bottom-color: var(--gold);
+    }
+    .tab-pane {
+      display: none;
+    }
+    .tab-pane.active {
+      display: block;
+    }
+    .section-title {
+      font-size: 18px;
+      color: var(--gold);
+      border-left: 3px solid var(--gold);
+      padding-left: 12px;
+      margin: 30px 0 15px 0;
+    }
+    p, li {
+      color: var(--text-main);
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    ul, ol {
+      padding-left: 24px;
+      margin-bottom: 15px;
+    }
+    .alert-box {
+      background: rgba(245, 158, 11, 0.07);
+      border-left: 4px solid var(--gold);
+      padding: 16px 20px;
+      border-radius: 0 8px 8px 0;
+      margin: 20px 0;
+    }
+    .alert-box h4 {
+      color: #fbbf24;
+      font-size: 14.5px;
+      margin-bottom: 6px;
+    }
+    .danger-box {
+      background: rgba(239, 68, 68, 0.08);
+      border-left: 4px solid var(--crimson);
+      padding: 16px 20px;
+      border-radius: 0 8px 8px 0;
+      margin: 20px 0;
+    }
+    .danger-box h4 {
+      color: #fca5a5;
+      font-size: 14.5px;
+      margin-bottom: 6px;
+    }
+    .packages-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+    .pkg-card {
+      background: #172033;
+      border: 1px solid #283548;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .pkg-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--gold);
+    }
+    .pkg-title {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .pkg-jade {
+      font-size: 20px;
+      font-weight: 800;
+      color: #34d399;
+      margin-bottom: 4px;
+    }
+    .pkg-price {
+      font-size: 14px;
+      color: var(--gold);
+      font-weight: 600;
+    }
+    .sim-panel {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 24px;
+      margin-top: 30px;
+    }
+    .sim-panel h3 {
+      font-size: 16px;
+      color: var(--gold);
+      margin-bottom: 12px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .form-group input, .form-group select {
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      width: 100%;
+      max-width: 320px;
+    }
+    .btn-calc {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #000;
+      font-weight: 700;
+      border: none;
+      padding: 9px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: opacity 0.2s;
+    }
+    .btn-calc:hover {
+      opacity: 0.9;
+    }
+    .sim-result {
+      margin-top: 15px;
+      padding: 14px;
+      background: #080d1a;
+      border-radius: 6px;
+      border: 1px solid #22324d;
+      font-family: monospace;
+      font-size: 13px;
+      color: #38bdf8;
+      display: none;
+      white-space: pre-wrap;
+    }
+    .ip-quote-box {
+      background: rgba(168, 85, 247, 0.06);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      font-style: italic;
+      color: #e9d5ff;
+    }
+    .footer-bar {
+      margin-top: 50px;
+      text-align: center;
+      font-size: 12px;
+      color: #64748b;
+      border-top: 1px solid var(--border-color);
+      padding-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div class="game-logo">
+      GuWorld <span>Quy Chế & Bản Quyền</span>
+    </div>
+    <h1>Quy Chế Nạp Tiền PayOS, Thử Nghiệm & Bản Quyền Tác Phẩm</h1>
+    <div class="meta-tags">
+      <div class="tag gold">Cổng Thanh Toán: PayOS (VietQR)</div>
+      <div class="tag law">Căn cứ: Nghị định 147/2024/NĐ-CP (Điều 53-57)</div>
+      <div class="tag purple">Tác phẩm: Cổ Chân Nhân (Fan-game / Fair Use)</div>
+      <div class="tag">Hiệu lực: 25/12/2024</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab(0)">1. Quy Chế Nạp Tiền & Ví Ngọc</button>
+    <button class="tab-btn" onclick="switchTab(1)">2. Thử Nghiệm Alpha & Wipe Policy</button>
+    <button class="tab-btn" onclick="switchTab(2)">3. Bản Quyền & Sở Hữu Trí Tuệ</button>
+  </div>
+
+  <!-- TAB 1: PAYMENT TERMS -->
+  <div class="tab-pane active" id="tab0">
+    <div class="alert-box">
+      <h4>📌 Bản Chất Khoản Nạp: Đóng Góp Tự Nguyện Duy Trì Máy Chủ</h4>
+      <p>Mọi khoản thanh toán qua PayOS là sự đóng góp tự nguyện của người chơi nhằm hỗ trợ chi phí hạ tầng máy chủ, băng thông và kỹ thuật. Hệ thống tri ân bằng việc cộng <strong>Ngọc (Jade)</strong> vào tài khoản.</p>
+    </div>
+
+    <h2 class="section-title">Danh Sách Gói Nạp Quy Đổi (Topup Packages)</h2>
+    <div class="packages-grid">
+      <div class="pkg-card">
+        <div class="pkg-title">Gói Sơ Nhập</div>
+        <div class="pkg-jade">100 Ngọc</div>
+        <div class="pkg-price">10.000 VND</div>
+      </div>
+      <div class="pkg-card">
+        <div class="pkg-title">Gói Tinh Tiến</div>
+        <div class="pkg-jade">210 Ngọc</div>
+        <div class="pkg-price">20.000 VND</div>
+      </div>
+      <div class="pkg-card">
+        <div class="pkg-title">Gói Đột Phá</div>
+        <div class="pkg-jade">550 Ngọc</div>
+        <div class="pkg-price">50.000 VND</div>
+      </div>
+      <div class="pkg-card">
+        <div class="pkg-title">Gói Đại Thừa</div>
+        <div class="pkg-jade">1.200 Ngọc</div>
+        <div class="pkg-price">100.000 VND</div>
+      </div>
+      <div class="pkg-card">
+        <div class="pkg-title">Gói Viên Mãn</div>
+        <div class="pkg-jade">2.600 Ngọc</div>
+        <div class="pkg-price">200.000 VND</div>
+      </div>
+    </div>
+
+    <div class="danger-box">
+      <h4>🚫 Quy Định Nghiêm Ngặt Về Tiền Tệ & Không Hoàn Tiền (Non-refundable)</h4>
+      <ul>
+        <li><strong>Không quy đổi tiền mặt</strong>: Căn cứ Nghị định 147/2024/NĐ-CP, Ngọc là dữ liệu điểm thưởng giải trí nội bộ, <strong>tuyệt đối không có giá trị quy đổi ngược lại thành tiền mặt (VND)</strong>, thẻ cào hoặc tài sản ngoài đời thực.</li>
+        <li><strong>Không hoàn tiền (Non-refundable)</strong>: Ngọc được cộng ngay lập tức vào tài khoản sau khi chuyển khoản thành công; do đó các khoản đóng góp <strong>hoàn toàn không được hoàn lại</strong> dưới bất kỳ lý do nào.</li>
+        <li><strong>Cấm giao dịch tiền thật ngoài game (Cấm RMT)</strong>: Mọi hành vi mua bán Ngọc hoặc tài khoản bằng tiền thật bên ngoài đều bị khóa tài khoản vĩnh viễn.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- TAB 2: ALPHA TEST & WIPE POLICY -->
+  <div class="tab-pane" id="tab1">
+    <h2 class="section-title">Định Vị Máy Chủ Thử Nghiệm Alpha & Rủi Ro Dữ Liệu</h2>
+    <p>1. <strong>Tính chất thử nghiệm công nghệ</strong>: GuWorld là sản phẩm thử nghiệm công nghệ mô phỏng chiến đấu theo lượt và giao lưu cộng đồng phi lợi nhuận; không cấu thành dịch vụ thương mại vĩnh viễn.</p>
+    <p>2. <strong>Bảo trì & Cân bằng</strong>: BQT có toàn quyền bảo trì đột xuất, sửa lỗi và điều chỉnh tăng/giảm chỉ số Cổ trùng để đạt sự cân bằng tối ưu.</p>
+    <p>3. <strong>Chính sách Bảo lưu 100% Ngọc khi Wipe Server (Reset Policy)</strong>: Khi có đợt cập nhật lớn bắt buộc phải Reset dữ liệu, BQT cam kết <strong>BẢO LƯU 100% SỐ NGỌC</strong> người chơi đã nạp qua PayOS để hoàn trả lại khi mở máy chủ mới.</p>
+
+    <!-- Interactive Wipe Restitution Simulator -->
+    <div class="sim-panel">
+      <h3>🧪 Trình Giả Lập Bảo Lưu Quyền Lợi Ngọc Khi Reset Máy Chủ (Wipe Restitution)</h3>
+      <div class="form-group">
+        <label>Chọn tổng các gói nạp đã ủng hộ trong đợt thử nghiệm:</label>
+        <select id="simPackage">
+          <option value="10000,100">1x Gói 10.000 VND (100 Ngọc)</option>
+          <option value="50000,550">1x Gói 50.000 VND (550 Ngọc)</option>
+          <option value="100000,1200">1x Gói 100.000 VND (1.200 Ngọc)</option>
+          <option value="200000,2600" selected>1x Gói 200.000 VND (2.600 Ngọc)</option>
+          <option value="500000,6500">Nhiều gói tổng 500.000 VND (6.500 Ngọc)</option>
+        </select>
+      </div>
+      <button class="btn-calc" onclick="simulateRestitution()">Mô Phỏng Kết Toán Khi Wipe</button>
+      <div id="restitutionResult" class="sim-result"></div>
+    </div>
+  </div>
+
+  <!-- TAB 3: IP NOTICE -->
+  <div class="tab-pane" id="tab2">
+    <h2 class="section-title">Tuyên Bố Tôn Trọng Quyền Tác Giả & Tác Phẩm Gốc</h2>
+    <div class="ip-quote-box">
+      "Thế giới quan Cổ Sư, Cổ Tiên, Cửu Chuyển, Đạo Ngân, Ngũ Vực Cửu Thiên và hệ thống Cổ trùng trong trò chơi được lấy cảm hứng sâu sắc từ danh tác tiên hiệp <strong>'Cổ Chân Nhân' (Reverend Insanity)</strong> của tác giả <strong>Cổ Chân Nhân (Gu Zhen Ren / 蛊真人)</strong>."
+    </div>
+    <p>1. <strong>Tuyên bố Fan-game phi thương mại (Fair Use)</strong>: GuWorld là sản phẩm sáng tạo độc lập của người hâm mộ nhằm thử nghiệm công nghệ mô phỏng game theo lượt; không mạo danh tác giả gốc, không cạnh tranh thương mại và hoàn toàn tôn trọng quyền tác giả của tiểu thuyết gốc.</p>
+    <p>2. <strong>Bản quyền Phần mềm</strong>: Toàn bộ mã nguồn backend (Go), frontend (TypeScript/Next.js), database schema, turn-based simulator và hệ thống hiệu ứng gamefx thuộc quyền sở hữu trí tuệ của Đội ngũ Phát triển GuWorld.</p>
+  </div>
+
+  <div class="footer-bar">
+    Quy Chế Nạp Tiền & Bản Quyền GuWorld © 2024. Tuân thủ Nghị định 147/2024/NĐ-CP & Luật Sở hữu trí tuệ Việt Nam.
+  </div>
+</div>
+
+<script>
+  function switchTab(index) {
+    const tabs = document.querySelectorAll('.tab-btn');
+    const panes = document.querySelectorAll('.tab-pane');
+    tabs.forEach((t, i) => {
+      if (i === index) {
+        t.classList.add('active');
+        panes[i].classList.add('active');
+      } else {
+        t.classList.remove('active');
+        panes[i].classList.remove('active');
+      }
+    });
+  }
+
+  function simulateRestitution() {
+    const val = document.getElementById('simPackage').value.split(',');
+    const vnd = parseInt(val[0]).toLocaleString('vi-VN');
+    const jade = parseInt(val[1]).toLocaleString('vi-VN');
+    const out = document.getElementById('restitutionResult');
+    out.style.display = 'block';
+    out.innerHTML = `<strong>[KẾT TOÁN BẢO LƯU NGỌC THỬ NGHIỆM KHI RESET SERVER]</strong>\n` +
+`• Tổng đóng góp PayOS đã xác nhận: ${vnd} VND
+• Số Ngọc đã cấp trong phiên bản thử nghiệm: ${jade} Ngọc
+• Trạng thái nhân vật cũ: Reset cấp độ & Cổ trùng về ban đầu (Wipe)
+• Cam kết bảo lưu: BẢO LƯU HOÀNG KIM 100% SỐ NGỌC ĐÃ NẠP
+• Tài khoản phiên bản mới sẽ nhận: +${jade} Ngọc vào Ví ngay tại thời điểm khởi tạo nhân vật!
+• Chi phí người chơi phải chịu: 0 VND.`;
+  }
+</script>
+
+</body>
+</html>

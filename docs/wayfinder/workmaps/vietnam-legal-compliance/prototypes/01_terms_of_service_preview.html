@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Điều Khoản Dịch Vụ & Quy Chế Hoạt Động — GuWorld</title>
+  <style>
+    :root {
+      --bg-dark: #0a0e17;
+      --card-bg: #111827;
+      --border-color: #1f293d;
+      --gold: #f59e0b;
+      --emerald: #10b981;
+      --crimson: #ef4444;
+      --text-main: #e2e8f0;
+      --text-muted: #94a3b8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      line-height: 1.7;
+      padding: 30px 20px;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .header {
+      border-bottom: 2px solid var(--border-color);
+      padding-bottom: 25px;
+      margin-bottom: 30px;
+    }
+    .game-logo {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .game-logo span {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 1px;
+    }
+    h1 {
+      font-size: 26px;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+    .meta-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .tag {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .tag.law {
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.08);
+    }
+    .tag.warning {
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #f87171;
+      background: rgba(239, 68, 68, 0.08);
+    }
+    .statutory-banner {
+      background: rgba(239, 68, 68, 0.1);
+      border-left: 4px solid var(--crimson);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin: 25px 0;
+      font-size: 14px;
+    }
+    .statutory-banner h3 {
+      color: #fca5a5;
+      font-size: 15px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav-toc {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 18px 24px;
+      margin-bottom: 30px;
+    }
+    .nav-toc h4 {
+      color: var(--gold);
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+    .nav-toc ol {
+      padding-left: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 8px;
+    }
+    .nav-toc a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13.5px;
+      transition: color 0.2s;
+    }
+    .nav-toc a:hover {
+      color: #38bdf8;
+      text-decoration: underline;
+    }
+    .section-title {
+      font-size: 18px;
+      color: var(--gold);
+      border-left: 3px solid var(--gold);
+      padding-left: 12px;
+      margin: 35px 0 15px 0;
+    }
+    p, li {
+      color: var(--text-main);
+      font-size: 14.5px;
+      margin-bottom: 12px;
+    }
+    ul, ol {
+      padding-left: 24px;
+      margin-bottom: 15px;
+    }
+    .highlight-box {
+      background: rgba(16, 185, 129, 0.05);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 15px 0;
+    }
+    .prohibited-box {
+      background: rgba(239, 68, 68, 0.05);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 15px 0;
+    }
+    .prohibited-box strong {
+      color: #f87171;
+    }
+    .consent-tester {
+      background: #0f172a;
+      border: 2px dashed #334155;
+      border-radius: 10px;
+      padding: 24px;
+      margin-top: 40px;
+    }
+    .consent-tester h3 {
+      font-size: 16px;
+      color: var(--gold);
+      margin-bottom: 12px;
+    }
+    .checkbox-label {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      cursor: pointer;
+      user-select: none;
+      margin-bottom: 15px;
+    }
+    .checkbox-label input {
+      margin-top: 4px;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: var(--emerald);
+    }
+    .btn-register {
+      background: #334155;
+      color: #64748b;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: not-allowed;
+      transition: all 0.3s;
+    }
+    .btn-register.active {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    }
+    .audit-output {
+      margin-top: 15px;
+      padding: 12px;
+      background: #090d16;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #38bdf8;
+      display: none;
+    }
+    .footer-bar {
+      margin-top: 50px;
+      text-align: center;
+      font-size: 12px;
+      color: #64748b;
+      border-top: 1px solid var(--border-color);
+      padding-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div class="game-logo">
+      GuWorld <span>Bản Thử Nghiệm Alpha</span>
+    </div>
+    <h1>Điều Khoản Dịch Vụ & Quy Chế Hoạt Động Web Game</h1>
+    <div class="meta-tags">
+      <div class="tag">Phiên bản: 2024.1</div>
+      <div class="tag law">Căn cứ: Nghị định 147/2024/NĐ-CP</div>
+      <div class="tag law">Căn cứ: Luật An ninh mạng 2018</div>
+      <div class="tag warning">Độ tuổi: Phân loại 18+</div>
+      <div class="tag">Hiệu lực: 25/12/2024</div>
+    </div>
+  </div>
+
+  <div class="statutory-banner">
+    <h3>⚠️ Cảnh Báo Sức Khỏe & Pháp Định (Điều 39 & 40 Nghị định 147/2024/NĐ-CP)</h3>
+    <p>1. Trò chơi điện tử trực tuyến phân loại dành cho người từ đủ <strong>18 tuổi trở lên (18+)</strong> do có yếu tố chiến đấu và đối kháng PvP.</p>
+    <p>2. <strong>Chơi quá 180 phút một ngày sẽ ảnh hưởng xấu đến sức khỏe.</strong> Người chơi cần phân bổ thời gian hợp lý giữa tu luyện và đời sống thực tế.</p>
+    <p>3. Dịch vụ vận hành ở trạng thái <strong>Thử nghiệm Công nghệ Giới hạn (Alpha/Beta Test)</strong> phi thương mại.</p>
+  </div>
+
+  <div class="nav-toc">
+    <h4>Mục Lục Điều Khoản</h4>
+    <ol>
+      <li><a href="#dieu-1">Điều 1. Giải thích thuật ngữ</a></li>
+      <li><a href="#dieu-2">Điều 2. Điều kiện & Quản lý tài khoản</a></li>
+      <li><a href="#dieu-3">Điều 3. Quy chế vật phẩm ảo & Cấm RMT</a></li>
+      <li><a href="#dieu-4">Điều 4. Hành vi nghiêm cấm</a></li>
+      <li><a href="#dieu-5">Điều 5. Quyền hạn BQT & Chế tài</a></li>
+      <li><a href="#dieu-6">Điều 6. Bảo trì & Wipe policy</a></li>
+      <li><a href="#dieu-7">Điều 7. Giới hạn trách nhiệm pháp lý</a></li>
+      <li><a href="#dieu-8">Điều 8. Giải quyết khiếu nại</a></li>
+      <li><a href="#dieu-9">Điều 9. Hiệu lực thi hành</a></li>
+    </ol>
+  </div>
+
+  <div id="dieu-1">
+    <h2 class="section-title">Điều 1. Giải Thích Thuật Ngữ</h2>
+    <p>Trong văn bản này, các thuật ngữ sau được hiểu theo nghĩa tương ứng:</p>
+    <ul>
+      <li><strong>"GuWorld" / "Cổ Giới"</strong>: Nền tảng trò chơi điện tử trực tuyến mô phỏng tu tiên theo lượt trên trình duyệt web.</li>
+      <li><strong>"Ban Quản Trị" (BQT)</strong>: Đội ngũ sáng lập, quản trị viên và kỹ thuật viên chịu trách nhiệm phát triển và vận hành hệ thống máy chủ.</li>
+      <li><strong>"Người chơi" / "Đạo hữu"</strong>: Cá nhân từ đủ 18 tuổi đã hoàn tất đăng ký tài khoản và trải nghiệm trò chơi.</li>
+      <li><strong>"Dữ liệu trò chơi"</strong>: Toàn bộ thông số nhân vật (Cảnh giới, Cổ trùng, Thể chất, Tiên Khiếu, Tông môn, Túi đồ, Lịch sử chiến đấu).</li>
+      <li><strong>"Vật phẩm ảo" & "Tiền ảo"</strong>: Nguyên Thạch, Tiên Thạch, Điểm Cống Hiến, Điểm Đấu Trường và Ngọc (Đơn vị nhận được khi ủng hộ duy trì máy chủ).</li>
+    </ul>
+  </div>
+
+  <div id="dieu-2">
+    <h2 class="section-title">Điều 2. Điều Kiện Tham Gia & Quản Lý Tài Khoản</h2>
+    <p>1. <strong>Độ tuổi</strong>: Người chơi cam kết từ đủ 18 tuổi trở lên, có đầy đủ năng lực hành vi dân sự theo quy định của pháp luật Việt Nam.</p>
+    <p>2. <strong>Tính chính chủ của Email</strong>: Sử dụng địa chỉ Email hợp pháp của mình. Email là kênh duy nhất để khôi phục mật khẩu hoặc xử lý tranh chấp.</p>
+    <p>3. <strong>Bảo mật mật khẩu</strong>: Người chơi tự chịu trách nhiệm bảo quản mật khẩu. BQT miễn trừ trách nhiệm với mọi tổn thất do người chơi chia sẻ tài khoản hoặc do máy cá nhân bị nhiễm virus/keylogger.</p>
+    <p>4. <strong>Nghiêm cấm cày thuê / chuyển nhượng</strong>: Mỗi tài khoản chỉ phục vụ mục đích giải trí của chính người chơi; nghiêm cấm cho thuê hoặc chuyển nhượng tài khoản trái phép.</p>
+  </div>
+
+  <div id="dieu-3">
+    <h2 class="section-title">Điều 3. Bản Chất Vật Phẩm Ảo & Tuyệt Đối Cấm Giao Dịch Tiền Thật (Cấm RMT)</h2>
+    <div class="highlight-box">
+      <p><strong>Căn cứ Điều 53–57 Nghị định 147/2024/NĐ-CP về điểm thưởng, tiền ảo và vật phẩm ảo:</strong></p>
+      <p>1. Mọi Cổ trùng, Tiên Thạch, Ngọc và dữ liệu in-game là dữ liệu kỹ thuật số thuộc quyền quản lý của hệ thống GuWorld, phục vụ thuần túy mục đích giải trí nội bộ.</p>
+      <p>2. <strong>Tính chất phi tiền tệ</strong>: Toàn bộ vật phẩm ảo và tiền tệ in-game <strong>KHÔNG CÓ GIÁ TRỊ QUY ĐỔI THÀNH TIỀN MẶT (VND)</strong>, thẻ cào viễn thông hoặc bất kỳ hiện vật, tài sản nào có giá trị kinh tế ngoài đời thực. BQT tuyệt đối không mua lại hoặc quy đổi vật phẩm in-game ra tiền mặt.</p>
+    </div>
+    <div class="prohibited-box">
+      <p><strong>🚫 TUYỆT ĐỐI NGHIÊM CẤM GIAO DỊCH TIỀN THẬT (REAL MONEY TRADING - RMT):</strong></p>
+      <p>Nghiêm cấm người chơi mua bán, trao đổi tài khoản, Tiên Thạch, Cổ trùng hoặc cày thuê bằng tiền mặt/chuyển khoản ngân hàng ngoài đời thực. Mọi giao dịch chỉ được thực hiện qua tính năng Chợ Đấu Giá hoặc Giao Dịch P2P in-game bằng Tiên Thạch theo đúng luật chơi.</p>
+      <p><em>Chế tài: Tài khoản vi phạm hoặc quảng bá RMT sẽ bị KHÓA VĨNH VIỄN (Permanent Ban) ngay lập tức mà không cần báo trước.</em></p>
+    </div>
+  </div>
+
+  <div id="dieu-4">
+    <h2 class="section-title">Điều 4. Quy Tắc Ứng Xử & Các Hành Vi Bị Nghiêm Cấm</h2>
+    <p>Căn cứ Điều 8 Luật An ninh mạng 2018 và quy chuẩn văn hóa trò chơi mạng:</p>
+    <ol>
+      <li><strong>An ninh thông tin</strong>: Nghiêm cấm lợi dụng kênh Chat thế giới, Chat Tông Môn hoặc Đạo hiệu để: chống phá Nhà nước CHXHCN Việt Nam; xúc phạm lãnh tụ, tôn giáo; kích động bạo lực, chia rẽ vùng miền; phát tán văn hóa phẩm đồi trụy; tổ chức cờ bạc, cá cược; vu khống xúc phạm danh dự người khác.</li>
+      <li><strong>Gian lận kỹ thuật</strong>: Nghiêm cấm sử dụng phần mềm thứ ba can thiệp (Auto, Bot, Macro trái phép, can thiệp bộ nhớ hoặc gói tin mạng).</li>
+      <li><strong>Lợi dụng lỗi (Bug Exploit)</strong>: Cố ý che giấu và khai thác lỗi trò chơi để nhân bản vật phẩm hoặc gây mất cân bằng. Người chơi có nghĩa vụ thông báo lỗi cho BQT.</li>
+      <li><strong>Giả mạo BQT</strong>: Nghiêm cấm mạo danh Admin/Mod để lừa đảo hoặc đe dọa người chơi khác.</li>
+    </ol>
+  </div>
+
+  <div id="dieu-5">
+    <h2 class="section-title">Điều 5. Quyền Hạn BQT & Các Mức Chế Tài Xử Lý</h2>
+    <ul>
+      <li><strong>Mức 1 (Cảnh cáo)</strong>: Cảnh cáo và thu hồi 100% vật phẩm/tài nguyên do khai thác lỗi hoặc gian lận.</li>
+      <li><strong>Mức 2 (Khóa Chat)</strong>: Khóa quyền phát ngôn (Mute) từ 24 giờ đến vĩnh viễn khi vi phạm quy tắc ứng xử/ngôn từ.</li>
+      <li><strong>Mức 3 (Khóa tạm thời)</strong>: Khóa tài khoản từ 03 đến 30 ngày đối với vi phạm mức độ trung bình.</li>
+      <li><strong>Mức 4 (Khóa vĩnh viễn)</strong>: Khóa tài khoản vĩnh viễn không hoàn tiền đối với hành vi hack/bot, mua bán RMT, chống phá an ninh mạng hoặc lừa đảo.</li>
+    </ul>
+  </div>
+
+  <div id="dieu-6">
+    <h2 class="section-title">Điều 6. Bảo Trì, Cân Bằng & Chính Sách Reset Dữ Liệu (Wipe Policy)</h2>
+    <p>1. BQT có quyền định kỳ bảo trì máy chủ và điều chỉnh tăng/giảm chỉ số Cổ trùng/chiêu thức để bảo đảm cân bằng gameplay.</p>
+    <p>2. Trong trường hợp cập nhật cấu trúc cơ sở dữ liệu lớn ở giai đoạn thử nghiệm Alpha/Beta cần Reset dữ liệu (Wipe), BQT sẽ thông báo trước tối thiểu <strong>07 ngày</strong> và cam kết <strong>bảo lưu 100% số Ngọc ủng hộ</strong> cho người chơi.</p>
+  </div>
+
+  <div id="dieu-7">
+    <h2 class="section-title">Điều 7. Giới Hạn Trách Nhiệm Pháp Lý (Disclaimer)</h2>
+    <p>Trò chơi cung cấp theo nguyên tắc "Nguyên trạng" (As-Is). BQT miễn trừ trách nhiệm trước các sự cố nghẽn mạng viễn thông của người chơi, các tranh chấp tiền thật phi pháp ngoài game, hoặc các trường hợp bất khả kháng theo quy định pháp luật.</p>
+  </div>
+
+  <div id="dieu-8">
+    <h2 class="section-title">Điều 8. Cơ Chế Khiếu Nại & Giải Quyết Tranh Chấp</h2>
+    <p>1. Kênh tiếp nhận: Discord cộng đồng chính thức hoặc hòm thư hỗ trợ BQT.</p>
+    <p>2. Thời hiệu khiếu nại trong vòng <strong>07 ngày</strong> kể từ khi sự việc phát sinh. Quyết định của BQT dựa trên <strong>Nhật ký máy chủ (Server Audit Logs)</strong> là quyết định cuối cùng.</p>
+  </div>
+
+  <div id="dieu-9">
+    <h2 class="section-title">Điều 9. Hiệu Lực & Sửa Đổi Điều Khoản</h2>
+    <p>Điều khoản có hiệu lực từ <strong>25/12/2024</strong>. BQT có quyền cập nhật điều khoản và sẽ thông báo trên giao diện trò chơi khi có phiên bản sửa đổi lớn.</p>
+  </div>
+
+  <!-- Interactive Acceptance Tester -->
+  <div class="consent-tester">
+    <h3>🧪 Mô Phỏng Trải Nghiệm Chấp Thuận Của Người Chơi Lúc Đăng Ký</h3>
+    <label class="checkbox-label">
+      <input type="checkbox" id="tosConsentCheck" onchange="toggleConsent()">
+      <span>Tôi xác nhận từ <strong>đủ 18 tuổi trở lên</strong>, đã đọc kỹ và cam kết tuân thủ đầy đủ <strong>Điều Khoản Dịch Vụ & Quy Chế Hoạt Động</strong> của GuWorld.</span>
+    </label>
+    <button id="registerBtn" class="btn-register" disabled>Đăng Ký Tài Khoản</button>
+    <div id="auditLog" class="audit-output"></div>
+  </div>
+
+  <div class="footer-bar">
+    Bản quyền tài liệu thuộc về Đội ngũ Phát triển GuWorld © 2024. Tuân thủ Nghị định 147/2024/NĐ-CP & Luật An ninh mạng Việt Nam.
+  </div>
+</div>
+
+<script>
+  function toggleConsent() {
+    const check = document.getElementById('tosConsentCheck');
+    const btn = document.getElementById('registerBtn');
+    const log = document.getElementById('auditLog');
+
+    if (check.checked) {
+      btn.disabled = false;
+      btn.classList.add('active');
+      log.style.display = 'block';
+      const now = new Date().toISOString();
+      log.innerHTML = `<strong>[Ghi nhận Audit Chứng cứ Chấp thuận]</strong><br>` +
+                      `terms_accepted: true<br>` +
+                      `terms_version: "2024.1"<br>` +
+                      `timestamp: "${now}"<br>` +
+                      `status: "Sẵn sàng gửi kèm payload RegisterPlayer"`;
+    } else {
+      btn.disabled = true;
+      btn.classList.remove('active');
+      log.style.display = 'none';
+    }
+  }
+</script>
+
+</body>
+</html>

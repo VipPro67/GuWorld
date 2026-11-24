@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chính Sách Bảo Vệ Dữ Liệu Cá Nhân — GuWorld (Nghị định 13/2023/NĐ-CP)</title>
+  <style>
+    :root {
+      --bg-dark: #0a0e17;
+      --card-bg: #111827;
+      --border-color: #1f293d;
+      --cyan: #06b6d4;
+      --emerald: #10b981;
+      --gold: #f59e0b;
+      --crimson: #ef4444;
+      --text-main: #e2e8f0;
+      --text-muted: #94a3b8;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      line-height: 1.7;
+      padding: 30px 20px;
+    }
+    .container {
+      max-width: 1020px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 10px 35px rgba(0,0,0,0.6);
+    }
+    .header {
+      border-bottom: 2px solid var(--border-color);
+      padding-bottom: 25px;
+      margin-bottom: 30px;
+    }
+    .game-logo {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: var(--cyan);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .game-logo span {
+      background: linear-gradient(135deg, #06b6d4, #0891b2);
+      color: #fff;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 1px;
+    }
+    h1 {
+      font-size: 25px;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+    .meta-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .tag {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .tag.law {
+      border-color: rgba(6, 182, 212, 0.4);
+      color: #22d3ee;
+      background: rgba(6, 182, 212, 0.08);
+    }
+    .tag.gdpr {
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.08);
+    }
+    .section-title {
+      font-size: 18px;
+      color: var(--cyan);
+      border-left: 3px solid var(--cyan);
+      padding-left: 12px;
+      margin: 35px 0 15px 0;
+    }
+    p, li {
+      color: var(--text-main);
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    ul, ol {
+      padding-left: 24px;
+      margin-bottom: 15px;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 13.5px;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+    }
+    .data-table th, .data-table td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .data-table th {
+      background: #1e293b;
+      color: #38bdf8;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+    }
+    .data-table tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .badge-basic {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+    .rights-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin: 15px 0 25px 0;
+    }
+    .right-card {
+      background: #172033;
+      border: 1px solid #23304a;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .right-card h4 {
+      color: var(--gold);
+      font-size: 13.5px;
+      margin-bottom: 6px;
+    }
+    .right-card p {
+      color: var(--text-muted);
+      font-size: 12px;
+      margin-bottom: 0;
+      line-height: 1.5;
+    }
+    .sim-box {
+      background: #0f172a;
+      border: 2px dashed #0369a1;
+      border-radius: 10px;
+      padding: 24px;
+      margin-top: 40px;
+    }
+    .sim-box h3 {
+      font-size: 16px;
+      color: #38bdf8;
+      margin-bottom: 8px;
+    }
+    .sim-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 15px 0;
+    }
+    .btn {
+      padding: 9px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-export {
+      background: #0284c7;
+      color: white;
+    }
+    .btn-export:hover {
+      background: #0369a1;
+    }
+    .btn-erase {
+      background: #dc2626;
+      color: white;
+    }
+    .btn-erase:hover {
+      background: #b91c1c;
+    }
+    .sim-output {
+      margin-top: 15px;
+      padding: 14px;
+      background: #080d1a;
+      border-radius: 6px;
+      border: 1px solid #1e293b;
+      font-family: monospace;
+      font-size: 12px;
+      color: #7dd3fc;
+      white-space: pre-wrap;
+      display: none;
+    }
+    .footer-bar {
+      margin-top: 50px;
+      text-align: center;
+      font-size: 12px;
+      color: #64748b;
+      border-top: 1px solid var(--border-color);
+      padding-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div class="game-logo">
+      GuWorld <span>Privacy & Data Policy</span>
+    </div>
+    <h1>Chính Sách Bảo Vệ Dữ Liệu Cá Nhân & Thông Báo Xử Lý Dữ Liệu</h1>
+    <div class="meta-tags">
+      <div class="tag">Phiên bản: 2024.1</div>
+      <div class="tag law">Căn cứ: Nghị định 13/2023/NĐ-CP (PDPD)</div>
+      <div class="tag gdpr">Quyền Chủ Thể Dữ Liệu: 11 Quyền Pháp Định</div>
+      <div class="tag">Hiệu lực: 25/12/2024</div>
+    </div>
+  </div>
+
+  <h2 class="section-title">1. Giới Thiệu & Vai Trò Xử Lý Dữ Liệu</h2>
+  <p>Ban Quản Trị GuWorld đóng vai trò là <strong>Bên Kiểm soát kiêm Bên Xử lý Dữ liệu Cá nhân</strong> theo Nghị định 13/2023/NĐ-CP. Chúng tôi tôn trọng quyền riêng tư và cam kết bảo vệ dữ liệu cá nhân của Người chơi bằng các giải pháp kỹ thuật an toàn cao nhất.</p>
+
+  <h2 class="section-title">2. Ma Trận Dữ Liệu Thu Thập & Mục Đích Xử Lý</h2>
+  <p>Theo nguyên tắc "Tối thiểu hóa dữ liệu", hệ thống chỉ thu thập dữ liệu cá nhân cơ bản để vận hành game:</p>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Hạng mục</th>
+        <th>Trường dữ liệu</th>
+        <th>Phân loại</th>
+        <th>Mục đích xử lý</th>
+        <th>Thời hạn lưu trữ</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Tài khoản</strong></td>
+        <td>Email, Username</td>
+        <td><span class="badge-basic">Cơ bản</span></td>
+        <td>Định danh, đăng nhập, khôi phục mật khẩu</td>
+        <td>Suốt vòng đời tài khoản</td>
+      </tr>
+      <tr>
+        <td><strong>Bảo mật</strong></td>
+        <td>Mật khẩu (Bcrypt Hash + Salt)</td>
+        <td><span class="badge-basic">Cơ bản</span></td>
+        <td>Xác thực đăng nhập an toàn (Không thể giải mã)</td>
+        <td>Suốt vòng đời tài khoản</td>
+      </tr>
+      <tr>
+        <td><strong>Kỹ thuật</strong></td>
+        <td>Địa chỉ IP, User-Agent</td>
+        <td><span class="badge-basic">Cơ bản</span></td>
+        <td>An ninh mạng, phòng chống tấn công DDoS, tối ưu giao diện</td>
+        <td>12 tháng (Luật An ninh mạng)</td>
+      </tr>
+      <tr>
+        <td><strong>Thanh toán</strong></td>
+        <td>Mã giao dịch PayOS, Số tiền (VND)</td>
+        <td><span class="badge-basic">Cơ bản</span></td>
+        <td>Cộng Ngọc in-game, đối soát kỹ thuật qua Webhook</td>
+        <td>Theo luật kế toán & giao dịch số</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 class="section-title">3. Tuyên Bố Không Thu Thập Dữ Liệu Nhạy Cảm</h2>
+  <p>Hệ thống <strong>TUYỆT ĐỐI KHÔNG THU THẬP</strong>: Số CCCD/Hộ chiếu, định danh VNeID, số tài khoản ngân hàng, thông tin thẻ tín dụng (mọi giao dịch nạp được thực hiện trực tiếp trên hạ tầng bảo mật của PayOS), dữ liệu sinh trắc học, định vị GPS vệ tinh hay thông tin y tế, tôn giáo.</p>
+
+  <h2 class="section-title">4. Chia Sẻ Cho Bên Thứ Ba (PayOS)</h2>
+  <p>Hệ thống <strong>không bán, không chuyển nhượng</strong> dữ liệu cho mục đích quảng cáo. Chúng tôi chỉ chia sẻ mã đơn hàng và số tiền sang cổng thanh toán đối tác <strong>PayOS</strong> để sinh mã VietQR nạp tiền. Không chia sẻ Email hay mật khẩu người dùng.</p>
+
+  <h2 class="section-title">5. 11 Quyền Của Chủ Thể Dữ Liệu (Điều 9 Nghị định 13/2023/NĐ-CP)</h2>
+  <div class="rights-grid">
+    <div class="right-card">
+      <h4>1. Quyền được biết</h4>
+      <p>Được thông báo rõ ràng về các hoạt động xử lý dữ liệu.</p>
+    </div>
+    <div class="right-card">
+      <h4>2. Quyền đồng ý</h4>
+      <p>Tự nguyện quyết định cho phép hoặc từ chối xử lý dữ liệu.</p>
+    </div>
+    <div class="right-card">
+      <h4>3. Quyền truy cập</h4>
+      <p>Xem toàn bộ thông tin cá nhân và tiến trình game bất kỳ lúc nào.</p>
+    </div>
+    <div class="right-card">
+      <h4>4. Rút lại sự đồng ý</h4>
+      <p>Có quyền thu hồi sự đồng ý đã cấp trước đó.</p>
+    </div>
+    <div class="right-card">
+      <h4>5. Quyền xóa dữ liệu</h4>
+      <p>Yêu cầu xóa vĩnh viễn dữ liệu (Right to be Forgotten).</p>
+    </div>
+    <div class="right-card">
+      <h4>6. Hạn chế xử lý</h4>
+      <p>Yêu cầu tạm ngưng xử lý khi có tranh chấp dữ liệu.</p>
+    </div>
+    <div class="right-card">
+      <h4>7. Cung cấp dữ liệu</h4>
+      <p>Yêu cầu trích xuất dữ liệu của mình dưới dạng JSON.</p>
+    </div>
+    <div class="right-card">
+      <h4>8. Phản đối xử lý</h4>
+      <p>Phản đối xử lý dữ liệu cho các mục đích không mong muốn.</p>
+    </div>
+    <div class="right-card">
+      <h4>9. Khiếu nại, tố cáo</h4>
+      <p>Gửi khiếu nại tới BQT hoặc cơ quan bảo vệ dữ liệu.</p>
+    </div>
+    <div class="right-card">
+      <h4>10. Yêu cầu bồi thường</h4>
+      <p>Khi có thiệt hại do vi phạm quy định dữ liệu.</p>
+    </div>
+    <div class="right-card">
+      <h4>11. Quyền tự bảo vệ</h4>
+      <p>Thực hiện các biện pháp tự bảo vệ quyền riêng tư.</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">6. Biện Pháp Bảo Mật & Kênh Liên Hệ</h2>
+  <p>Toàn bộ kết nối được mã hóa bằng <strong>HTTPS / TLS 1.3</strong>. Mật khẩu mã hóa Bcrypt một chiều có Salt. Mọi yêu cầu bảo vệ dữ liệu được gửi về hòm thư: <code>privacy@guworld.local</code> (phản hồi trong tối đa 72 giờ làm việc).</p>
+
+  <!-- Interactive Data Subject Rights Simulator -->
+  <div class="sim-box">
+    <h3>🧪 Trình Mô Phỏng Thực Thi Quyền Chủ Thể Dữ Liệu (Self-Service Rights Simulator)</h3>
+    <p style="color: var(--text-muted); font-size: 13px;">
+      Thử nghiệm các tính năng người chơi có thể tự thực thi trực tiếp trên giao diện tài khoản theo Nghị định 13/2023/NĐ-CP:
+    </p>
+
+    <div class="sim-actions">
+      <button class="btn btn-export" onclick="simulateExport()">Trích Xuất Dữ Liệu Cá Nhân (Quyền #7 - JSON Export)</button>
+      <button class="btn btn-erase" onclick="simulateErasure()">Yêu Cầu Xóa Dữ Liệu / Vô Danh Hóa (Quyền #5 - Right to be Forgotten)</button>
+    </div>
+
+    <div id="simOutput" class="sim-output"></div>
+  </div>
+
+  <div class="footer-bar">
+    Chính sách Bảo vệ Dữ liệu Cá nhân GuWorld © 2024. Tuân thủ Nghị định 13/2023/NĐ-CP & Luật An ninh mạng Việt Nam.
+  </div>
+</div>
+
+<script>
+  function simulateExport() {
+    const out = document.getElementById('simOutput');
+    out.style.display = 'block';
+    const sampleData = {
+      user_id: "usr_9f82c7a1-3e4b",
+      username: "BachNgungBang",
+      email: "bachngungbang@gmail.com",
+      created_at: "2024-11-20T14:22:00Z",
+      consent_records: {
+        terms_version: "2024.1",
+        privacy_version: "2024.1",
+        consent_timestamp: "2024-11-20T14:22:00Z",
+        consent_ip: "113.161.xx.xx"
+      },
+      character_snapshot: {
+        cultivation_rank: 5,
+        starting_region: "dai_vuc_nam_cuong",
+        gu_count: 12
+      },
+      payos_history_count: 2,
+      data_category: "BASIC_PERSONAL_DATA_ONLY (No Sensitive Data)"
+    };
+    out.innerHTML = `<strong>[KẾT QUẢ TRÍCH XUẤT DỮ LIỆU CÁ NHÂN THEO ĐIỀU 9 NĐ 13/2023/NĐ-CP]</strong>\n` +
+                    JSON.stringify(sampleData, null, 2);
+  }
+
+  function simulateErasure() {
+    const out = document.getElementById('simOutput');
+    out.style.display = 'block';
+    const now = new Date().toISOString();
+    out.innerHTML = `<strong>[TIẾN TRÌNH VÔ DANH HÓA DỮ LIỆU / RIGHT TO BE FORGOTTEN ĐÃ KÍCH HOẠT]</strong>\n` +
+`1. Xác thực mật khẩu: Hợp lệ (Bcrypt verified)
+2. Cập nhật trạng thái người dùng: is_deleted = true, is_active = false
+3. Ngắt phiên đăng nhập (JWT Revocation): Thu hồi token thành công
+4. Vô danh hóa trường định danh cá nhân:
+   - Email: "bachngungbang@gmail.com" → "deleted_9f82c7a1@guworld.local"
+   - IP logs: Ẩn danh hóa / Hashing
+   - Password hash: Xóa bỏ (NULL)
+5. Giữ lại bản ghi đối soát kế toán PayOS ở trạng thái ẩn danh (Ref Order: OK)
+6. Thời điểm hoàn tất: ${now}
+7. Thông báo hoàn thành: Đã gửi email xác nhận lần cuối tới người dùng.`;
+  }
+</script>
+
+</body>
+</html>

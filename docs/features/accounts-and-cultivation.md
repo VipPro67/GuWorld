@@ -18,9 +18,13 @@ Tài khoản tạo danh tính đăng nhập. Nhân vật giữ rank, chỉ số,
 ### Tài khoản và phiên
 
 1. Gọi `GET /auth/config` để UI biết chính sách xác thực.
-2. Nếu OTP được yêu cầu, gửi mã qua `/auth/send-otp`, rồi đăng ký với OTP.
-3. Đăng nhập hoặc hoàn tất Google OAuth; frontend nạp player bằng `/auth/me`.
-4. Client gameplay claim tab hiện hành qua `/auth/claim-tab`; logout kết thúc session phía client/server.
+2. Tuân thủ pháp lý Việt Nam: trò chơi áp dụng phân loại độ tuổi 18+ và cảnh báo thời gian chơi theo Nghị định 147/2024/NĐ-CP; chính sách dữ liệu cá nhân tuân thủ Nghị định 13/2023/NĐ-CP.
+3. Người chơi đăng ký tài khoản bắt buộc phải tích chọn đồng ý Điều Khoản Dịch Vụ và Chính Sách Bảo Mật (hộp kiểm không được tích sẵn). Request `/auth/register` gửi `agree_terms: true`; server ghi nhận phiên bản điều khoản, thời gian và địa chỉ IP chấp thuận.
+4. Nếu OTP được yêu cầu, gửi mã qua `/auth/send-otp`, rồi đăng ký với OTP.
+5. Đăng nhập hoặc hoàn tất Google OAuth; server kiểm tra cờ `is_deleted` và từ chối các tài khoản đã bị xóa. Frontend nạp player bằng `/auth/me`.
+6. Client gameplay claim tab hiện hành qua `/auth/claim-tab`; logout kết thúc session phía client/server.
+7. Cảnh báo sức khỏe: hệ thống giám sát thời gian chơi liên tục và cảnh báo định kỳ mỗi 60, 120 phút và hiển thị modal cảnh báo bắt buộc khi đạt 180 phút/ngày ("Chơi quá 180 phút một ngày sẽ ảnh hưởng xấu đến sức khỏe").
+8. Quyền xóa dữ liệu (Right to be Forgotten): Người chơi có thể yêu cầu xóa tài khoản qua `POST /api/auth/delete-account` (yêu cầu xác thực mật khẩu). Thao tác này soft-delete tài khoản, vô danh hóa email thành `deleted_<uuid>@guworld.local`, xóa địa chỉ IP và ghi nhận audit log.
 
 ### Tutorial và onboarding
 

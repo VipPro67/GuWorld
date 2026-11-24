@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { BACKEND_URL } from "@/lib/config";
+import { LegalModal, LegalDocType } from "@/components/legal/LegalModal";
 import {
   Sparkles,
   Compass,
@@ -59,6 +60,14 @@ export const Registration: React.FC<RegistrationProps> = ({
   const [referralCode, setReferralCode] = useState("");
   const [gender, setGender] = useState("male");
   const [emailVerificationRequired, setEmailVerificationRequired] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
+  const [legalDocType, setLegalDocType] = useState<LegalDocType>("TOS");
+
+  const handleOpenLegal = (doc: LegalDocType) => {
+    setLegalDocType(doc);
+    setLegalModalOpen(true);
+  };
 
   useEffect(() => {
     fetch(`${BACKEND_URL}/api/auth/config`)
@@ -425,6 +434,50 @@ export const Registration: React.FC<RegistrationProps> = ({
           </div>
         )}
 
+        {/* Consent Checkbox theo Nghị định 13/2023/NĐ-CP & Nghị định 147/2024/NĐ-CP */}
+        {!isLoginTab && (
+          <div className="p-3 bg-[var(--bg-elevated)] border border-[var(--border-default)] rounded-xl mt-3">
+            <label className="flex items-start gap-2.5 text-xs text-[var(--text-secondary)] cursor-pointer select-none">
+              <input
+                type="checkbox"
+                id="agreeTermsCheckbox"
+                checked={agreeTerms}
+                onChange={(e) => {
+                  onClearError();
+                  setAgreeTerms(e.target.checked);
+                }}
+                className="mt-0.5 w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500 cursor-pointer shrink-0"
+                required
+              />
+              <span className="leading-relaxed">
+                Tôi xác nhận từ <strong>đủ 18 tuổi trở lên</strong>, đã đọc kỹ và đồng ý với{" "}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleOpenLegal("TOS");
+                  }}
+                  className="text-amber-500 hover:text-amber-400 underline font-semibold cursor-pointer"
+                >
+                  Điều Khoản Dịch Vụ
+                </button>{" "}
+                và{" "}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleOpenLegal("PRIVACY");
+                  }}
+                  className="text-amber-500 hover:text-amber-400 underline font-semibold cursor-pointer"
+                >
+                  Chính Sách Bảo Mật
+                </button>{" "}
+                của GuWorld.
+              </span>
+            </label>
+          </div>
+        )}
+
         {/* Submit Button */}
         <button
           type="submit"
@@ -432,14 +485,14 @@ export const Registration: React.FC<RegistrationProps> = ({
             isLoading ||
             (isLoginTab
               ? email.trim().length === 0
-              : username.trim().length < 3 || email.trim().length === 0 || (emailVerificationRequired && otp.trim().length < 6)) ||
+              : username.trim().length < 3 || email.trim().length === 0 || !agreeTerms || (emailVerificationRequired && otp.trim().length < 6)) ||
             password.length < 6
           }
           className={`w-full py-3.5 px-6 rounded-xl font-serif text-sm font-semibold tracking-wider transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-lg mt-5 ${
             isLoading ||
             (isLoginTab
               ? email.trim().length === 0
-              : username.trim().length < 3 || email.trim().length === 0 || (emailVerificationRequired && otp.trim().length < 6)) ||
+              : username.trim().length < 3 || email.trim().length === 0 || !agreeTerms || (emailVerificationRequired && otp.trim().length < 6)) ||
             password.length < 6
               ? "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
               : "bg-gradient-to-r from-amber-600 to-yellow-600 text-zinc-950 font-bold hover:from-amber-500 hover:to-yellow-500 hover:shadow-[0_0_25px_rgba(234,179,8,0.25)] active:scale-[0.98]"
@@ -479,6 +532,12 @@ export const Registration: React.FC<RegistrationProps> = ({
           {isLoginTab ? "Đăng nhập bằng Google" : "Đăng ký bằng Google"}
         </button>
       </form>
+
+      <LegalModal
+        isOpen={legalModalOpen}
+        initialTab={legalDocType}
+        onClose={() => setLegalModalOpen(false)}
+      />
     </div>
   );
 };

@@ -30,6 +30,7 @@ export interface AuthSlice {
     gender?: string
   ) => Promise<boolean>;
   logout: () => void;
+  deleteAccount: (password: string, reason?: string) => Promise<boolean>;
   clearError: () => void;
   completeOnboarding: (data: {
     starting_region: string;
@@ -157,6 +158,7 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
           race: race || "human",
           gender: gender || "male",
           fingerprint,
+          agree_terms: true,
         }),
       });
 
@@ -293,6 +295,36 @@ export const createAuthSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     localStorage.removeItem("gu_auth_token");
     localStorage.removeItem("gu_player_id");
     get().addLog("Đã rời khỏi thế giới Cổ sư.");
+  },
+
+  deleteAccount: async (password: string, reason?: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/auth/delete-account`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password,
+          reason: reason || "Yêu cầu xóa tài khoản theo Nghị định 13/2023/NĐ-CP",
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Xóa tài khoản thất bại.");
+      }
+
+      get().addToast("Tài khoản đã được xóa và dữ liệu cá nhân đã được vô danh hóa.", "success");
+      get().logout();
+      return true;
+    } catch (caught: unknown) {
+      const err = caught instanceof Error ? caught : new Error(String(caught));
+      set({ error: err.message });
+      get().addToast(err.message || "Xóa tài khoản thất bại.", "error");
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
   },
 
   clearError: () => set({ error: null }),

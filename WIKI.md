@@ -179,6 +179,23 @@ Ví hiển thị số dư và giao dịch. Top-up tạo order và chờ kết qu
 - **Lịch sử chiến đấu/Ký sự tu hành:** xem replay/trận đấu và audit log cá nhân, gồm các sự kiện do player thực hiện hoặc tác động tới player.
 - **Referral, gift code, notification:** liên kết/nhận thưởng referral, đổi mã quà và quản lý thông báo.
 
+## Quy định pháp lý & Tuân thủ luật Việt Nam
+
+GuWorld tuân thủ đầy đủ các quy định pháp luật hiện hành của Nước Cộng hòa Xã hội Chủ nghĩa Việt Nam:
+
+1. **Phân loại độ tuổi & Cảnh báo sức khỏe (Nghị định 147/2024/NĐ-CP):**
+   - Trò chơi dành riêng cho người chơi từ đủ **18 tuổi trở lên (18+)**.
+   - Cảnh báo luật định hiển thị xuyên suốt: *"Chơi quá 180 phút một ngày sẽ ảnh hưởng xấu đến sức khỏe"*. Hệ thống phát thông báo định kỳ mỗi 60, 120 phút và mở popup cảnh báo trực quan khi người chơi đạt 180 phút trong ngày.
+   - **Nghiêm cấm hành vi RMT:** Vật phẩm ảo, Cổ trùng, Nguyên Thạch và Tiên Ngọc chỉ có giá trị trải nghiệm trong trò chơi, không có giá trị quy đổi ngược lại thành tiền mặt, thẻ cào hoặc hiện vật thực tế dưới bất kỳ hình thức nào. Mọi hành vi mua bán tài khoản hoặc vật phẩm bằng tiền thật đều bị xử lý khóa tài khoản vĩnh viễn.
+
+2. **Bảo vệ dữ liệu cá nhân (Nghị định 13/2023/NĐ-CP):**
+   - Mọi hoạt động thu thập dữ liệu (Email, địa chỉ IP, lịch sử hoạt động) chỉ phục vụ xác thực bảo mật tài khoản và vận hành kỹ thuật.
+   - Người chơi có toàn quyền đối với dữ liệu của mình (bao gồm quyền rút lại sự đồng thuận và quyền yêu cầu xóa tài khoản / dữ liệu cá nhân vĩnh viễn qua chức năng Xóa tài khoản).
+
+3. **Tuyên bố bản quyền tác phẩm phái sinh & Đóng góp máy chủ:**
+   - Trò chơi là sản phẩm độc lập của người hâm mộ (Fan-game phi thương mại) lấy cảm hứng từ thế giới quan tác phẩm *"Cổ Chân Nhân"*. Dự án tôn trọng quyền tác giả và sở hữu trí tuệ của tiểu thuyết gốc.
+   - Các gói nạp qua PayOS là sự ủng hộ tài chính tự nguyện (Donation) nhằm bù đắp chi phí vận hành máy chủ và băng thông. Khoản đóng góp là không hoàn lại tiền mặt; trong trường hợp reset dữ liệu ở giai đoạn thử nghiệm Alpha, BQT cam kết bảo lưu và hoàn trả 100% số lượng Ngọc đã nạp vào tài khoản mới.
+
 ## Dữ liệu và thuật ngữ
 
 Tên, mô tả, chỉ số, hiệu ứng, recipe, quái, map, realm và shop có thể lấy từ CSV/database; các môi trường khác nhau nếu dataset khác nhau. Xem [hướng dẫn dữ liệu](docs/guides/GAME_DATA.md) cho quy trình import.

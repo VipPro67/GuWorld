@@ -107,8 +107,29 @@ func schemaPlayers() error {
 		banned_at TIMESTAMPTZ,
 		is_chat_muted BOOLEAN NOT NULL DEFAULT false,
 		chat_muted_until TIMESTAMPTZ,
-		aperture_expiry_pending BOOLEAN NOT NULL DEFAULT FALSE
+		aperture_expiry_pending BOOLEAN NOT NULL DEFAULT FALSE,
+		accepted_terms_version VARCHAR(20) NOT NULL DEFAULT '',
+		accepted_privacy_version VARCHAR(20) NOT NULL DEFAULT '',
+		terms_accepted_at TIMESTAMPTZ DEFAULT NULL,
+		terms_accepted_ip VARCHAR(50) NOT NULL DEFAULT '',
+		is_deleted BOOLEAN NOT NULL DEFAULT false,
+		deleted_at TIMESTAMPTZ DEFAULT NULL,
+		deletion_reason TEXT NOT NULL DEFAULT ''
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("players_legal_consent_columns", `
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS accepted_terms_version VARCHAR(20) NOT NULL DEFAULT '';
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS accepted_privacy_version VARCHAR(20) NOT NULL DEFAULT '';
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ DEFAULT NULL;
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS terms_accepted_ip VARCHAR(50) NOT NULL DEFAULT '';
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false;
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL;
+	ALTER TABLE players ADD COLUMN IF NOT EXISTS deletion_reason TEXT NOT NULL DEFAULT '';`); err != nil {
+		return err
+	}
+	if err := execSchema("players_is_deleted_idx", `
+	CREATE INDEX IF NOT EXISTS idx_players_is_deleted ON players (is_deleted) WHERE is_deleted = true;`); err != nil {
 		return err
 	}
 	if err := execSchema("players_active_combat_compat", `

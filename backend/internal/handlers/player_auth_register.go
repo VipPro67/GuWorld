@@ -75,11 +75,21 @@ func resolveStartingRegion(region string) (string, int, int, bool) {
 	return targetRegion, x, y, true
 }
 
+const (
+	CurrentTermsVersion   = "2024.1"
+	CurrentPrivacyVersion = "2024.1"
+)
+
 // RegisterPlayer handles registering a new player, hashing password, and rolling their aptitude
 func RegisterPlayer(c *gin.Context) {
 	var req CreatePlayerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !req.AgreeTerms {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu cần xác nhận đủ 18 tuổi và đồng ý với Điều Khoản Dịch Vụ cùng Chính Sách Bảo Mật để thức tỉnh Không Khiếu!"})
 		return
 	}
 
@@ -333,13 +343,13 @@ func RegisterPlayer(c *gin.Context) {
 
 	var player models.Player
 	query := `
-		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, lifespan, time_speed_multiplier, email, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender, constitution, register_fingerprint, register_ip)
-		VALUES ($1, $2, 0, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $14, $15, $11, '{}'::jsonb, '[]'::jsonb, $8, '{}'::jsonb, 100.0, 1.0, $9, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true, $12, $13, $16, $17, $18)
+		INSERT INTO players (username, password_hash, rank, sub_rank, aptitude_type, aptitude_percent, aptitude_grade, current_mana, max_mana, primeval_stones, immortal_stones, wall_progress, human_qi, next_tribulation_time, hp, base_hp, body_mods, x, y, equipped_gus, cleared_cells, visited_subzones, current_region, path_masteries, lifespan, time_speed_multiplier, email, explore_count, last_explore_reset, soul_hp, max_soul, soul_tier, needs_soul_refine, bio, avatar_url, fake_rank, fake_sub_rank, fake_vital_gu, is_disguised, ref_code, needs_onboarding, race, gender, constitution, register_fingerprint, register_ip, accepted_terms_version, accepted_privacy_version, terms_accepted_at, terms_accepted_ip)
+		VALUES ($1, $2, 0, 1, $3, $4, $5, $6, $7, 20, 0, 0.0, 0.0, NULL, 100.0, 100.0, '[]'::jsonb, $14, $15, $11, '{}'::jsonb, '[]'::jsonb, $8, '{}'::jsonb, 100.0, 1.0, $9, 0, NOW(), 10, 10, 'NHAN_HON', false, 'Hãy viết gì đó về bản thân...', '', 1, 1, '', false, $10, true, $12, $13, $16, $17, $18, $19, $20, NOW(), $18)
 		RETURNING id
 	`
 
 	var newPlayerID uuid.UUID
-	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus, req.Race, req.Gender, spawnX, spawnY, constitution, strings.TrimSpace(req.Fingerprint), c.ClientIP()).Scan(&newPlayerID)
+	err = tx.QueryRow(query, req.Username, passwordHash, aptitudeType, aptitudePercent, aptitudeGrade, currentMana, maxMana, req.StartingRegion, req.Email, refCode, equippedGus, req.Race, req.Gender, spawnX, spawnY, constitution, strings.TrimSpace(req.Fingerprint), c.ClientIP(), CurrentTermsVersion, CurrentPrivacyVersion).Scan(&newPlayerID)
 	if err != nil {
 		if isUsernameUniqueViolation(err) {
 			c.JSON(http.StatusConflict, gin.H{"error": "Đạo hiệu này đã tồn tại (không phân biệt chữ hoa/thường)!"})

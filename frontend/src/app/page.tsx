@@ -11,7 +11,12 @@ import { useUIStore } from "@/store/useUIStore";
 import { Registration } from "@/components/Registration";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { LevelZeroView } from "@/components/LevelZeroView";
-import { Sparkles, X, Handshake, Store, HelpCircle, LogOut, Compass, Gem, Swords } from "@/lib/icons";
+import { Sparkles, X, Handshake, Store, HelpCircle, LogOut, Compass, Gem, Swords, ShieldCheck } from "@/lib/icons";
+import { LegalModal, LegalDocType } from "@/components/legal/LegalModal";
+import { LegalFooter } from "@/components/legal/LegalFooter";
+import { PlaytimeWarningModal } from "@/components/legal/PlaytimeWarningModal";
+import { AccountDeletionModal } from "@/components/legal/AccountDeletionModal";
+import { usePlaytimeWarning } from "@/hooks/usePlaytimeWarning";
 import { GlobalChatOverlay } from "@/components/GlobalChatOverlay";
 import { NotificationBell } from "@/components/NotificationBell";
 import { RespawnChoiceModal } from "@/components/RespawnChoiceModal";
@@ -65,6 +70,9 @@ export default function Home() {
   const router = useRouter();
   const [worldConnected, setWorldConnected] = useState(false);
   const [isMobileHeaderHidden, setIsMobileHeaderHidden] = useState(false);
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
+  const [legalDocType, setLegalDocType] = useState<LegalDocType>("TOS");
+  const [accountDeletionOpen, setAccountDeletionOpen] = useState(false);
   const connection = useSyncExternalStore(subscribeConnection, getConnection, getServerConnection);
   const [
     player,
@@ -202,6 +210,7 @@ export default function Home() {
   }, [isApertureInstanceInside, requestedView, setView]);
   const showChangelog = useUIStore((s) => s.showChangelog);
   const setShowChangelog = useUIStore((s) => s.setShowChangelog);
+  const { playtimeMinutes, show180Modal, dismiss180Modal } = usePlaytimeWarning(Boolean(player));
   const mainContentRef = useRef<HTMLElement>(null);
   const featureDialogRef = useRef<HTMLElement>(null);
   const changelogDialogRef = useRef<HTMLDivElement>(null);
@@ -444,9 +453,25 @@ export default function Home() {
               <span className="hidden sm:inline">Nhóm Discord</span>
             </a>
             <ClearCacheButton showLabel={true} className="!text-amber-500 dark:!text-amber-400 !bg-amber-500/10 hover:!bg-amber-500/20 !border-amber-500/20" />
+            <button
+              type="button"
+              onClick={() => {
+                setLegalDocType("TOS");
+                setLegalModalOpen(true);
+              }}
+              className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-colors cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span>Pháp Lý & Điều Khoản</span>
+            </button>
           </div>
           <p className="text-xs text-zinc-400 font-mono">Cổ Chân Nhân Web Game © 2026 • Thiết Kế Trực Quan Sinh Động</p>
         </footer>
+        <LegalModal
+          isOpen={legalModalOpen}
+          initialTab={legalDocType}
+          onClose={() => setLegalModalOpen(false)}
+        />
       </div>
     );
   }
@@ -573,6 +598,22 @@ export default function Home() {
             </Link>
           )}
 
+          {player && (
+            <button
+              type="button"
+              onClick={() => {
+                setLegalDocType("TOS");
+                setLegalModalOpen(true);
+              }}
+              aria-label="Điều khoản & Pháp lý"
+              className="min-h-11 px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-xs text-amber-400 hover:text-amber-300 font-serif transition-colors border border-zinc-800 inline-flex items-center gap-1 cursor-pointer"
+              title="Điều khoản & Pháp lý"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">Pháp Lý</span>
+            </button>
+          )}
+
           {player && <NotificationBell />}
 
           {player && (
@@ -679,6 +720,13 @@ export default function Home() {
                 />
               </div>
             </div>
+
+            <LegalFooter
+              onOpenDoc={(doc) => {
+                setLegalDocType(doc);
+                setLegalModalOpen(true);
+              }}
+            />
           </div>
         ) : player.active_combat || activeCombatReplay ? (
           <div className="w-full flex-1 min-h-0 overflow-y-auto overscroll-contain pb-20 sm:pb-4">
@@ -1097,6 +1145,27 @@ export default function Home() {
 
       {/* Global Floating Chat Box */}
       {player && !isExploreView && <GlobalChatOverlay />}
+
+      {/* Statutory Playtime Warning Modal (Nghị định 147/2024/NĐ-CP) */}
+      <PlaytimeWarningModal
+        isOpen={show180Modal}
+        playtimeMinutes={playtimeMinutes}
+        onDismiss={dismiss180Modal}
+      />
+
+      {/* Legal & Terms Modal (Nghị định 147/2024/NĐ-CP & Nghị định 13/2023/NĐ-CP) */}
+      <LegalModal
+        isOpen={legalModalOpen}
+        initialTab={legalDocType}
+        onClose={() => setLegalModalOpen(false)}
+        onRequestDeleteAccount={() => setAccountDeletionOpen(true)}
+      />
+
+      {/* Account Deletion Modal (Right to be Forgotten - Nghị định 13/2023/NĐ-CP) */}
+      <AccountDeletionModal
+        isOpen={accountDeletionOpen}
+        onClose={() => setAccountDeletionOpen(false)}
+      />
     </div>
   );
 }

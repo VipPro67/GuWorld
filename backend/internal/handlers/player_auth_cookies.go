@@ -52,6 +52,7 @@ type CreatePlayerRequest struct {
 	Race           string `json:"race"`
 	Gender         string `json:"gender"`
 	Fingerprint    string `json:"fingerprint" binding:"required"`
+	AgreeTerms     bool   `json:"agree_terms"`
 }
 
 // CreatePlayerResponse represents the output payload for registration/login

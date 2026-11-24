@@ -673,6 +673,8 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 			authGroup.POST("/register", middleware.RateLimitByIP(1, time.Minute), handlers.RegisterPlayer)
 			authGroup.POST("/login", middleware.RateLimitByIP(9, time.Minute), handlers.LoginPlayer)
 			authGroup.POST("/logout", handlers.LogoutPlayer)
+			authGroup.POST("/delete-account", middleware.AuthRequired(), handlers.RequestAccountDeletion)
+			authGroup.POST("/reconsent-terms", middleware.AuthRequired(), handlers.ReconsentTerms)
 			authGroup.POST("/claim-tab", middleware.AuthRequired(), handlers.ClaimGameplayTab)
 			authGroup.GET("/me", middleware.AuthRequired(), handlers.GetCurrentPlayer)
 

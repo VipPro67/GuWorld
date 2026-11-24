@@ -113,13 +113,19 @@ func LoginPlayer(c *gin.Context) {
 	var banned bool
 	var banReason string
 	var bannedUntil sql.NullTime
-	err := db.DB.QueryRow(`SELECT id, password_hash, is_banned, COALESCE(ban_reason, ''), banned_until FROM players WHERE LOWER(email) = $1`, loginEmail).Scan(&targetPlayerID, &passwordHash, &banned, &banReason, &bannedUntil)
+	var isDeleted bool
+	err := db.DB.QueryRow(`SELECT id, password_hash, is_banned, COALESCE(ban_reason, ''), banned_until, COALESCE(is_deleted, false) FROM players WHERE LOWER(email) = $1`, loginEmail).Scan(&targetPlayerID, &passwordHash, &banned, &banReason, &bannedUntil, &isDeleted)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Thông tin đăng nhập không hợp lệ!"})
 		} else {
 			httperr.Respond(c, httperr.Internal("Lỗi cơ sở dữ liệu: "+err.Error(), err))
 		}
+		return
+	}
+
+	if isDeleted {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Tài khoản này đã bị xóa/vô danh hóa theo yêu cầu bảo vệ dữ liệu cá nhân!"})
 		return
 	}
 
