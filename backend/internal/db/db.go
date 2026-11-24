@@ -150,11 +150,14 @@ func Connect() error {
 	var err error
 	DB, err = sql.Open("postgres", connStr)
 	if err != nil {
+		DB = nil
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 
 	err = DB.Ping()
 	if err != nil {
+		_ = DB.Close()
+		DB = nil
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 

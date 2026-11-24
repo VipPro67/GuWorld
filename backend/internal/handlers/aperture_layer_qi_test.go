@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
 func TestLayerQiMultipliers(t *testing.T) {
@@ -112,6 +113,22 @@ func TestApertureCoreEffectiveTimeRateInBlackHeaven(t *testing.T) {
 }
 
 func TestWorldMapIDForRegionPrefixes(t *testing.T) {
+	zoneReg.mu.Lock()
+	previousZones, previousByID := zoneReg.zones, zoneReg.byID
+	zoneReg.zones = []models.Region{
+		{ID: "thanh_mao_son", Name: "Thanh Mao Sơn", WorldMapID: "thanh_mao_son"},
+	}
+	zoneReg.byID = make(map[string]*models.Region, len(zoneReg.zones))
+	for i := range zoneReg.zones {
+		zoneReg.byID[zoneReg.zones[i].ID] = &zoneReg.zones[i]
+	}
+	zoneReg.mu.Unlock()
+	t.Cleanup(func() {
+		zoneReg.mu.Lock()
+		zoneReg.zones, zoneReg.byID = previousZones, previousByID
+		zoneReg.mu.Unlock()
+	})
+
 	cases := []struct {
 		region   string
 		expected string
@@ -128,6 +145,7 @@ func TestWorldMapIDForRegionPrefixes(t *testing.T) {
 		{"dai_vuc_trung_chau", "world_map"},
 		{"thanh_mao_son", "thanh_mao_son"},
 		{"dai_vuc_nam_cuong", "world_map"},
+		{"unregistered_fallback_region", "world_map"},
 	}
 
 	for _, c := range cases {

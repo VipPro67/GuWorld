@@ -27,7 +27,12 @@ func TestUpdateRefinePlayerResourcesEquippedGusIsJSONB(t *testing.T) {
 	if err := db.Connect(); err != nil {
 		t.Skipf("cannot connect to db: %v", err)
 	}
-	defer db.DB.Close()
+	defer func() {
+		if db.DB != nil {
+			_ = db.DB.Close()
+			db.DB = nil
+		}
+	}()
 
 	tx, err := db.DB.Begin()
 	if err != nil {

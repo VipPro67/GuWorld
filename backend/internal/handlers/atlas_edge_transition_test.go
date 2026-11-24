@@ -89,7 +89,8 @@ func TestResolveCellArrivalEdgeTransition(t *testing.T) {
 	playerAtRightEdge.Y = 997
 	playerAtRightEdge.Rank = 5
 
-	msg, _, err := resolveCellArrivalWithInstance(context.Background(), nil, &playerAtRightEdge, 1001, 997, "", false, nil, nil)
+	noInst := sql.NullString{}
+	msg, _, err := resolveCellArrivalWithInstance(context.Background(), nil, &playerAtRightEdge, 1001, 997, "", false, &noInst, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -108,7 +109,7 @@ func TestResolveCellArrivalEdgeTransition(t *testing.T) {
 	playerAtLeftEdge.Y = 500
 	playerAtLeftEdge.Rank = 5
 
-	msg2, _, err2 := resolveCellArrivalWithInstance(context.Background(), nil, &playerAtLeftEdge, -1, 500, "", false, nil, nil)
+	msg2, _, err2 := resolveCellArrivalWithInstance(context.Background(), nil, &playerAtLeftEdge, -1, 500, "", false, &noInst, nil)
 	if err2 != nil {
 		t.Fatalf("unexpected error: %v", err2)
 	}

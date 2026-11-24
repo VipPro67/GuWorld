@@ -21,6 +21,12 @@ func TestAdminListAperturesCoordinates(t *testing.T) {
 	if err := db.Connect(); err != nil {
 		t.Skipf("cannot connect to db: %v", err)
 	}
+	t.Cleanup(func() {
+		if db.DB != nil {
+			_ = db.DB.Close()
+			db.DB = nil
+		}
+	})
 
 	testRegionID := "test_region_aperture_" + uuid.New().String()[:8]
 	testRegionName := "Vực Kiểm Thử " + testRegionID
