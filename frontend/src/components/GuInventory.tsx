@@ -519,18 +519,30 @@ export const GuInventory: React.FC<GuInventoryProps> = ({
   };
 
   // Keep material search focused on names; item details are available in the wiki.
+  // Iterate player.materials_inventory rather than itemDictionary keys so items
+  // still render with a fallback spec if the dictionary is incomplete or stale.
   const ownedMaterials = useMemo(() => {
-    return Object.keys(itemDictionary)
-      .filter((key) => {
-        const qty = materials[key] || 0;
-        return qty > 0 && Boolean(itemDictionary[key]);
-      })
-      .map((key) => ({ key, spec: itemDictionary[key], qty: materials[key] }));
+    return Object.entries(materials)
+      .filter(([, rawQty]) => Math.max(0, Number(rawQty) || 0) > 0)
+      .map(([key, rawQty]) => {
+        const qty = Math.max(0, Number(rawQty) || 0);
+        const spec: ItemSpec = itemDictionary[key] ?? {
+          id: key,
+          name: key,
+          item_type: "Material",
+          rank: 1,
+          rarity: 1,
+          description: "Vật phẩm chưa có trong từ điển hiện tại.",
+          base_price: 0,
+          path: "",
+        };
+        return { key, spec, qty };
+      });
   }, [itemDictionary, materials]);
 
   const filteredMaterials = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-    return ownedMaterials.filter(({ spec }) => spec.name.toLowerCase().includes(normalizedSearch));
+    return ownedMaterials.filter(({ key, spec }) => (spec.name || key).toLowerCase().includes(normalizedSearch));
   }, [ownedMaterials, searchTerm]);
 
   const allMaterialPaths = useMemo(() => Array.from(new Set(

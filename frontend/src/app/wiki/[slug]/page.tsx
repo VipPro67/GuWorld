@@ -69,7 +69,7 @@ function WikiPageContent({ page }: { page: WikiPage }) {
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <div className="max-w-4xl mx-auto px-2 sm:px-4 py-8">
-        <nav className="flex items-center gap-1.5 text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-6">
+        <nav className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest mb-6">
           <Link
             href="/"
             className="hover:text-[var(--brand)] transition-colors font-bold text-emerald-400"
@@ -129,7 +129,7 @@ function WikiPageContent({ page }: { page: WikiPage }) {
           )}
         </div>
 
-        <div className="border-t border-[var(--border)]/60 pt-4 mt-8 flex items-center justify-between text-[10px] text-[var(--text-muted)] font-mono">
+        <div className="border-t border-[var(--border)]/60 pt-4 mt-8 flex flex-wrap items-center justify-between gap-2 text-[10px] text-[var(--text-muted)] font-mono">
           <span>Bản dịch & Tổng hợp theo nguyên tác Cổ Chân Nhân.</span>
           <span>Cổ Giới Wiki v1.0</span>
         </div>

@@ -787,7 +787,7 @@ export default function WikiClientView({
           </div>
 
           {/* Quick Stats Grid */}
-          <div className="grid grid-cols-4 gap-2 bg-zinc-900/40 p-2.5 rounded-2xl border border-[var(--border)] max-w-md">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-zinc-900/40 p-2.5 rounded-2xl border border-[var(--border)] max-w-md">
             <div className="text-center px-2 py-1">
               <p className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider">H.Dẫn</p>
               <p className="text-sm font-bold font-mono text-emerald-400">

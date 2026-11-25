@@ -558,7 +558,7 @@ export default function Home() {
       {/* Top Header Navigation */}
       <header
         inert={showChangelog}
-        className={`w-full max-w-[1600px] px-2 sm:px-6 mx-auto py-2.5 sm:py-3 border-b border-[var(--border-default)] flex justify-between items-center gap-3 shrink-0 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-30 transition-transform duration-200 focus-within:translate-y-0 focus-within:mb-0 ${isMobileHeaderHidden ? "-translate-y-full -mb-[53px]" : ""}`}
+        className={`w-full max-w-[1600px] px-2 sm:px-6 mx-auto py-2.5 sm:py-3 border-b border-[var(--border-default)] flex justify-between items-center gap-3 shrink-0 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-30 transition-transform duration-200 focus-within:translate-y-0 focus-within:mb-0 ${isMobileHeaderHidden ? "-translate-y-full -mb-[65px]" : ""}`}
       >
         <div className="flex items-center gap-3 sm:gap-6">
           <button
@@ -740,20 +740,18 @@ export default function Home() {
             />
           </div>
         ) : player.rank === 0 ? (
-          <div className="py-12 w-full flex justify-center overflow-y-auto">
+          <div className="flex-1 min-h-0 w-full overflow-y-auto overscroll-contain flex flex-col items-stretch sm:items-center sm:justify-start sm:px-4 sm:py-8">
             <LevelZeroView onComplete={completeTutorial} />
           </div>
         ) : player.needs_onboarding ? (
-          <div className="py-12 w-full flex justify-center overflow-y-auto">
-            <OnboardingModal onComplete={completeOnboarding} />
-          </div>
+          <OnboardingModal onComplete={completeOnboarding} />
         ) : (
             <div className="relative isolate w-full h-full min-h-0 flex-1 overflow-hidden bg-zinc-950">
-            <div inert={featureDialogOpen} className="w-full h-full overflow-y-auto py-2 sm:py-4 px-2 sm:px-6">
+            <div inert={featureDialogOpen} className="w-full h-full overflow-y-auto py-2 pb-20 sm:py-4 sm:pb-6 px-2 sm:px-6">
               <LobbyView />
             </div>
             {currentView !== "dashboard" && (
-              <div className={`absolute inset-0 z-40 flex items-center justify-center ${isFullBleedView ? "" : "bg-black/55 backdrop-blur-[2px] md:p-4"}`}>
+              <div className={`absolute inset-0 z-[45] flex items-center justify-center ${isFullBleedView ? "" : "bg-black/55 backdrop-blur-[2px] md:p-4"}`}>
                 <section
                   ref={featureDialogRef}
                   role="dialog"
@@ -988,8 +986,8 @@ export default function Home() {
 
       {/* Changelog Modal */}
       {player && showChangelog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-primary)] animate-fade-in" onClick={handleCloseChangelog}>
-          <div ref={changelogDialogRef} role="dialog" aria-modal="true" aria-labelledby="changelog-title" tabIndex={-1} className="w-full max-w-xl max-h-[90vh] sm:max-h-[85vh] flex flex-col bg-[var(--bg-surface)] border border-amber-300/20 rounded-3xl p-4 sm:p-5 shadow-[0_28px_90px_rgba(0,0,0,.65)] overflow-hidden overscroll-contain animate-scale-up" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:p-4 bg-[var(--bg-primary)] animate-fade-in" onClick={handleCloseChangelog}>
+          <div ref={changelogDialogRef} role="dialog" aria-modal="true" aria-labelledby="changelog-title" tabIndex={-1} className="relative w-full max-w-xl max-h-[90dvh] sm:max-h-[85dvh] flex flex-col bg-[var(--bg-surface)] border border-amber-300/20 rounded-3xl p-4 sm:p-5 shadow-[0_28px_90px_rgba(0,0,0,.65)] overflow-hidden overscroll-contain animate-scale-up" onClick={e => e.stopPropagation()}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-xl pointer-events-none" />
             <div className="flex items-center justify-between mb-4 shrink-0">
               <div className="flex items-center gap-2">
@@ -998,7 +996,7 @@ export default function Home() {
               </div>
               <button aria-label="Đóng cập nhật mới" onClick={handleCloseChangelog} className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
-            <div tabIndex={0} aria-label="Chi tiết bản cập nhật" className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+            <div tabIndex={0} aria-label="Chi tiết bản cập nhật" className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
               <section className="relative isolate overflow-hidden rounded-2xl border border-amber-300/20 bg-gradient-to-br from-amber-950/70 via-zinc-950/80 to-emerald-950/50 p-4 sm:p-5">
                 <img src="/assets/world/form-six-arm-ice-demon.webp" alt="" aria-hidden="true" className="pointer-events-none absolute -right-4 -top-8 h-36 w-40 object-contain opacity-35 sm:h-44 sm:w-48" />
                 <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-zinc-950/10 via-zinc-950/30 to-zinc-950/75" />
@@ -1065,8 +1063,8 @@ export default function Home() {
 
       {/* Direct Trade Overlays */}
       {activeTrade && activeTrade.status === "PENDING" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-primary)] animate-fade-in">
-          <div className="w-full max-w-md bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-6 shadow-2xl relative overflow-hidden text-center flex flex-col gap-5 animate-scale-up">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain p-4 bg-[var(--bg-primary)] animate-fade-in">
+          <div className="w-full max-w-md max-h-[90dvh] overflow-y-auto bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-3xl p-6 shadow-2xl relative text-center flex flex-col gap-5 animate-scale-up">
             <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
 
             <div className="w-12 h-12 rounded-full bg-emerald-950/50 border border-emerald-500/20 flex items-center justify-center mx-auto">
@@ -1125,8 +1123,8 @@ export default function Home() {
 
       {/* Dead Player Overlay — cõi chết is derived from lifespan on the server */}
       {player && player.lifespan <= 0 && (
-        <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div role="alertdialog" aria-modal="true" aria-labelledby="lifespan-depleted-title" aria-describedby="lifespan-depleted-description" tabIndex={-1} className="bg-zinc-950 border border-red-900/50 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl shadow-red-950/50">
+        <div className="fixed inset-0 z-[9999] overflow-y-auto overscroll-contain bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="lifespan-depleted-title" aria-describedby="lifespan-depleted-description" tabIndex={-1} className="bg-zinc-950 border border-red-900/50 rounded-2xl p-6 max-w-md max-h-[90dvh] overflow-y-auto w-full text-center space-y-4 shadow-2xl shadow-red-950/50">
             <div className="w-16 h-16 bg-red-950/50 border border-red-800/40 rounded-full flex items-center justify-center mx-auto text-red-500 text-3xl font-extrabold animate-pulse">
               ☠️
             </div>
@@ -1144,7 +1142,7 @@ export default function Home() {
       )}
 
       {/* Global Floating Chat Box */}
-      {player && !isExploreView && <GlobalChatOverlay />}
+      {player && !isExploreView && player.rank !== 0 && !player.needs_onboarding && <GlobalChatOverlay />}
 
       {/* Statutory Playtime Warning Modal (Nghị định 147/2024/NĐ-CP) */}
       <PlaytimeWarningModal

@@ -966,7 +966,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
         <div className="space-y-1.5">
           {combatants.map(c => (
-            <div key={c.id} className="flex items-center gap-2 text-xs bg-zinc-950/40 border border-zinc-800/50 rounded-lg px-3 py-2">
+            <div key={c.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs bg-zinc-950/40 border border-zinc-800/50 rounded-lg px-3 py-2">
               <div className={`w-7 h-7 rounded-full shrink-0 overflow-hidden border ${isEnemy ? "border-rose-800/60 bg-rose-950/40" : "border-emerald-800/60 bg-emerald-950/40"} flex items-center justify-center`}>
                 <img
                   src={c.avatar_url || (isEnemy
@@ -981,7 +981,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                   className="w-full h-full object-cover"
                 />
               </div>
-              <span className="text-zinc-200 font-medium truncate flex-1">{c.name}</span>
+              <span className="text-zinc-200 font-medium truncate min-w-[110px] flex-1">{c.name}</span>
               <span className="text-zinc-400 shrink-0">{rankLabel(c.rank)}</span>
               <span className="text-zinc-500 shrink-0">{subRankLabel(c.sub_rank, c.rank)}</span>
               <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${c.grid_x === 1 ? 'text-rose-400 bg-rose-950/40' : c.grid_x === 2 ? 'text-amber-400 bg-amber-950/40' : 'text-cyan-400 bg-cyan-950/40'}`}>
@@ -1630,7 +1630,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
             Tự Động Chiến Đấu
           </h3>
           <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
                 <label className="flex min-h-11 items-center gap-2 cursor-pointer">
                   <input type="checkbox" className="peer sr-only" checked={autoHealHP} onChange={e => setAutoHealHP(e.target.checked)} />
                   <span aria-hidden="true" className="relative h-5 w-9 rounded-full bg-zinc-700 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-emerald-600 peer-checked:after:translate-x-full peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-amber-300" />
@@ -1642,7 +1642,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
                   <span className="w-8 text-xs text-zinc-300">{healThreshold}%</span>
                 </label>
               </div>
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
                 <label className="flex min-h-11 items-center gap-2 cursor-pointer">
                   <input type="checkbox" className="peer sr-only" checked={autoRestoreMana} onChange={e => setAutoRestoreMana(e.target.checked)} />
                   <span aria-hidden="true" className="relative h-5 w-9 rounded-full bg-zinc-700 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-cyan-600 peer-checked:after:translate-x-full peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-amber-300" />

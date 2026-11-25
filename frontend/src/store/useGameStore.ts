@@ -2513,7 +2513,8 @@ export const useGameStore = create<GameState>((set, get) => {
     if (!forceFresh) {
       try {
         const cached = await getDictionaryCache<UnifiedDictionaryPayload>("game_dictionary_unified");
-        if (cached && cached.data) {
+        const hasCachedItems = Boolean(cached?.data?.items && Object.keys(cached.data.items).length > 0);
+        if (cached && cached.data && hasCachedItems) {
           cachedEtag = cached.etag;
           populateDictionaries(cached.data);
           set({ dictionaryLoaded: true, dictionaryError: null });

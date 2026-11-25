@@ -204,7 +204,7 @@ export const Registration: React.FC<RegistrationProps> = ({
       </div>
 
       {/* Text Description */}
-      <p className="text-xs text-[var(--text-secondary)] leading-relaxed text-center mb-5 font-serif h-12 flex items-center justify-center">
+      <p className="text-xs text-[var(--text-secondary)] leading-relaxed text-center mb-5 font-serif min-h-12 flex items-center justify-center">
         {isLoginTab
           ? "Đã có Tiên cốt Không Khiếu? Nhập Email cùng Mật mã để tiếp tục nghịch thiên hành trình."
           : '"Con người là vạn vật chi linh, Cổ là thiên địa chi tinh." Khai mở Đạo hiệu để gacha Tư chất (Giáp, Ất, Bính, Đinh).'}
@@ -287,7 +287,7 @@ export const Registration: React.FC<RegistrationProps> = ({
               Email
             </label>
             <div className="flex gap-2">
-              <div className="relative flex-grow">
+              <div className="relative min-w-0 flex-grow">
                 <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-zinc-600" />
                 <input
                   type="email"

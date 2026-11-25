@@ -191,7 +191,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
 
         {editingFormation ? (
           <div className="space-y-2">
-<div className="grid grid-cols-4 gap-2">
+<div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {Array.from({ length: maxSlots }).map((_, i) => {
                   const petId = formationDraft[i];
                   const pet = petId ? pets.find((p) => p.id === petId) : null;
@@ -242,7 +242,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
             </GameButton>
           </div>
         ) : (
-<div className="grid grid-cols-4 gap-2">
+<div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {Array.from({ length: maxSlots }).map((_, i) => {
                 const pet = formationPets[i];
                 return (

@@ -27,7 +27,7 @@ export const TrackingRadarDrawer: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-[calc(env(safe-area-inset-right)+1rem)] z-40 flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-cyan-500/30 bg-neutral-950/95 shadow-2xl backdrop-blur-md">
+    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-[calc(env(safe-area-inset-right)+1rem)] z-[46] flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-cyan-500/30 bg-neutral-950/95 shadow-2xl backdrop-blur-md">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-cyan-500/20 bg-neutral-900 px-4 py-3">
         <div className="flex items-center gap-2">
@@ -57,11 +57,11 @@ export const TrackingRadarDrawer: React.FC = () => {
 
       {/* Target List */}
       <div className="flex-1 min-h-0 space-y-2 overflow-y-auto p-4 text-xs">
-        <div className="flex items-center justify-between text-neutral-400">
-          <span>Mục tiêu đang bị gắn ấn ký ({trackedTargets.length})</span>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-neutral-400">
+          <span className="min-w-0">Mục tiêu đang bị gắn ấn ký ({trackedTargets.length})</span>
           <button
             onClick={handleSeverClues}
-            className="flex items-center gap-1 rounded bg-red-950/60 px-2 py-1 font-semibold text-red-300 border border-red-800/50 hover:bg-red-900/60"
+            className="flex shrink-0 items-center gap-1 rounded bg-red-950/60 px-2 py-1 font-semibold text-red-300 border border-red-800/50 hover:bg-red-900/60"
           >
             <Scissors className="h-3.5 w-3.5" />
             Chém Đứt Manh Mối
@@ -78,9 +78,9 @@ export const TrackingRadarDrawer: React.FC = () => {
           trackedTargets.map((target) => (
             <div
               key={target.id}
-              className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900/90 p-2.5"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-900/90 p-2.5"
             >
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 font-bold text-white">
                   <span>{target.target_username || "Cổ Sư Vô Danh"}</span>
                   <span className="rounded bg-cyan-950 px-1.5 py-0.2 font-mono text-[9px] text-cyan-300">

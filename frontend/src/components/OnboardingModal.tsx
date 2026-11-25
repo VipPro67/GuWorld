@@ -152,10 +152,19 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overscroll-contain p-3 pb-16 sm:p-4 sm:pb-8 bg-zinc-950/90 backdrop-blur-md overflow-y-auto">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="onboarding-title" tabIndex={-1} className="glass-panel-gold my-auto max-h-[calc(100dvh-5rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl p-5 shadow-[0_0_50px_rgba(234,179,8,0.15)] sm:max-h-[calc(100dvh-4rem)] sm:p-8">
-        <div className="absolute -left-12 -bottom-12 w-28 h-28 rounded-full bg-emerald-500/10 blur-2xl pointer-events-none" />
-        <div className="absolute -right-12 -top-12 w-28 h-28 rounded-full bg-amber-500/10 blur-2xl pointer-events-none" />
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/90 backdrop-blur-md">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="onboarding-title"
+        tabIndex={-1}
+        className="glass-panel-gold relative w-full h-[100dvh] max-h-[100dvh] overflow-y-auto overflow-x-hidden overscroll-contain rounded-none p-5 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-[calc(2rem+env(safe-area-inset-bottom))] shadow-[0_0_50px_rgba(234,179,8,0.15)] sm:h-auto sm:max-h-[calc(100dvh-3rem)] sm:max-w-lg sm:rounded-3xl sm:p-8"
+      >
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -left-12 -bottom-12 w-28 h-28 rounded-full bg-emerald-500/10 blur-2xl" />
+          <div className="absolute -right-12 -top-12 w-28 h-28 rounded-full bg-amber-500/10 blur-2xl" />
+        </div>
 
         {/* Header */}
         <div className="text-center mb-6">
@@ -255,7 +264,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
             <p id="starting-defense-label" className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-2">
               Cổ Trùng Phòng Thủ (Cấp 1)
             </p>
-            <div role="group" aria-labelledby="starting-defense-label" className="grid grid-cols-5 gap-1.5">
+            <div role="group" aria-labelledby="starting-defense-label" className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
               {STARTING_DEFENSE_GUS.map((item) => {
                 const IconComponent = item.icon;
                 const isSelected = selectedDefenseGu === item.id;

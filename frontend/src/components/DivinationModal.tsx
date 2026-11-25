@@ -356,7 +356,7 @@ export const DivinationModal: React.FC = () => {
           id="divination-panel"
           role="tabpanel"
           aria-labelledby={`divination-${activeScoutingTab}-tab`}
-          className="flex-1 space-y-5 overflow-y-auto overscroll-contain bg-[radial-gradient(ellipse_at_50%_-20%,rgba(125,82,30,0.1),transparent_65%)] p-3 text-sm sm:p-4 md:p-6"
+          className="flex-1 min-h-0 space-y-5 overflow-y-auto overscroll-contain bg-[radial-gradient(ellipse_at_50%_-20%,rgba(125,82,30,0.1),transparent_65%)] p-3 text-sm sm:p-4 md:p-6"
         >
           {/* TAB 1: PLAYER DIVINATION */}
           {activeScoutingTab === "player" && (
@@ -723,7 +723,7 @@ export const DivinationModal: React.FC = () => {
                       </div>
 
                       {/* Multi-Domain Breakdown Chips */}
-                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center text-xs">
                         <div className="rounded-lg border border-amber-500/20 bg-neutral-900/70 p-2">
                           <div className="flex items-center justify-center gap-1 text-amber-400 mb-0.5">
                             <User className="h-3.5 w-3.5" />

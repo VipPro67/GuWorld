@@ -505,11 +505,6 @@ html {
     font-size: 15px;
   }
 
-  button {
-    min-width: 44px;
-    min-height: 44px;
-  }
-
   :where(h1, h2, h3, h4, p, label, td, th) {
     overflow-wrap: anywhere;
   }

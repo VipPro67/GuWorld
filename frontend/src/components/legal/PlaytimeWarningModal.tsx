@@ -18,11 +18,11 @@ export const PlaytimeWarningModal: React.FC<PlaytimeWarningModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onDismiss}
     >
       <div
-        className="relative w-full max-w-md bg-[#111827] border-2 border-red-600/70 rounded-2xl shadow-2xl shadow-red-950/50 text-zinc-200 overflow-hidden"
+        className="relative w-full max-w-md max-h-[90dvh] flex flex-col bg-[#111827] border-2 border-red-600/70 rounded-2xl shadow-2xl shadow-red-950/50 text-zinc-200 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -39,7 +39,7 @@ export const PlaytimeWarningModal: React.FC<PlaytimeWarningModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-4 text-xs sm:text-sm text-zinc-300 leading-relaxed">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 text-xs sm:text-sm text-zinc-300 leading-relaxed">
           <div className="flex items-center gap-3 p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl">
             <Clock className="w-5 h-5 text-amber-400 shrink-0" />
             <div>
@@ -60,7 +60,7 @@ export const PlaytimeWarningModal: React.FC<PlaytimeWarningModalProps> = ({
         </div>
 
         {/* Footer Action */}
-        <div className="px-6 py-3.5 bg-zinc-950/80 border-t border-zinc-800/80 flex items-center justify-between gap-3">
+        <div className="shrink-0 px-4 py-3 sm:px-6 sm:py-3.5 bg-zinc-950/80 border-t border-zinc-800/80 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
             <Heart className="w-3.5 h-3.5 text-rose-500" />
             <span>Bảo vệ sức khỏe đạo hữu</span>

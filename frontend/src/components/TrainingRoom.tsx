@@ -52,7 +52,7 @@ export const TrainingRoom: React.FC<TrainingRoomProps> = ({ onClose }) => {
 
   return (
     <div className={active ? "pointer-events-none absolute inset-0 z-50 flex items-start justify-end p-4" : "absolute inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/75 backdrop-blur-sm md:p-4"}>
-      <section className={`pointer-events-auto border border-[#a88952]/60 bg-[#150f0bf2] p-5 text-[#f4e8cb] shadow-2xl ${active ? "w-full max-w-sm rounded-2xl" : "h-full w-full md:h-auto md:max-h-[90dvh] md:max-w-xl md:rounded-2xl"}`}>
+      <section className={`pointer-events-auto border border-[#a88952]/60 bg-[#150f0bf2] p-5 text-[#f4e8cb] shadow-2xl ${active ? "w-full max-w-sm rounded-2xl" : "h-full w-full overflow-y-auto overscroll-contain md:h-auto md:max-h-[90dvh] md:max-w-xl md:rounded-2xl"}`}>
         <header className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Swords className="h-5 w-5 text-amber-300" />

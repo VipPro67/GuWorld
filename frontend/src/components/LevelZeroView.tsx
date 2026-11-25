@@ -115,9 +115,11 @@ export const LevelZeroView: React.FC<LevelZeroViewProps> = ({ onComplete }) => {
   };
 
   return (
-    <div className="glass-panel-gold rounded-3xl p-8 w-full max-w-lg relative overflow-hidden shadow-[0_0_50px_rgba(234,179,8,0.15)] my-8">
-      <div className="absolute -left-12 -bottom-12 w-28 h-28 rounded-full bg-emerald-500/10 blur-2xl pointer-events-none" />
-      <div className="absolute -right-12 -top-12 w-28 h-28 rounded-full bg-amber-500/10 blur-2xl pointer-events-none" />
+    <div className="glass-panel-gold relative flex min-h-full w-full flex-col justify-between overflow-x-hidden rounded-none p-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-[0_0_50px_rgba(234,179,8,0.15)] sm:min-h-0 sm:max-w-lg sm:rounded-3xl sm:p-8">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-12 -bottom-12 w-28 h-28 rounded-full bg-emerald-500/10 blur-2xl" />
+        <div className="absolute -right-12 -top-12 w-28 h-28 rounded-full bg-amber-500/10 blur-2xl" />
+      </div>
 
       <div className="text-center mb-5">
         <div className="inline-flex p-3 rounded-2xl bg-amber-950/40 border border-amber-500/20 text-amber-400 mb-3 animate-pulse">

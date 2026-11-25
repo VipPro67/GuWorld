@@ -472,7 +472,7 @@ export const GlobalChatOverlay: React.FC<{ placement?: "default" | "mmo" }> = ({
                   : "Nội bộ Bang Hội..."
               }
               maxLength={500}
-              className="flex-grow bg-[var(--bg-surface)] border border-[var(--border-default)] focus:border-[var(--border-hover)] rounded-xl px-3 py-2 text-xs md:text-sm text-[var(--text-primary)] placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
+              className="min-w-0 flex-grow bg-[var(--bg-surface)] border border-[var(--border-default)] focus:border-[var(--border-hover)] rounded-xl px-3 py-2 text-xs md:text-sm text-[var(--text-primary)] placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] font-mono"
             />
             <button
               type="submit"

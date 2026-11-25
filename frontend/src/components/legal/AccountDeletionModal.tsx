@@ -50,11 +50,11 @@ export const AccountDeletionModal: React.FC<AccountDeletionModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto overscroll-contain p-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-md bg-zinc-950 border border-red-900/60 rounded-2xl p-6 shadow-2xl shadow-red-950/40 text-zinc-100 flex flex-col gap-4"
+        className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain bg-zinc-950 border border-red-900/60 rounded-2xl p-4 sm:p-6 shadow-2xl shadow-red-950/40 text-zinc-100 flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

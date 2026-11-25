@@ -30,7 +30,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 overscroll-contain"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-2 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 overscroll-contain"
       onClick={onClose}
     >
       <div
@@ -255,7 +255,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-3.5 border-t border-zinc-800 bg-zinc-950/80">
+        <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 sm:gap-3 px-4 py-3 sm:px-6 sm:py-3.5 border-t border-zinc-800 bg-zinc-950/80">
           <span className="text-[11px] text-zinc-400">
             Phiên bản: 2024.1 — Hiệu lực từ 25/12/2024
           </span>

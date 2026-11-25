@@ -326,13 +326,13 @@ export const TradeRoomModal: React.FC = () => {
       size="6xl"
       showCloseButton={true}
     >
-      <div className="w-full max-w-screen-xl bg-zinc-950 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
+      <div className="w-full max-w-screen-xl bg-zinc-950 border border-zinc-900 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col">
 
         {/* Main Workspace split */}
-        <div className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-zinc-900">
+        <div className="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-zinc-900">
 
           {/* LEFT SIDE: Player (You) */}
-          <div className="p-6 flex flex-col gap-5 bg-zinc-950/40">
+          <div className="p-3 sm:p-6 flex flex-col gap-4 sm:gap-5 bg-zinc-950/40">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-serif font-bold text-zinc-300 flex items-center gap-1.5">
                 <User className="w-4 h-4 text-emerald-400" />
@@ -415,14 +415,14 @@ export const TradeRoomModal: React.FC = () => {
                         {getMatName(matId)} (x{qty})
                         {!myLocked && (
                           <div className="flex items-center gap-1 border-l border-zinc-800 pl-1.5 ml-1">
-                            <button type="button" aria-label={`Giảm số lượng ${getMatName(matId)}`} onClick={() => adjustMaterialQty(matId, -1)} className="flex min-h-11 min-w-11 items-center justify-center hover:text-amber-500 cursor-pointer">
-                              <Minus className="w-2.5 h-2.5" />
+                            <button type="button" aria-label={`Giảm số lượng ${getMatName(matId)}`} onClick={() => adjustMaterialQty(matId, -1)} className="flex h-7 w-7 items-center justify-center rounded hover:text-amber-500 cursor-pointer">
+                              <Minus className="w-3 h-3" />
                             </button>
-                            <button type="button" aria-label={`Tăng số lượng ${getMatName(matId)}`} onClick={() => adjustMaterialQty(matId, 1)} className="flex min-h-11 min-w-11 items-center justify-center hover:text-amber-500 cursor-pointer">
-                              <Plus className="w-2.5 h-2.5" />
+                            <button type="button" aria-label={`Tăng số lượng ${getMatName(matId)}`} onClick={() => adjustMaterialQty(matId, 1)} className="flex h-7 w-7 items-center justify-center rounded hover:text-amber-500 cursor-pointer">
+                              <Plus className="w-3 h-3" />
                             </button>
-                            <button type="button" aria-label={`Bỏ ${getMatName(matId)} khỏi đề nghị`} onClick={() => removeMaterial(matId)} className="flex min-h-11 min-w-11 items-center justify-center hover:text-red-400 cursor-pointer pl-1 text-red-500/80">
-                              <Trash2 className="w-2.5 h-2.5" />
+                            <button type="button" aria-label={`Bỏ ${getMatName(matId)} khỏi đề nghị`} onClick={() => removeMaterial(matId)} className="flex h-7 w-7 items-center justify-center rounded hover:text-red-400 cursor-pointer text-red-500/80">
+                              <Trash2 className="w-3 h-3" />
                             </button>
                           </div>
                         )}
@@ -442,7 +442,7 @@ export const TradeRoomModal: React.FC = () => {
                         <ScrollText className="h-4 w-4 shrink-0" />
                         {getRecipeName(recipeId)} ({rate.toFixed(0)}%)
                         {!myLocked && (
-                          <button type="button" aria-label={`Bỏ ${getRecipeName(recipeId)} khỏi đề nghị`} onClick={() => removeRecipe(recipeId)} className="ml-1 flex min-h-11 min-w-11 items-center justify-center hover:text-red-400 cursor-pointer">
+                          <button type="button" aria-label={`Bỏ ${getRecipeName(recipeId)} khỏi đề nghị`} onClick={() => removeRecipe(recipeId)} className="ml-1 flex h-7 w-7 items-center justify-center rounded hover:text-red-400 cursor-pointer">
                             <X className="w-3 h-3" />
                           </button>
                         )}
@@ -492,10 +492,10 @@ export const TradeRoomModal: React.FC = () => {
               />
             )}
               {/* Selectors tabs */}
-              <div className="flex border-b border-zinc-900 text-xs font-mono bg-zinc-950">
+              <div className="flex overflow-x-auto whitespace-nowrap border-b border-zinc-900 text-xs font-mono bg-zinc-950">
                 <button
                   onClick={() => { setSearchTerm(""); setActiveTab("stones"); }}
-                  className={`flex-1 py-2.5 border-b-2 font-bold cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
+                  className={`flex-1 shrink-0 px-2.5 py-2.5 border-b-2 font-bold cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                     activeTab === "stones"
                       ? "text-amber-400 border-amber-500/40 bg-amber-950/5"
                       : "text-zinc-500 border-transparent hover:text-zinc-300"
@@ -505,7 +505,7 @@ export const TradeRoomModal: React.FC = () => {
                 </button>
                 <button
                   onClick={() => { setSearchTerm(""); setActiveTab("gus"); }}
-                  className={`flex-1 py-2.5 border-b-2 font-bold cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
+                  className={`flex-1 shrink-0 px-2.5 py-2.5 border-b-2 font-bold cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                     activeTab === "gus"
                       ? "text-emerald-400 border-emerald-500/40 bg-emerald-950/5"
                       : "text-zinc-500 border-transparent hover:text-zinc-300"
@@ -515,7 +515,7 @@ export const TradeRoomModal: React.FC = () => {
                 </button>
                 <button
                   onClick={() => { setSearchTerm(""); setActiveTab("materials"); }}
-                  className={`flex-1 py-2.5 border-b-2 font-bold cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
+                  className={`flex-1 shrink-0 px-2.5 py-2.5 border-b-2 font-bold cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                     activeTab === "materials"
                       ? "text-violet-400 border-violet-500/40 bg-violet-950/5"
                       : "text-zinc-500 border-transparent hover:text-zinc-300"
@@ -525,7 +525,7 @@ export const TradeRoomModal: React.FC = () => {
                 </button>
                 <button
                   onClick={() => { setSearchTerm(""); setActiveTab("recipes"); }}
-                  className={`flex-1 py-2.5 border-b-2 font-bold cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
+                  className={`flex-1 shrink-0 px-2.5 py-2.5 border-b-2 font-bold cursor-pointer transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${
                     activeTab === "recipes"
                       ? "text-pink-400 border-pink-500/40 bg-pink-950/5"
                       : "text-zinc-500 border-transparent hover:text-zinc-300"
@@ -1130,7 +1130,7 @@ export const TradeRoomModal: React.FC = () => {
         </div>
 
         {/* Footer actions bar */}
-        <div className="px-6 py-5 border-t border-zinc-900 bg-zinc-950 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+        <div className="px-4 py-4 sm:px-6 sm:py-5 border-t border-zinc-900 bg-zinc-950 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
           <div className="text-[10px] font-mono text-zinc-500 leading-tight">
             <span>Thực trạng liên kết: </span>
             {myLocked && oppLocked ? (
@@ -1140,7 +1140,7 @@ export const TradeRoomModal: React.FC = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Lock / Unlock Offer Button */}
             {!myLocked ? (
               <button

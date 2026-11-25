@@ -194,7 +194,7 @@ export const GameModal = forwardRef<HTMLDivElement, GameModalProps>(
               )}
             </div>
           )}
-          <div className="flex-1 overflow-y-auto overscroll-contain p-5">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5">
             {children}
           </div>
           {footer && (
