@@ -370,8 +370,7 @@ func JoinSect(c *gin.Context) {
 	defer tx.Rollback()
 
 	// Check if already in a sect
-	var existingSectID string
-	err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&existingSectID)
+	existingSectID, err := LoadSectID(tx, playerID)
 	if err == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đã gia nhập tông môn \"" + existingSectID + "\" rồi!"})
 		return

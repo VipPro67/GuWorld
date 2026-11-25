@@ -239,11 +239,12 @@ func StockSectVault(c *gin.Context) {
 
 	// Fetch caller's sect and rank
 	var sectID, callerRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	membership, err := LoadSectMembership(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	sectID, callerRank = membership.SectID, membership.Rank
 
 	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão hoặc Chưởng Môn mới có quyền mua thêm vật phẩm cho bảo khố!"})
@@ -435,11 +436,12 @@ func DestroySectVaultItem(c *gin.Context) {
 	defer tx.Rollback()
 
 	var sectID, callerRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	membership, err := LoadSectMembership(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	sectID, callerRank = membership.SectID, membership.Rank
 	if !canDestroyVaultItem(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ Chưởng Môn hoặc Hộ Pháp mới có quyền tiêu huỷ vật phẩm trong bảo khố!"})
 		return
@@ -629,11 +631,12 @@ func StockSectVaultBulk(c *gin.Context) {
 	defer tx.Rollback()
 
 	var sectID, callerRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	membership, err := LoadSectMembership(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	sectID, callerRank = membership.SectID, membership.Rank
 
 	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão hoặc Chưởng Môn mới có quyền mua thêm vật phẩm cho bảo khố!"})

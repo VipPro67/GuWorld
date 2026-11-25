@@ -30,29 +30,32 @@ export const LegalModal: React.FC<LegalModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 overscroll-contain"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-3xl max-h-[85vh] flex flex-col bg-[#111827] border border-amber-900/50 rounded-2xl shadow-2xl shadow-black/80 text-zinc-200 overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Văn Bản Pháp Lý & Quy Chế GuWorld"
+        className="relative w-full max-w-3xl max-h-[90dvh] flex flex-col bg-[#111827] border border-amber-900/50 rounded-2xl shadow-2xl shadow-black/80 text-zinc-200 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-950/60">
-          <div className="flex items-center gap-2.5">
-            <Scale className="w-5 h-5 text-amber-500" />
-            <div>
-              <h2 className="text-base font-serif font-bold text-amber-400">
+        <div className="shrink-0 flex items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4 border-b border-zinc-800 bg-zinc-950/60">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Scale className="w-5 h-5 text-amber-500 shrink-0" />
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-serif font-bold text-amber-400 truncate">
                 Văn Bản Pháp Lý & Quy Chế GuWorld
               </h2>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-zinc-400 truncate">
                 Căn cứ Nghị định 147/2024/NĐ-CP & Nghị định 13/2023/NĐ-CP
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800/80 transition-colors cursor-pointer"
+            className="shrink-0 p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800/80 transition-colors cursor-pointer"
             aria-label="Đóng"
           >
             <X className="w-5 h-5" />
@@ -60,49 +63,49 @@ export const LegalModal: React.FC<LegalModalProps> = ({
         </div>
 
         {/* Tab Selection */}
-        <div className="flex border-b border-zinc-800 bg-zinc-900/40 px-6 pt-2 gap-2 overflow-x-auto">
+        <div className="shrink-0 grid grid-cols-3 sm:flex border-b border-zinc-800 bg-zinc-900/40 px-2 sm:px-6 pt-1.5 sm:pt-2 gap-1 sm:gap-2">
           <button
             type="button"
             onClick={() => setActiveTab("TOS")}
-            className={`pb-3 px-3 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+            className={`py-2 px-1.5 sm:pb-3 sm:px-3 text-[11px] sm:text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 border-b-2 transition-all text-center leading-tight cursor-pointer ${
               activeTab === "TOS"
                 ? "border-amber-500 text-amber-400"
                 : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
-            Điều Khoản Dịch Vụ
+            <FileText className="w-3.5 h-3.5 shrink-0" />
+            <span>Điều Khoản Dịch Vụ</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("PRIVACY")}
-            className={`pb-3 px-3 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+            className={`py-2 px-1.5 sm:pb-3 sm:px-3 text-[11px] sm:text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 border-b-2 transition-all text-center leading-tight cursor-pointer ${
               activeTab === "PRIVACY"
                 ? "border-amber-500 text-amber-400"
                 : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
-            <Shield className="w-3.5 h-3.5" />
-            Chính Sách Bảo Mật (NĐ 13)
+            <Shield className="w-3.5 h-3.5 shrink-0" />
+            <span>Bảo Mật (NĐ 13)</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("PAYMENT")}
-            className={`pb-3 px-3 text-xs font-semibold flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+            className={`py-2 px-1.5 sm:pb-3 sm:px-3 text-[11px] sm:text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 border-b-2 transition-all text-center leading-tight cursor-pointer ${
               activeTab === "PAYMENT"
                 ? "border-amber-500 text-amber-400"
                 : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
-            <Coins className="w-3.5 h-3.5" />
-            Quy Chế Nạp Tiền & Bản Quyền
+            <Coins className="w-3.5 h-3.5 shrink-0" />
+            <span>Nạp Tiền & Bản Quyền</span>
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 text-xs sm:text-sm text-zinc-300 space-y-4 leading-relaxed font-sans">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 text-xs sm:text-sm text-zinc-300 space-y-4 leading-relaxed font-sans">
           {activeTab === "TOS" && (
             <div className="space-y-4">
               <div className="p-3 bg-red-950/30 border-l-4 border-red-500 rounded-r-lg text-red-200 text-xs">
@@ -252,14 +255,14 @@ export const LegalModal: React.FC<LegalModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-t border-zinc-800 bg-zinc-950/80">
+        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-3.5 border-t border-zinc-800 bg-zinc-950/80">
           <span className="text-[11px] text-zinc-400">
             Phiên bản: 2024.1 — Hiệu lực từ 25/12/2024
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 text-zinc-950 font-serif font-bold text-xs hover:from-amber-500 hover:to-yellow-500 transition-all cursor-pointer shadow-md"
+            className="shrink-0 whitespace-nowrap px-4 py-2 sm:px-5 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 text-zinc-950 font-serif font-bold text-xs hover:from-amber-500 hover:to-yellow-500 transition-all cursor-pointer shadow-md"
           >
             Ta Đã Hiểu & Đóng
           </button>

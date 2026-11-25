@@ -267,11 +267,12 @@ func DefendSect(c *gin.Context) {
 	defer tx.Rollback()
 
 	var sectID, callerRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	membership, err := LoadSectMembership(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	sectID, callerRank = membership.SectID, membership.Rank
 
 	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão/Hộ Pháp/Chưởng Môn mới có quyền bố trí phòng thủ!"})
@@ -432,11 +433,12 @@ func UndefendSect(c *gin.Context) {
 	}
 
 	var sectID, callerRank string
-	err = db.DB.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	membership, err := LoadSectMembership(db.DB, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	sectID, callerRank = membership.SectID, membership.Rank
 	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão/Hộ Pháp/Chưởng Môn mới có quyền điều động phòng thủ!"})
 		return
@@ -476,13 +478,12 @@ func ToggleDefendSect(c *gin.Context) {
 		return
 	}
 
-	var sectID string
-	var isDefending bool
-	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id, is_defending FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &isDefending)
+	membership, err := LoadSectMembershipContext(c.Request.Context(), db.DB, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	sectID, isDefending := membership.SectID, membership.IsDefending
 
 	// If turning ON, check player location == sect location
 	if !isDefending {
@@ -572,8 +573,7 @@ func AttackSect(c *gin.Context) {
 	defer tx.Rollback()
 
 	// Check attacker sect membership (optional: lone wolves / rogue cultivators can attack)
-	var mySectID string
-	_ = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&mySectID)
+	mySectID, _ := LoadSectID(tx, playerID)
 
 	if mySectID != "" && mySectID == req.TargetSectID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể đánh tông môn của chính mình!"})
@@ -824,8 +824,7 @@ func ApplySectWarVictory(tx *sql.Tx, player *models.Player, combat *sectWarSettl
 		}
 	}
 
-	var mySectID string
-	_ = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, player.ID).Scan(&mySectID)
+	mySectID, _ := LoadSectID(tx, player.ID)
 
 	var targetFunds int64
 	var targetBuildings []byte

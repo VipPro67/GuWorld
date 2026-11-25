@@ -119,7 +119,9 @@ func GetPlayerProfile(c *gin.Context) {
 		return
 	}
 
-	_ = db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id::text FROM sect_members WHERE player_id = $1`, viewerID).Scan(&viewerSectID)
+	if m, mErr := LoadSectMembershipContext(c.Request.Context(), db.DB, viewerID); mErr == nil {
+		viewerSectID = sql.NullString{String: m.SectID, Valid: true}
+	}
 
 	// 2. Fetch target details and target's sect name
 	var target models.Player

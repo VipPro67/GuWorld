@@ -928,20 +928,25 @@ func (r *combatActionRunner) runOne(actor *CombatantAuto, a *SimAction, isAlly b
 		}
 
 		costMsg := ""
+		settlement := &SettlementEffect{Code: chosenCost}
 		if chosenCost == "aptitude_10" {
 			costMsg = "Trừ 10% Tư chất gốc vĩnh viễn!"
+			settlement.Amount = 10
 		} else if chosenCost == "lifespan_5" {
 			costMsg = "Trừ 5 năm tuổi thọ vĩnh viễn!"
+			settlement.Amount = 5
 		} else if chosenCost == "luck_50" {
 			costMsg = "Trừ 50% Nguyên Thạch hiện tại!"
+			settlement.Amount = 50
 		}
 
 		(*r.turnLogs) = append((*r.turnLogs), CombatLog{
-			Turn:      r.turn,
-			ActorId:   actor.ID,
-			ActorName: actor.Name,
-			Action:    "CHAOS_GAMBLE",
-			Detail:    fmt.Sprintf("[%s] kích hoạt Thần Thông Cổ Nhiệm Ý! %s Cái giá phải trả: %s", a.Name, effectMsg, costMsg),
+			Turn:       r.turn,
+			ActorId:    actor.ID,
+			ActorName:  actor.Name,
+			Action:     "CHAOS_GAMBLE",
+			Detail:     fmt.Sprintf("[%s] kích hoạt Thần Thông Cổ Nhiệm Ý! %s Cái giá phải trả: %s", a.Name, effectMsg, costMsg),
+			Settlement: settlement,
 		})
 
 		if chosenEffect == "crit_500" {
@@ -3772,6 +3777,7 @@ func (r *combatActionRunner) runOne(actor *CombatantAuto, a *SimAction, isAlly b
 		var resultLogs []CombatLog
 		var preservedLogs []CombatLog
 		var extraBreakdown *DamageBreakdown
+		var foldedSettlement *SettlementEffect
 
 		for i := range logs {
 			log := &logs[i]
@@ -3794,11 +3800,22 @@ func (r *combatActionRunner) runOne(actor *CombatantAuto, a *SimAction, isAlly b
 					// logs folded into the consolidated entry.
 					extraBreakdown = log.Breakdown
 				}
+				// Folded logs disappear, so carry their typed post-combat
+				// settlement onto the surviving action entry; otherwise a
+				// Love Gu cost would be lost with the log it came from.
+				// Passives are logged before the "used [X]" entry, so this
+				// cannot attach directly here.
+				if log.Settlement != nil && foldedSettlement == nil {
+					foldedSettlement = log.Settlement
+				}
 				resultLogs = append(resultLogs, *log)
 			}
 		}
 
 		if useLog != nil {
+			if useLog.Settlement == nil {
+				useLog.Settlement = foldedSettlement
+			}
 			if useLog.Breakdown == nil {
 				useLog.Breakdown = extraBreakdown
 			} else if extraBreakdown != nil {

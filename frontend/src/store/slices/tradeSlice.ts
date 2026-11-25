@@ -19,11 +19,10 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   activeTrade: null,
 
   fetchActiveTrade: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/active`);
-      if (response.status === 401) { logout(); return; }
       if (!response.ok) return;
       const data = await response.json();
       set({ activeTrade: data.trade });
@@ -34,7 +33,7 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   initiateTrade: async (receiverUsername, source = "chat") => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     set({ error: null });
     try {
@@ -43,7 +42,6 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ receiver_username: receiverUsername, source }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gửi yêu cầu giao dịch thất bại");
       get().addLog(data.message || "Yêu cầu giao dịch đã được gửi!");
@@ -62,11 +60,10 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   acceptTrade: async (tradeId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/accept/${tradeId}`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Chấp nhận giao dịch thất bại");
       get().addLog(data.message || "Đã chấp nhận giao dịch!");
@@ -81,11 +78,10 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   declineTrade: async (tradeId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/decline/${tradeId}`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Từ chối giao dịch thất bại");
       get().addLog(data.message || "Đã từ chối giao dịch!");
@@ -99,11 +95,10 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   cancelTrade: async (tradeId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/cancel/${tradeId}`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy giao dịch thất bại");
       get().addLog(data.message || "Đã hủy giao dịch!");
@@ -118,7 +113,7 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   updateTradeOffer: async (tradeId, offer) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/offer/${tradeId}`, {
@@ -126,7 +121,6 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(offer),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cập nhật ưu đãi thất bại");
       await get().fetchActiveTrade();
@@ -139,11 +133,10 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   lockTrade: async (tradeId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/lock/${tradeId}`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khóa giao dịch thất bại");
       get().addLog("Đã khóa ưu đãi giao dịch!");
@@ -159,11 +152,10 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   unlockTrade: async (tradeId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/unlock/${tradeId}`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Mở khóa giao dịch thất bại");
       get().addLog("Đã mở khóa giao dịch để chỉnh sửa!");
@@ -179,11 +171,10 @@ export const createTradeSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   confirmTrade: async (tradeId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/trade/confirm/${tradeId}`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Xác nhận giao dịch thất bại");
 

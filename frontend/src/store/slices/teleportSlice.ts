@@ -234,11 +234,10 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   fetchMyTeleportArrays: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/teleport/mine`);
-      if (response.status === 401) { logout(); return; }
       if (!response.ok) return;
       const data: TeleportArray[] = await response.json();
       set({ myTeleportArrays: data });
@@ -248,12 +247,11 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   fetchTeleportDirectory: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       set({ teleportLoading: true });
       const response = await authFetch(`${BACKEND_URL}/api/teleport/directory`);
-      if (response.status === 401) { logout(); return; }
       if (!response.ok) return;
       const data: TeleportDirectoryData = await response.json();
       set({ teleportDirectory: data });
@@ -265,7 +263,7 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   buildTeleportArray: async (req) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:position")) return { success: false, message: "Đang bận" };
     set({ error: null });
     try {
@@ -274,7 +272,6 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(req),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bố trí trận pháp thất bại");
 
@@ -301,7 +298,7 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   travelTeleport: async (targetArrayId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:position")) return { success: false, message: "Đang bận" };
     set({ error: null });
     try {
@@ -310,7 +307,6 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ target_array_id: targetArrayId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Truyền tống thất bại");
 
@@ -342,7 +338,7 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   manageTeleportArray: async (req) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:position")) return false;
     set({ error: null });
     try {
@@ -351,7 +347,6 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(req),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cập nhật cấu hình thất bại");
 
@@ -371,7 +366,7 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   repairTeleportArray: async (arrayId, amount = 0) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:position")) return false;
     set({ error: null });
     try {
@@ -380,7 +375,6 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ array_id: arrayId, amount }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Sửa chữa thất bại");
 
@@ -407,7 +401,7 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   withdrawTeleportVault: async (arrayId, amount = 0) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:position")) return false;
     set({ error: null });
     try {
@@ -416,7 +410,6 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ array_id: arrayId, amount }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Rút tiền thất bại");
 
@@ -442,7 +435,7 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   dismantleTeleportArray: async (arrayId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:position")) return false;
     set({ error: null });
     try {
@@ -451,7 +444,6 @@ export const createTeleportSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ array_id: arrayId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thu hồi thất bại");
 

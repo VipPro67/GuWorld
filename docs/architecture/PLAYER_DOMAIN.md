@@ -25,7 +25,8 @@ Tài liệu này mô tả ranh giới sở hữu dữ liệu player để tránh
 2. Giữ các cập nhật liên quan trong cùng transaction khi có nhiều bản ghi cần đồng bộ.
 3. Tôn trọng compare-and-swap/revision và khóa hiện có; player state được cập nhật thường xuyên.
 4. Sau mutation, phát snapshot/event theo flow domain đang dùng để frontend không phải tự suy đoán trạng thái server.
-5. Thêm hoặc cập nhật test ở package sở hữu hành vi.
+5. Ghi trạng thái player qua Chuỗi Đột Biến Người Chơi: `MutatePlayer` khi handler tự sở hữu transaction, `MutatePlayerInTx` + `PublishPlayerMutation` sau commit khi transaction đã do luồng lớn hơn sở hữu. Không tự viết danh sách cột và tự tăng `version`/`state_revision` trong handler.
+6. Thêm hoặc cập nhật test ở package sở hữu hành vi.
 
 Player đổi vị trí phải đi qua `handlers/movement.go`, dùng chung kiểm tra quyền/đích, ghi vị trí và phát sự kiện. `world:pos` cập nhật marker lân cận; thay đổi tọa độ của ô map/drop/resource point và vòng đời actor quái/boss dùng World Change Feed, được lọc theo region/map/instance. Snapshot trả `epoch`/`revision`; client resync khi có gap hoặc reconnect. Không tự viết một nhánh cập nhật tọa độ riêng trong handler khác.
 

@@ -80,7 +80,6 @@ func TestValidateMovementState(t *testing.T) {
 		name       string
 		mutate     func(*models.Player)
 		spec       movementSpec
-		owned      bool
 		wantStatus int
 		wantCode   string
 	}{
@@ -116,7 +115,7 @@ func TestValidateMovementState(t *testing.T) {
 			if tc.mutate != nil {
 				tc.mutate(player)
 			}
-			err := validateMovementState(player, tc.spec, tc.owned)
+			err := validateMovementState(player, tc.spec)
 			if tc.wantStatus == 0 {
 				if err != nil {
 					t.Fatalf("validateMovementState = %v, want nil", err)

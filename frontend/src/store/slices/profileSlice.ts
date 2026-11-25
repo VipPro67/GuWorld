@@ -71,6 +71,8 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
 
     try {
       const response = await authFetch(`${BACKEND_URL}/api/auth/me`);
+      // authFetch already logged out; repeat the local reset so an in-flight
+      // session restore cannot leave a half-cleared player behind.
       if (response.status === 401) {
 		    get().setPlayerFromServer(null, { token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 });
         set((state: ApiResponseData) => ({ player: null, playerRevision: state.playerRevision + 1, manaSnapshot: null, token: null, notifications: [], notificationsLoaded: false, unreadNotifications: 0 }));
@@ -117,10 +119,6 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
 
       try {
         const response = await authFetch(`${BACKEND_URL}/api/auth/me`);
-        if (response.status === 401) {
-          logout();
-          return;
-        }
         if (!response.ok) throw new Error("Failed to refresh player summary");
 
         const player: Player = await response.json();
@@ -165,10 +163,6 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
       try {
         const response = await authFetch(`${BACKEND_URL}/api/player/status/${id}`);
 
-        if (response.status === 401) {
-          logout();
-          return;
-        }
 
         if (!response.ok) {
           throw new Error("Failed to fetch status");
@@ -213,6 +207,7 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
     const clientVersion = player.version ?? 0;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/status/${player.id}`);
+      // authFetch owns logout; the revision guard only avoids a redundant call.
       if (response.status === 401) {
         if (requestRevision === get().reconciliationRevision) get().logout();
         return;
@@ -259,10 +254,6 @@ export const createProfileSlice: StateCreator<ApiResponseData, ApiResponseData, 
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/profile/${encodeURIComponent(username)}`);
 
-      if (response.status === 401) {
-        logout();
-        return;
-      }
 
       if (!response.ok) {
         const data = await response.json();

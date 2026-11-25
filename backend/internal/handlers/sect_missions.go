@@ -223,7 +223,7 @@ func CompleteSectMission(c *gin.Context) {
 
 		// Add gathered materials to sect vault
 		var memberForVault SectMember
-		err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&memberForVault.SectID)
+		memberForVault.SectID, err = LoadSectID(tx, playerID)
 		if err == nil {
 			_, _ = tx.Exec(`
 				INSERT INTO sect_vault_materials (sect_id, item_id, quantity)
@@ -265,7 +265,7 @@ func CompleteSectMission(c *gin.Context) {
 
 		// Add donated Gu to sect vault
 		var memberForVault SectMember
-		err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&memberForVault.SectID)
+		memberForVault.SectID, err = LoadSectID(tx, playerID)
 		if err == nil {
 			itemInstID := donatedInstanceID
 			if itemInstID == "" {
@@ -496,11 +496,12 @@ func CreateCustomMission(c *gin.Context) {
 
 	// Fetch caller's sect and rank
 	var callerSectID, callerRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&callerSectID, &callerRank)
+	membership, err := LoadSectMembership(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	callerSectID, callerRank = membership.SectID, membership.Rank
 
 	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Trưởng Lão hoặc Chưởng Môn mới có quyền phân phát nhiệm vụ!"})

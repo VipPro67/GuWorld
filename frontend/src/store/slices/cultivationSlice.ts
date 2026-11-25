@@ -125,6 +125,8 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/recipes`);
+        // Session expiry is handled by authFetch; keep only the "loaded" flag so
+        // the recipes view stops retrying in a loop after logout.
         if (response.status === 401) {
           set({ recipes: [], recipesLoaded: true });
           return;
@@ -160,6 +162,7 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   fetchQuests: async () => {
     try {
       const response = await authFetch(`${BACKEND_URL}/api/quest`);
+      // authFetch owns logout; this branch only clears stale quest data.
       if (response.status === 401) {
         set({ quests: [] });
         return;
@@ -202,6 +205,8 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
         set({ regionsLoaded: true });
         return;
       }
+      // authFetch owns logout; keep the regions "loaded" flag so the map view
+      // does not retry the region list while the session is gone.
       if (response.status === 401) {
         if (!get().regionsLoaded) {
           set({ regions: [], regionsLoaded: true });
@@ -347,7 +352,6 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
     if (!token) return null;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension/session`, { method: "GET" });
-      if (response.status === 401) { throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể tải phiên Thăng Tiên.");
       set({ ascensionSession: data.session ?? null });
@@ -359,12 +363,11 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   shatterAperture: async () => {
-    const { player, token, logout } = get();
+    const { player, token } = get();
     if (!player || !token || !get().beginAction("player:cultivation")) return null;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension/shatter`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Trùng kích nát khiếu thất bại.");
       get().applyInventoryFromResponse(data);
@@ -381,7 +384,7 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   temperAscension: async (optionIndex) => {
-    const { player, token, logout } = get();
+    const { player, token } = get();
     if (!player || !token || !get().beginAction("player:cultivation")) return null;
     set({ error: null });
     try {
@@ -390,7 +393,6 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ option_index: optionIndex }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khảo nghiệm tâm tính thất bại.");
       get().applyInventoryFromResponse(data);
@@ -407,12 +409,11 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   engageAscensionCalamity: async () => {
-    const { player, token, logout } = get();
+    const { player, token } = get();
     if (!player || !token || !get().beginAction("player:cultivation")) return null;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/cultivate/ascension/calamity/engage`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể nghênh chiến Địa Tai.");
       get().addLog(data.message || "Địa Tai giáng lâm.");
@@ -436,7 +437,7 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   releaseAscensionGu: async (instanceIds) => {
-    const { player, token, logout } = get();
+    const { player, token } = get();
     if (!player || !token || !get().beginAction("player:cultivation")) return null;
     set({ error: null });
     try {
@@ -445,7 +446,6 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gu_instance_ids: instanceIds }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thả cổ thất bại.");
       get().applyInventoryFromResponse(data);
@@ -462,7 +462,7 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   completeQuest: async (questId) => {
-    const { player, token, logout } = get();
+    const { player, token } = get();
     if (!player || !token || !get().beginAction("player:cultivation")) return null;
     set({ error: null });
     try {
@@ -471,7 +471,6 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quest_id: questId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Không thể nhận thưởng nhiệm vụ."); }
       get().applyInventoryFromResponse(data);
@@ -486,7 +485,7 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   redeemGiftCode: async (code) => {
-    const { player, token, logout } = get();
+    const { player, token } = get();
     if (!player || !token || !get().beginAction("player:cultivation")) return null;
     set({ error: null });
     try {
@@ -495,7 +494,6 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Mã quà không hợp lệ."); }
       get().applyInventoryFromResponse(data);

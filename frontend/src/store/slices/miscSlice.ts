@@ -14,7 +14,7 @@ export const createMiscSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   auditLogsLoading: false,
 
   clearStress: async () => {
-    const { player, token, logout } = get();
+    const { player, token } = get();
     if (!player || !token || !get().beginAction("player:misc")) return null;
     set({ error: null });
     try {
@@ -24,10 +24,6 @@ export const createMiscSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         body: JSON.stringify({ player_id: player.id }),
       });
 
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tịnh hóa Không khiếu thất bại.");
 
@@ -45,7 +41,7 @@ export const createMiscSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   fetchAuditLogs: async (filters) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
 
     set({ auditLogsLoading: true });
@@ -65,7 +61,7 @@ export const createMiscSlice: StateCreator<ApiResponseData, ApiResponseData, Api
       }
 
       const response = await authFetch(url, { method: "GET" });
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       if (response.ok) {
         set({ auditLogs: data || [] });

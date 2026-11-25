@@ -204,7 +204,7 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   executeDivination: async (req: DivinationRequest) => {
-    const { token, logout, addToast, addLog } = get();
+    const { token, addToast, addLog } = get();
     if (!token) return null;
     set({ divinationLoading: true });
     try {
@@ -214,10 +214,6 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
         body: JSON.stringify(req),
       });
 
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
 
       const data = await response.json();
       if (!response.ok) {
@@ -251,7 +247,7 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   executeDivineGu: async (req: DivineGuRequest) => {
-    const { token, logout, addToast, addLog } = get();
+    const { token, addToast, addLog } = get();
     if (!token) return null;
     set({ guDivinationLoading: true });
     try {
@@ -261,10 +257,6 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
         body: JSON.stringify(req),
       });
 
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
 
       const data = await response.json();
       if (!response.ok) {
@@ -298,7 +290,7 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   applyTrackingMark: async (targetId: string, markType = "wisdom") => {
-    const { token, logout, addToast, addLog } = get();
+    const { token, addToast, addLog } = get();
     if (!token || !targetId) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/scouting/apply-mark`, {
@@ -307,10 +299,6 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
         body: JSON.stringify({ target_id: targetId, mark_type: markType }),
       });
 
-      if (response.status === 401) {
-        logout();
-        return false;
-      }
 
       const data = await response.json();
       if (!response.ok) {
@@ -329,14 +317,11 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   fetchTrackedTargets: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/scouting/tracked-targets`);
-      if (response.status === 401) {
-        logout();
-        return;
-      }
+      if (!response.ok) return;
       const data = await response.json();
       if (response.ok && data.tracked_targets) {
         set({ trackedTargets: data.tracked_targets });
@@ -347,7 +332,7 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   severClues: async () => {
-    const { token, logout, addToast, addLog } = get();
+    const { token, addToast, addLog } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/scouting/sever-clues`, {
@@ -356,10 +341,6 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
         body: JSON.stringify({}),
       });
 
-      if (response.status === 401) {
-        logout();
-        return false;
-      }
 
       const data = await response.json();
       if (!response.ok) {
@@ -378,7 +359,7 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   executeResonanceScan: async (targetPath = "", minRank = 0, scanRegion = "") => {
-    const { token, logout, addToast, addLog } = get();
+    const { token, addToast, addLog } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/scouting/resonance-scan`, {
@@ -391,10 +372,6 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
         }),
       });
 
-      if (response.status === 401) {
-        logout();
-        return false;
-      }
 
       const data = await response.json();
       if (!response.ok) {
@@ -420,7 +397,7 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   inspectLocalPlayer: async (targetId = "", targetUsername = "") => {
-    const { token, logout, addToast } = get();
+    const { token, addToast } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/scouting/inspect`, {
@@ -429,10 +406,6 @@ export const createScoutingSlice: StateCreator<ApiResponseData, ApiResponseData,
         body: JSON.stringify({ target_id: targetId, target_username: targetUsername }),
       });
 
-      if (response.status === 401) {
-        logout();
-        return false;
-      }
 
       const data = await response.json();
       if (!response.ok) {

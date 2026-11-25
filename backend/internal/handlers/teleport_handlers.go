@@ -148,15 +148,17 @@ func calculateBuildStats(player *models.Player, tpl models.TeleportTemplate) (su
 
 // Helper to query player's sect ID
 func getPlayerSectID(tx *sql.Tx, playerID uuid.UUID) *string {
-	var sID string
-	var err error
+	var (
+		sectID string
+		err    error
+	)
 	if tx != nil {
-		err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&sID)
+		sectID, err = LoadSectID(tx, playerID)
 	} else {
-		err = db.DB.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&sID)
+		sectID, err = LoadSectID(db.DB, playerID)
 	}
-	if err == nil && sID != "" {
-		return &sID
+	if err == nil && sectID != "" {
+		return &sectID
 	}
 	return nil
 }
@@ -942,9 +944,8 @@ func TravelTeleport(c *gin.Context) {
 		dest.SectID = &dSectID.String
 	}
 	if errMove := checkMovement(tx, &player, movementSpec{
-		kind:               movementTeleport,
-		targetRegion:       dest.RegionID,
-		realtimeAuthorized: realtimeTransfer,
+		kind:         movementTeleport,
+		targetRegion: dest.RegionID,
 	}); errMove != nil {
 		if respondMovementError(c, errMove) {
 			return
@@ -1072,12 +1073,11 @@ func TravelTeleport(c *gin.Context) {
 
 	// 7. Move the player and apply the regional wall debuff via authoritative spatial transition.
 	transition, errMove := ExecuteSpatialTransition(c.Request.Context(), tx, &player, movementSpec{
-		kind:               movementTeleport,
-		x:                  dest.X,
-		y:                  dest.Y,
-		hasTarget:          true,
-		targetRegion:       dest.RegionID,
-		realtimeAuthorized: realtimeTransfer,
+		kind:         movementTeleport,
+		x:            dest.X,
+		y:            dest.Y,
+		hasTarget:    true,
+		targetRegion: dest.RegionID,
 	}, publishPartyRealtimeEvent)
 	if errMove != nil {
 		if respondMovementError(c, errMove) {

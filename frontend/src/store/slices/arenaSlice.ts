@@ -71,11 +71,10 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   leaderboardLastUpdated: "",
 
   fetchArenaLeaderboard: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/arena/leaderboard`);
-      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set({
         arenaLeaderboard: Array.isArray(data.leaderboard) ? data.leaderboard : [],
@@ -130,7 +129,7 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   challengeArena: async (targetPlayerId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("arena")) return false;
     set({ error: null });
     try {
@@ -139,7 +138,6 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ target_player_id: targetPlayerId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khiêu chiến thất bại");
       if (data.active_combat) {
@@ -189,12 +187,11 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   fetchDeathArenaCurrent: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     set({ deathArenaLoading: true });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/current`);
-      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set((state: ApiResponseData) => {
         const nextT = data.tournament || null;
@@ -216,12 +213,11 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   registerDeathArena: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("arena")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/register`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Đăng ký thất bại");
       get().addToast(data.message || "Đăng ký thành công!", "success");
@@ -237,12 +233,11 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   unregisterDeathArena: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("arena")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/register`, { method: "DELETE" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy đăng ký thất bại");
       get().addToast(data.message || "Hủy đăng ký thành công!", "success");
@@ -258,11 +253,10 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   fetchDeathArenaBracket: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/bracket`);
-      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set((state: ApiResponseData) => {
         const nextT = data.tournament || null;
@@ -277,11 +271,10 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   fetchDeathArenaMyTeam: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/my-team`);
-      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set((state: ApiResponseData) => {
         const nextTeam = data.team || null;
@@ -296,11 +289,11 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   fetchDeathArenaMyMatches: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/matches`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ deathArenaMyMatches: data.matches || [] });
     } catch (err) {
@@ -310,11 +303,11 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   fetchDeathArenaRewards: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/rewards`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ deathArenaRewards: data.rewards || [] });
     } catch (err) {
@@ -324,11 +317,11 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   fetchDeathArenaHistory: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/history`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ deathArenaHistory: data.tournaments || [] });
     } catch (err) {
@@ -338,7 +331,7 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   claimDeathArenaReward: async (rewardId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("arena")) return false;
     set({ error: null });
     try {
@@ -347,7 +340,6 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reward_id: rewardId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nhận thưởng thất bại");
       get().addToast(data.message || "Nhận thưởng thành công!", "success");
@@ -364,11 +356,10 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   fetchDeathArenaMatchLog: async (matchId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return null;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/death-arena/matches/${matchId}/log`);
-      if (response.status === 401) { logout(); return null; }
       if (!response.ok) return null;
       return await response.json();
     } catch (err) {
@@ -378,12 +369,11 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   fetchLeaderboard: async (category) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     set({ leaderboardLoading: true, leaderboardCategory: category });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/leaderboard/${category}`);
-      if (response.status === 401) { logout(); return; }
       const data = await response.json();
       set({
         leaderboardEntries: Array.isArray(data.entries) ? data.entries : [],
@@ -398,11 +388,11 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   toggleLeaderboardVisibility: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/leaderboard/toggle`, { method: "POST" });
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ leaderboardShowOnLeaderboard: data.show_on_leaderboard });
       get().addLog(data.show_on_leaderboard ? "Đã tham gia bảng xếp hạng" : "Đã rút khỏi bảng xếp hạng");
@@ -413,11 +403,11 @@ export const createArenaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   fetchLeaderboardSettings: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/leaderboard/settings`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ leaderboardShowOnLeaderboard: data.show_on_leaderboard });
     } catch (err) {

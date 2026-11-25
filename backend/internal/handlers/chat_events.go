@@ -100,8 +100,7 @@ func resolveChatChannelKey(c *gin.Context, channel string) (string, bool) {
 		return chatChannelKey(channel, sql.NullString{}), true
 	}
 
-	var sectID string
-	err := db.DB.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID)
+	sectID, err := LoadSectID(db.DB, playerID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa gia nhập tông môn nào, không thể xem tin nhắn kênh tông môn!"})

@@ -29,7 +29,6 @@ export const createAchievementsSlice: StateCreator<ApiResponseData, ApiResponseD
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/daily-missions`);
-      if (response.status === 401) return;
       if (response.ok) {
         const data = await response.json();
         set({ dailyMissions: data.missions || [], dailyMissionsResetAt: data.reset_at || '' });
@@ -42,7 +41,7 @@ export const createAchievementsSlice: StateCreator<ApiResponseData, ApiResponseD
   },
 
   claimDailyMission: async (missionId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return null;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/daily-missions/claim`, {
@@ -50,7 +49,6 @@ export const createAchievementsSlice: StateCreator<ApiResponseData, ApiResponseD
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mission_id: missionId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nhận thưởng nhiệm vụ thất bại.");
       await Promise.all([get().fetchDailyMissions(), get().refreshPlayerSummary()]);
@@ -67,7 +65,6 @@ export const createAchievementsSlice: StateCreator<ApiResponseData, ApiResponseD
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/achievements`);
-      if (response.status === 401) return;
       if (response.ok) {
         const data = await response.json();
         set({ achievements: data.achievements || [], earnedAchievements: data.earned || [], selectedTitle: data.selected_title || '', selectedFrame: data.selected_frame || '' });
@@ -80,7 +77,7 @@ export const createAchievementsSlice: StateCreator<ApiResponseData, ApiResponseD
   },
 
   claimAchievement: async (achievementId) => {
-    const { player, token, logout } = get();
+    const { player, token } = get();
     if (!player || !token || !get().beginAction("achievements")) return null;
     set({ error: null });
     try {
@@ -89,7 +86,6 @@ export const createAchievementsSlice: StateCreator<ApiResponseData, ApiResponseD
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ achievement_id: achievementId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Nhận thưởng thất bại."); }
       get().applyInventoryFromResponse(data);
@@ -114,7 +110,6 @@ export const createAchievementsSlice: StateCreator<ApiResponseData, ApiResponseD
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, frame }),
       });
-      if (response.status === 401) return null;
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cập nhật thất bại.");
       set({ selectedTitle: title, selectedFrame: frame });

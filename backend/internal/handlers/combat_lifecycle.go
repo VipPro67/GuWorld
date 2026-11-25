@@ -121,5 +121,5 @@ func SettleCombatSession(tx *sql.Tx, player *models.Player, loadout *simulator.C
 	if loadout != nil {
 		guIDs = loadout.GuIds
 	}
-	return resolveCombatWithTerminalState(tx, player, loadout, guIDs, initialState, terminalState, terminalLogs)
+	return settleCombat(tx, player, loadout, guIDs, initialState, terminalState, terminalLogs)
 }

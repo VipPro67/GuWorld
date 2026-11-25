@@ -101,12 +101,12 @@ export const createMartialArenaSlice: StateCreator<ApiResponseData, ApiResponseD
   martialLoading: false,
 
   fetchMartialCurrent: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     set({ martialLoading: true });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/martial-arena/current`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ martialCurrent: Array.isArray(data.tournaments) ? data.tournaments : [] });
     } catch (err) {
@@ -118,11 +118,11 @@ export const createMartialArenaSlice: StateCreator<ApiResponseData, ApiResponseD
   },
 
   fetchMartialBracket: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/martial-arena/bracket`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ martialBracket: Array.isArray(data.tournaments) ? data.tournaments : [] });
     } catch (err) {
@@ -132,11 +132,11 @@ export const createMartialArenaSlice: StateCreator<ApiResponseData, ApiResponseD
   },
 
   fetchMartialMyMatches: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/martial-arena/matches`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ martialMyMatches: Array.isArray(data.matches) ? data.matches : [] });
     } catch (err) {
@@ -146,11 +146,11 @@ export const createMartialArenaSlice: StateCreator<ApiResponseData, ApiResponseD
   },
 
   fetchMartialRewards: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/martial-arena/rewards`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ martialRewards: Array.isArray(data.rewards) ? data.rewards : [] });
     } catch (err) {
@@ -160,11 +160,11 @@ export const createMartialArenaSlice: StateCreator<ApiResponseData, ApiResponseD
   },
 
   fetchMartialHistory: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/martial-arena/history`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ martialHistory: Array.isArray(data.tournaments) ? data.tournaments : [] });
     } catch (err) {
@@ -174,7 +174,7 @@ export const createMartialArenaSlice: StateCreator<ApiResponseData, ApiResponseD
   },
 
   claimMartialReward: async (rewardId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("arena")) return false;
     set({ error: null });
     try {
@@ -183,7 +183,6 @@ export const createMartialArenaSlice: StateCreator<ApiResponseData, ApiResponseD
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reward_id: rewardId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nhận thưởng thất bại");
       get().addToast(data.message || "Nhận thưởng thành công!", "success");
@@ -201,11 +200,10 @@ export const createMartialArenaSlice: StateCreator<ApiResponseData, ApiResponseD
   },
 
   fetchMartialMatchLog: async (matchId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return null;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/martial-arena/matches/${matchId}/log`);
-      if (response.status === 401) { logout(); return null; }
       if (!response.ok) return null;
       return await response.json();
     } catch (err) {

@@ -4,6 +4,7 @@ import { CombatReplayView, type CombatLogEntry, type StatProvenance } from "./Co
 import { FormattedText } from "./FormattedText";
 import { Num } from "./Num";
 import { formatNumber } from "@/lib/utils";
+import { combatLogKind } from "@/lib/combatLog";
 import { guSpecFor, useGameStore } from "@/store/useGameStore";
 
 // StatProvenanceRows renders one "base → final" stat row plus the itemized
@@ -424,7 +425,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
           {/* Log Entry List */}
           <div className="max-h-[60vh] overflow-y-auto space-y-1.5 p-3 rounded-xl bg-black/60 border border-zinc-800 font-mono text-xs">
             {filteredLogs.map((entry, idx) => {
-              const isTurnStart = entry.action === "TURN_START";
+              const isTurnStart = combatLogKind(entry) === "turnStart";
               if (isTurnStart) {
                 return (
                   <div key={idx} className="flex items-center gap-2 py-2">
@@ -487,7 +488,7 @@ export const CombatReportView: React.FC<CombatReportViewProps> = ({
                       <FormattedText
                         text={entry.detail || `${entry.action} lên mục tiêu`}
                       />
-                      {entry.damage && entry.damage > 0 && !entry.detail?.includes("gây ") && !entry.breakdown?.healing_base && !entry.breakdown?.shield_base && entry.action !== "SHIELD_GAIN" ? (
+                      {entry.damage && entry.damage > 0 && !entry.detail?.includes("gây ") && !entry.breakdown?.healing_base && !entry.breakdown?.shield_base && combatLogKind(entry) !== "shieldGain" ? (
                         <span
                           className={`ml-1.5 font-bold ${
                             entry.is_crit ? "text-amber-400" : "text-rose-400"

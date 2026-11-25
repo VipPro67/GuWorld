@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
-	"github.com/vippro67/GuWorld/backend/internal/middleware"
 	"github.com/vippro67/GuWorld/backend/internal/models"
 )
 
@@ -82,11 +81,6 @@ type movementSpec struct {
 	x, y         int
 	hasTarget    bool
 	targetRegion string
-	// realtimeAuthorized is set only after a handler suspended the live zone
-	// session for this exact mutation (currently the teleport array handoff).
-	// Every other guard still runs; only the realtime-ownership refusal is
-	// skipped because the caller already coordinated with the lease.
-	realtimeAuthorized bool
 	// allowBorderWalk permits small negative or boundary coordinates (within 10 cells)
 	// when walking on the world map to trigger seamless edge transitions.
 	allowBorderWalk bool
@@ -124,7 +118,7 @@ func validateMovementTarget(spec movementSpec) *movementError {
 
 // validateMovementState is the database-free half of the chain. Kept pure so
 // the precedence and messages are testable without a transaction.
-func validateMovementState(player *models.Player, spec movementSpec, _ bool) *movementError {
+func validateMovementState(player *models.Player, spec movementSpec) *movementError {
 	if player.ActiveCombat != nil {
 		return &movementError{status: http.StatusConflict, message: "Không thể di chuyển khi đang chiến đấu."}
 	}
@@ -142,9 +136,7 @@ func validateMovementState(player *models.Player, spec movementSpec, _ bool) *mo
 
 // checkMovement runs the full guard for a player-initiated movement.
 func checkMovement(tx *sql.Tx, player *models.Player, spec movementSpec) error {
-	authorizedHandoff := spec.realtimeAuthorized && spec.kind == movementTeleport
-	ownedByRealtime := middleware.IsRealtimeWorldOwned(player.ID) && !authorizedHandoff
-	if err := validateMovementState(player, spec, ownedByRealtime); err != nil {
+	if err := validateMovementState(player, spec); err != nil {
 		return err
 	}
 	policy, known := movementPolicies[spec.kind]
@@ -192,13 +184,6 @@ func actionStatus(policy movementPolicy) int {
 		return policy.actionStatus
 	}
 	return http.StatusForbidden
-}
-
-// rejectRealtimeOwned stops a legacy movement mutation before it opens a
-// transaction, so an MMO-owned character is not even charged mana by the
-// legacy path. The full guard still repeats the check at the seam.
-func rejectRealtimeOwned(c *gin.Context, playerID uuid.UUID) bool {
-	return false
 }
 
 // movementErrorPayload renders a guard violation without needing a gin context,

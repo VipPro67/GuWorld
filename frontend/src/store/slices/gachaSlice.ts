@@ -16,7 +16,6 @@ export const createGachaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/gacha/pools`);
-      if (response.status === 401) return;
       if (response.ok) {
         const data = await response.json();
         set({ gachaPools: data.pools || [] });
@@ -29,7 +28,7 @@ export const createGachaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   openGacha: async (poolId, quantity = 1) => {
-    const { player, token, logout } = get();
+    const { player, token } = get();
     if (!player || !token || !get().beginAction("player:inventory")) return null;
     set({ error: null });
     try {
@@ -38,7 +37,6 @@ export const createGachaSlice: StateCreator<ApiResponseData, ApiResponseData, Ap
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pool_id: poolId, quantity }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       // Rate limit: treat as a cooldown signal, not an error. Stay quiet so
       // spam-clicking never floods the log/toast with 429 noise.
       if (response.status === 429) {

@@ -426,8 +426,7 @@ func AdminAddToSect(c *gin.Context) {
 	}
 
 	// Check if already in a sect
-	var existingSectID string
-	err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerUUID).Scan(&existingSectID)
+	existingSectID, err := LoadSectID(tx, playerUUID)
 	if err == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Người chơi đã ở trong tông môn " + existingSectID})
 		return

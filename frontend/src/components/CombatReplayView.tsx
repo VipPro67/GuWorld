@@ -8,6 +8,23 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { formatNumber } from "@/lib/utils";
+import {
+  addsShieldKind,
+  autoUsageCount,
+  combatLogKind,
+  fallbackActionLabel,
+  isActionLog,
+  isHealKind,
+  isLossLog,
+  isRewardKind,
+  isSkillCastKind,
+  reducesTargetHp,
+  showsFloatingDamage,
+  showsInlineDamage,
+  skillNameFromDetail,
+  turnNumberFromLog,
+  type CombatLogKind,
+} from "@/lib/combatLog";
 import { Num } from "./Num";
 import { FormattedText } from "./FormattedText";
 import { translateMastery, masteryKeyForPoints } from "@/lib/translate";
@@ -203,12 +220,7 @@ type ReplayAction =
   | { type: "SET_TURN"; turn: number }
   | { type: "UPDATE_STATES"; combatants: Record<string, CombatantState> };
 
-const TURN_REGEX = /=== LƯỢT (\d+) ===/;
-const NON_ACTION_LOGS = new Set(["AWAIT_COMMAND", "BATTLE_END", "BATTLE_START", "TURN_END", "TURN_START"]);
-
 let nextEventId = 0;
-
-const isCombatActionLog = (log: CombatLogEntry) => !NON_ACTION_LOGS.has(log.action);
 
 function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
   switch (action.type) {
@@ -227,16 +239,17 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
 
     case "ADVANCE": {
       const log = action.log;
+      const kind = combatLogKind(log);
       const next = { ...state.combatantStates };
 
       if (log.snapshot) {
-        for (const [kind, snapshotCombatants] of [["ally", log.snapshot.allies], ["enemy", log.snapshot.enemies]] as const) {
+        for (const [side, snapshotCombatants] of [["ally", log.snapshot.allies], ["enemy", log.snapshot.enemies]] as const) {
           for (const snapshot of snapshotCombatants || []) {
             const current = next[snapshot.id];
             if (!current) continue;
             next[snapshot.id] = {
               ...current,
-              kind,
+              kind: side,
               hp: snapshot.hp,
               maxHp: snapshot.max_hp,
               mp: snapshot.mana,
@@ -254,25 +267,25 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
       // Update combatant states
       if (log.actor_id && next[log.actor_id]) {
         const actor = { ...next[log.actor_id] };
-        if (["HEAL", "ITEM_HEAL", "LIFESTEAL"].includes(log.action)) {
+        if (isHealKind(kind)) {
           actor.hp = Math.min(actor.maxHp, actor.hp + (log.damage || 0));
         }
-        if (log.action === "SHIELD_GAIN" || log.action === "PRE_COMBAT_BARRIER") {
+        if (addsShieldKind(kind)) {
           actor.shield += log.damage || 0;
         }
-        if (log.action === "SHIELD_BREAK") {
+        if (kind === "shieldBreak") {
           actor.shield = 0;
         }
-        if (log.action === "SHIELD_ABSORB") {
+        if (kind === "shieldAbsorb") {
           actor.shield = Math.max(0, actor.shield - (log.damage || 0));
         }
-        if (log.action === "DIED") {
+        if (kind === "died") {
           actor.hp = 0;
         }
-        if (log.action === "MANA_COST") {
+        if (kind === "manaCost") {
           actor.mp = Math.max(0, actor.mp - (log.damage || 0));
         }
-        if (log.action === "MANA_RESTORE") {
+        if (kind === "manaRestore") {
           actor.mp = Math.min(actor.maxMp, actor.mp + (log.damage || 0));
         }
         next[log.actor_id] = actor;
@@ -280,16 +293,16 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
 
       if (log.target_id && next[log.target_id]) {
         const target = { ...next[log.target_id] };
-        if (["DAMAGE", "BASIC_ATTACK", "GU_SKILL", "KILLER_MOVE", "PHANTOM_ATTACK", "THORNS", "DOT_TICK"].includes(log.action)) {
+        if (reducesTargetHp(kind)) {
           target.hp = Math.max(0, target.hp - (log.damage || 0));
         }
-        if (log.action === "SHIELD_ABSORB") {
+        if (kind === "shieldAbsorb") {
           target.shield = Math.max(0, target.shield - (log.damage || 0));
         }
-        if (log.action === "SHIELD_BREAK") {
+        if (kind === "shieldBreak") {
           target.shield = 0;
         }
-        if (log.action === "DIED") {
+        if (kind === "died") {
           target.hp = 0;
         }
         next[log.target_id] = target;
@@ -297,14 +310,14 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
 
       // Build events
       const events: FloatingEvent[] = [];
-      if (log.action === "SHIELD_ABSORB" && log.damage) {
+      if (kind === "shieldAbsorb" && log.damage) {
         events.push({
           id: ++nextEventId, actorId: log.actor_id, targetId: log.target_id,
           text: `🛡 -${formatNumber(log.damage)}`,
           type: "shield",
         });
       }
-      if (log.action === "DAMAGE_APPLIED") {
+      if (kind === "damageApplied") {
         if (log.shield_absorbed && log.shield_absorbed > 0) {
           events.push({
             id: ++nextEventId, actorId: log.actor_id, targetId: log.target_id,
@@ -326,54 +339,47 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
           });
         }
       }
-      if (log.damage && ["DAMAGE", "DOT_TICK", "THORNS", "PHANTOM_ATTACK", "SHIELD_PIERCE", "SHIELD_BYPASS_ATTACK"].includes(log.action)) {
+      if (log.damage && showsFloatingDamage(kind)) {
         events.push({
           id: ++nextEventId, actorId: log.actor_id, targetId: log.target_id,
           text: `-${formatNumber(log.damage)}`,
           type: log.is_crit ? "crit" : "damage",
         });
       }
-      if (["HEAL", "ITEM_HEAL", "LIFESTEAL"].includes(log.action)) {
+      if (isHealKind(kind)) {
         events.push({
           id: ++nextEventId, actorId: log.actor_id,
           text: `+${formatNumber(log.damage || 0)}`,
           type: "heal",
         });
       }
-      if (log.action === "SHIELD_GAIN") {
+      if (kind === "shieldGain") {
         events.push({
           id: ++nextEventId, actorId: log.actor_id,
           text: `🛡 +${formatNumber(log.damage || 0)}`,
           type: "shield",
         });
       }
-      if (log.action === "DIED") {
+      if (kind === "died") {
         events.push({
           id: ++nextEventId, actorId: log.target_id || log.actor_id,
           text: "†",
           type: "death",
         });
       }
-      if (["GU_SKILL", "KILLER_MOVE", "BASIC_ATTACK"].includes(log.action)) {
-        const detail = log.detail || "";
-        const idxDung = detail.indexOf("dùng [");
-        const idxSuDung = detail.indexOf("sử dụng");
-        const idx = idxDung >= 0 ? idxDung : idxSuDung;
-        if (idx >= 0) {
-          const afterKeyword = detail.substring(idx).replace(/^.*?\[([^\]]+)\].*$/, "[$1]");
-          const bracketMatch = detail.substring(idx).match(/\[([^\]]+)\]/);
-          if (bracketMatch) {
-            events.push({
-              id: ++nextEventId, actorId: log.actor_id,
-              text: bracketMatch[1],
-              type: "skill",
-            });
-          }
+      if (isSkillCastKind(kind)) {
+        const skillName = skillNameFromDetail(log.detail);
+        if (skillName) {
+          events.push({
+            id: ++nextEventId, actorId: log.actor_id,
+            text: skillName,
+            type: "skill",
+          });
         }
       }
 
       let apertureHp = state.apertureHp;
-      if (log.action === "APERTURE_DAMAGE" && log.damage) {
+      if (kind === "apertureDamage" && log.damage) {
         apertureHp = Math.max(0, apertureHp - log.damage);
       }
 
@@ -414,45 +420,45 @@ function replayReducer(state: ReplayState, action: ReplayAction): ReplayState {
   }
 }
 
-const actionIcon = (action: string) => {
-  switch (action) {
-    case "BASIC_ATTACK": return <Swords className="w-3 h-3" />;
-    case "GU_SKILL": return <Sparkles className="w-3 h-3" />;
-    case "KILLER_MOVE": return <Zap className="w-3 h-3" />;
-    case "HEAL": case "ITEM_HEAL": return <Heart className="w-3 h-3" />;
-    case "SHIELD_GAIN": case "SHIELD_ABSORB": return <Shield className="w-3 h-3" />;
-    case "SHIELD_BREAK": case "SHIELD_PIERCE": case "SHIELD_BYPASS_ATTACK": return <Swords className="w-3 h-3" />;
-    case "DAMAGE": return <Swords className="w-3 h-3" />;
-    case "DOT_TICK": return <Droplets className="w-3 h-3" />;
-    case "GU_BACKLASH": return <Zap className="w-3 h-3 text-red-400" />;
-    case "DIED": return <Skull className="w-3 h-3" />;
-    case "LIFESTEAL": return <FlaskConical className="w-3 h-3" />;
-    case "STUNNED": return <Zap className="w-3 h-3" />;
-    case "MINE_LOOT": return <Coins className="w-3 h-3" />;
-    case "MINE_OCCUPY": return <Gem className="w-3 h-3" />;
-    case "APERTURE_DAMAGE": return <Sparkles className="w-3 h-3" />;
-    case "BUFF": return <Sparkles className="w-3 h-3" />;
-    case "DEFEND": return <Shield className="w-3 h-3" />;
+const actionIcon = (kind: CombatLogKind) => {
+  switch (kind) {
+    case "basicAttack": return <Swords className="w-3 h-3" />;
+    case "guSkill": return <Sparkles className="w-3 h-3" />;
+    case "killerMove": return <Zap className="w-3 h-3" />;
+    case "heal": case "itemHeal": return <Heart className="w-3 h-3" />;
+    case "shieldGain": case "shieldAbsorb": return <Shield className="w-3 h-3" />;
+    case "shieldBreak": case "shieldPierce": case "shieldBypassAttack": return <Swords className="w-3 h-3" />;
+    case "damage": return <Swords className="w-3 h-3" />;
+    case "dotTick": return <Droplets className="w-3 h-3" />;
+    case "guBacklash": return <Zap className="w-3 h-3 text-red-400" />;
+    case "died": return <Skull className="w-3 h-3" />;
+    case "lifesteal": return <FlaskConical className="w-3 h-3" />;
+    case "stunned": return <Zap className="w-3 h-3" />;
+    case "mineLoot": return <Coins className="w-3 h-3" />;
+    case "mineOccupy": return <Gem className="w-3 h-3" />;
+    case "apertureDamage": return <Sparkles className="w-3 h-3" />;
+    case "buff": return <Sparkles className="w-3 h-3" />;
+    case "defend": return <Shield className="w-3 h-3" />;
     default: return <ChevronRight className="w-3 h-3" />;
   }
 };
 
-const actionColor = (action: string) => {
-  switch (action) {
-    case "DAMAGE": case "BASIC_ATTACK": case "SHIELD_BREAK": case "SHIELD_PIERCE": case "SHIELD_BYPASS_ATTACK": return "text-rose-400";
-    case "GU_SKILL": return "text-zinc-200";
-    case "KILLER_MOVE": return "text-purple-400";
-    case "HEAL": case "ITEM_HEAL": return "text-emerald-400";
-    case "SHIELD_GAIN": case "SHIELD_ABSORB": case "DEFEND": return "text-cyan-400";
-    case "DOT_TICK": return "text-yellow-400";
-    case "GU_BACKLASH": return "text-red-400 font-semibold";
-    case "DIED": return "text-rose-500";
-    case "LIFESTEAL": return "text-pink-400";
-    case "BATTLE_START": case "BATTLE_END": return "text-amber-400";
-    case "MINE_LOOT": return "text-yellow-400";
-    case "MINE_OCCUPY": return "text-emerald-400";
-    case "APERTURE_DAMAGE": return "text-amber-400";
-    case "BUFF": return "text-emerald-300";
+const actionColor = (kind: CombatLogKind) => {
+  switch (kind) {
+    case "damage": case "basicAttack": case "shieldBreak": case "shieldPierce": case "shieldBypassAttack": return "text-rose-400";
+    case "guSkill": return "text-zinc-200";
+    case "killerMove": return "text-purple-400";
+    case "heal": case "itemHeal": return "text-emerald-400";
+    case "shieldGain": case "shieldAbsorb": case "defend": return "text-cyan-400";
+    case "dotTick": return "text-yellow-400";
+    case "guBacklash": return "text-red-400 font-semibold";
+    case "died": return "text-rose-500";
+    case "lifesteal": return "text-pink-400";
+    case "battleStart": case "battleEnd": return "text-amber-400";
+    case "mineLoot": return "text-yellow-400";
+    case "mineOccupy": return "text-emerald-400";
+    case "apertureDamage": return "text-amber-400";
+    case "buff": return "text-emerald-300";
     default: return "text-zinc-400";
   }
 };
@@ -655,15 +661,16 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
     if (idx < 0 || idx >= logs.length) return;
 
     const log = logs[idx];
+    const kind = combatLogKind(log);
 
-    if (log.action === "TURN_START") {
-      const m = TURN_REGEX.exec(log.detail || "");
-      if (m) dispatch({ type: "SET_TURN", turn: parseInt(m[1]) });
+    if (kind === "turnStart") {
+      const turn = turnNumberFromLog(log);
+      if (turn !== null) dispatch({ type: "SET_TURN", turn });
       dispatch({ type: "SET_INDEX", index: idx + 1 });
       return;
     }
 
-    if (log.action === "BATTLE_START") {
+    if (kind === "battleStart") {
       dispatch({ type: "SET_TURN", turn: 0 });
       dispatch({ type: "SET_INDEX", index: idx + 1 });
       return;
@@ -733,10 +740,11 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
     let current = { ...state, currentIndex: state.currentIndex };
     for (let i = state.currentIndex; i < logs.length; i++) {
       const log = logs[i];
-      if (log.action === "TURN_START" || log.action === "BATTLE_START") {
-        if (log.action === "TURN_START") {
-          const m = TURN_REGEX.exec(log.detail || "");
-          if (m) current.currentTurn = parseInt(m[1]);
+      const kind = combatLogKind(log);
+      if (kind === "turnStart" || kind === "battleStart") {
+        if (kind === "turnStart") {
+          const turn = turnNumberFromLog(log);
+          if (turn !== null) current.currentTurn = turn;
         }
         current.currentIndex = i + 1;
         continue;
@@ -1078,25 +1086,24 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
     let stonesUsed = 0;
 
     for (const log of logs) {
+      const kind = combatLogKind(log);
       if (log.damage && log.damage > 0) {
         const isFromPlayer = log.actor_name === playerName || log.actor_id === playerName;
         if (isFromPlayer) totalDmgDealt += log.damage;
         else totalDmgTaken += log.damage;
       }
-      if (log.action === "SHIELD_GAIN" || log.action === "SHIELD_ABSORB") {
+      if (kind === "shieldGain" || kind === "shieldAbsorb") {
         shieldsUsed += log.damage || 0;
       }
-      if (log.action === "MANA_COST") {
+      if (kind === "manaCost") {
         const isFromPlayer = log.actor_name === playerName || log.actor_id === playerName;
         if (isFromPlayer) manaCost += log.damage || 0;
       }
-      if (log.action === "AUTO_ITEM_USAGE") {
-        const m = log.detail?.match(/(\d+)/);
-        if (m) itemsUsed += parseInt(m[1]);
+      if (kind === "autoItemUsage") {
+        itemsUsed += autoUsageCount(log.detail);
       }
-      if (log.action === "AUTO_STONE_USAGE") {
-        const m = log.detail?.match(/(\d+)/);
-        if (m) stonesUsed += parseInt(m[1]);
+      if (kind === "autoStoneUsage") {
+        stonesUsed += autoUsageCount(log.detail);
       }
     }
     return { totalDmgDealt, totalDmgTaken, shieldsUsed, manaCost, itemsUsed, stonesUsed };
@@ -1108,15 +1115,11 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
   }, [isCompleted, parseSummary]);
 
   const rewards = useMemo(() => {
-    return logs.filter(log => ["LOOT", "ARENA_REWARD", "ARENA_RANK_UP", "MINE_LOOT", "MINE_OCCUPY", "PATH_MASTERY_GAIN"].includes(log.action));
+    return logs.filter((log) => isRewardKind(combatLogKind(log)));
   }, [logs]);
 
   const losses = useMemo(() => {
-    return logs.filter(log => {
-      if (log.action === "PET_DEATH") return true;
-      if (log.action === "BATTLE_END" && log.detail?.includes("rơi rớt mất")) return true;
-      return false;
-    });
+    return logs.filter((log) => isLossLog(log));
   }, [logs]);
 
   const totalTurns = useMemo(() => {
@@ -1129,7 +1132,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
 
   const visibleLogs = useMemo(() => logs.slice(0, state.currentIndex + 1), [logs, state.currentIndex]);
 
-  const actionLogs = useMemo(() => visibleLogs.filter(isCombatActionLog), [visibleLogs]);
+  const actionLogs = useMemo(() => visibleLogs.filter((log) => isActionLog(log)), [visibleLogs]);
   const turnsWithActions = useMemo(() => new Set(actionLogs.map((log) => log.turn)), [actionLogs]);
 
   return (
@@ -1387,9 +1390,10 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
             <div className="text-zinc-700 text-center py-8 italic">Chưa có dữ liệu</div>
           )}
           {visibleLogs.map((log, idx) => {
-            const isTurnStart = log.action === "TURN_START";
-            const isBattleBoundary = log.action === "BATTLE_START" || log.action === "BATTLE_END";
-            const isAction = isCombatActionLog(log);
+            const kind = combatLogKind(log);
+            const isTurnStart = kind === "turnStart";
+            const isBattleBoundary = kind === "battleStart" || kind === "battleEnd";
+            const isAction = isActionLog(log);
 
             if (isTurnStart) {
               if (!turnsWithActions.has(log.turn)) return null;
@@ -1404,14 +1408,14 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               );
             }
 
-            if (log.action === "TURN_END") {
+            if (kind === "turnEnd") {
               return null;
             }
 
             if (isBattleBoundary) {
               return (
                 <div key={idx} className="text-center py-2">
-                  <span className={`text-[10px] font-bold ${log.action === "BATTLE_START" ? 'text-emerald-500' : 'text-amber-500'} bg-zinc-900/60 px-4 py-1 rounded-full border border-zinc-800`}>
+                  <span className={`text-[10px] font-bold ${kind === "battleStart" ? 'text-emerald-500' : 'text-amber-500'} bg-zinc-900/60 px-4 py-1 rounded-full border border-zinc-800`}>
                     {log.detail}
                   </span>
                 </div>
@@ -1420,7 +1424,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
 
             if (!isAction) return null;
 
-            const baseColor = actionColor(log.action);
+            const baseColor = actionColor(kind);
             const isCurrent = idx === state.currentIndex;
 
             return (
@@ -1429,16 +1433,16 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
                 className={`flex items-start gap-2 px-2 py-1.5 rounded-lg transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] ${isCurrent ? 'bg-zinc-800/40 border border-zinc-700/50' : 'hover:bg-zinc-900/30'}`}
               >
                 <span className={`mt-0.5 shrink-0 ${baseColor}`}>
-                  {actionIcon(log.action)}
+                  {actionIcon(kind)}
                 </span>
 
                 {log.trigger && (
                   <span className="text-[8px] text-cyan-500 bg-cyan-950/40 px-1 rounded shrink-0">Kích hoạt</span>
                 )}
                 <span className={`${baseColor} leading-tight ${isCurrent ? 'font-medium' : ''}`}>
-                  <FormattedText text={log.detail?.trim() || `${log.actor_name || "Chiến binh"}: ${log.action.replaceAll("_", " ").toLowerCase()}`} />
+                  <FormattedText text={log.detail?.trim() || `${log.actor_name || "Chiến binh"}: ${fallbackActionLabel(log)}`} />
                 </span>
-                {log.damage && log.damage > 0 && !["DOT_TICK", "SHIELD_GAIN", "SHIELD_ABSORB", "HEAL", "ITEM_HEAL", "LIFESTEAL"].includes(log.action) && (
+                {log.damage && log.damage > 0 && showsInlineDamage(kind) && (
                   <span className="text-red-400 font-bold shrink-0 ml-auto">
                     -<Num value={log.damage} />
                   </span>

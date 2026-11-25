@@ -53,6 +53,7 @@ Redis dùng cho cache, pub/sub và một số phối hợp realtime. Rate limite
 
 ## Ranh giới khi thay đổi
 
+- Kế hoạch làm sâu module và tiến độ từng bước: [DEEPENING_PLAN.md](DEEPENING_PLAN.md).
 - Route: cập nhật `docs/guides/API.md`.
 - Player persistence hoặc state nhìn thấy bởi player: đọc [PLAYER_DOMAIN.md](PLAYER_DOMAIN.md) trước.
 - Schema/CSV: đọc [GAME_DATA.md](../guides/GAME_DATA.md) và sửa schema domain tương ứng.

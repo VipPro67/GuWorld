@@ -83,11 +83,10 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   sectMap: [],
 
   fetchSects: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects`);
-      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ sects: data || [] });
@@ -99,14 +98,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   joinSect: async (sectId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/${sectId}/join`, {
         method: "POST",
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gia nhập tông môn thất bại.");
       get().addToast(data.message || "Gia nhập tông môn thành công!", "success");
@@ -122,14 +120,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   leaveSect: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/leave`, {
         method: "POST",
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Rời tông môn thất bại.");
       get().addToast(data.message || "Đã rời tông môn!", "info");
@@ -145,14 +142,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   cancelSectJoinRequest: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/join-request/cancel`, {
         method: "POST",
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy đơn xin gia nhập thất bại.");
       get().addToast(data.message || "Đã hủy đơn xin gia nhập tông môn!", "info");
@@ -180,11 +176,10 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     }
     if (fetchMySectStatusPromise) return fetchMySectStatusPromise;
     const executeFetch = async () => {
-      const { token, logout } = get();
+      const { token } = get();
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/sects/me`);
-        if (response.status === 401) { logout(); return; }
         if (response.ok) {
           const data = await response.json();
           lastMySectFetchPlayerId = currentPlayerId;
@@ -203,14 +198,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   promoteSectRank: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/promote`, {
         method: "POST",
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Khảo hạch thăng cấp thất bại.");
       get().addToast(data.message || "Thăng cấp thành công!", "success");
@@ -227,7 +221,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   donateSectStones: async (amount: number) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -236,7 +230,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
       get().addToast(data.message || "Quyên góp Nguyên Thạch thành công!", "success");
@@ -253,7 +246,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   donateSectMaterials: async (materialId: string, amount: number) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -262,7 +255,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ material_id: materialId, amount }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
       get().addToast(data.message || "Quyên góp nguyên liệu thành công!", "success");
@@ -279,7 +271,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   donateSectGu: async (guInstanceId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -288,7 +280,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gu_instance_id: guInstanceId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Quyên góp thất bại.");
       get().addToast(data.message || "Quyên góp Cổ trùng thành công!", "success");
@@ -305,7 +296,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   donateSectRecipe: async (recipeId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -314,7 +305,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recipe_id: recipeId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) {
         // A recipe selection can be stale (donated twice, lost to a death
@@ -342,7 +332,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     gus: { gu_instance_id: string }[];
     recipes: { recipe_id: string }[];
   }) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -351,7 +341,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) {
         // Stale recipe rows are reported per-item by the backend; refresh the
@@ -377,7 +366,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   buyFromSectVault: async (itemType: string, itemId: string, quantity = 1, rank?: number) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -386,7 +375,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item_type: itemType, item_id: itemId, quantity, rank }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) {
         if (itemType === "recipe") void get().refreshRecipeProgress();
@@ -407,11 +395,10 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   fetchSectMissions: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions`);
-      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ sectMissions: data || [] });
@@ -423,14 +410,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   acceptSectMission: async (missionId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/accept`, {
         method: "POST",
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nhận nhiệm vụ thất bại.");
       get().addToast(data.message || "Nhận nhiệm vụ thành công!", "success");
@@ -446,14 +432,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   completeSectMission: async (missionId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/complete`, {
         method: "POST",
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hoàn thành nhiệm vụ thất bại.");
       get().addToast(data.message || "Hoàn thành nhiệm vụ thành công!", "success");
@@ -470,14 +455,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   deleteSectMission: async (missionId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}`, {
         method: "DELETE",
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Xóa nhiệm vụ thất bại.");
       get().addToast(data.message || "Đã xóa nhiệm vụ tông môn!", "success");
@@ -494,14 +478,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   abandonSectMission: async (missionId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/missions/${missionId}/abandon`, {
         method: "DELETE",
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy nhiệm vụ thất bại.");
       get().addToast(data.message || "Đã hủy nhiệm vụ tông môn!", "success");
@@ -518,7 +501,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   createSect: async (name: string, description: string, region: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -527,7 +510,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, description, region }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Lập phái thất bại.");
       get().addToast(data.message || "Khai tông lập phái thành công!", "success");
@@ -544,11 +526,10 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   fetchSectMembers: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/me/members`);
-      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ sectMembers: data || [] });
@@ -560,7 +541,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   setMemberRank: async (memberId: string, rank: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -569,7 +550,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rank }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Điều chỉnh chức vụ thất bại.");
       get().addToast(data.message || "Đã điều chỉnh chức vụ!", "success");
@@ -585,14 +565,13 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   kickMember: async (memberId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/members/${memberId}/kick`, {
         method: "POST",
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Trục xuất đệ tử thất bại.");
       get().addToast(data.message || "Đã trục xuất đệ tử!", "info");
@@ -608,7 +587,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   createCustomMission: async (payload) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -626,7 +605,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
           duration_hours: payload.duration_hours,
         }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Phát hành nhiệm vụ thất bại.");
       get().addToast(data.message || "Đã phát hành nhiệm vụ môn phái!", "success");
@@ -643,7 +621,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   stockSectVault: async (itemType, itemId, quantity) => {
-    const { token, logout, itemDictionary } = get();
+    const { token, itemDictionary } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     const item = itemDictionary?.[itemId];
@@ -664,7 +642,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
           quantity: quantity,
         }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nhập kho bảo khố thất bại.");
       get().addToast(data.message || "Đã nhập kho bảo khố thành công!", "success");
@@ -680,7 +657,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   stockSectVaultBulk: async (items) => {
-    const { token, logout, itemDictionary } = get();
+    const { token, itemDictionary } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     const invalidItem = items.find(it => {
@@ -700,7 +677,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nhập kho bảo khố thất bại.");
       get().addToast(data.message || "Đã nhập kho bảo khố thành công!", "success");
@@ -716,7 +692,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   destroySectVaultItem: async (itemType, itemId, rank) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -725,7 +701,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item_type: itemType, item_id: itemId, rank }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tiêu huỷ vật phẩm thất bại.");
       get().addToast(data.message || "Đã tiêu huỷ vật phẩm!", "success");
@@ -743,7 +718,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   
 
   toggleSectApproval: async (requireApproval) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -752,7 +727,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ require_approval: requireApproval }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cài đặt thất bại.");
       get().addToast(data.message || "Đã cập nhật cài đặt duyệt thành viên!", "success");
@@ -767,7 +741,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   toggleSectPromotionApproval: async (requirePromotionApproval) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -776,7 +750,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ require_promotion_approval: requirePromotionApproval }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cài đặt thất bại.");
       get().addToast(data.message || "Đã cập nhật cài đặt duyệt lên cấp!", "success");
@@ -791,7 +764,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   paySectSalary: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -800,7 +773,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirm: true }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Phát lương thất bại.");
       get().addToast(data.message || "Đã phát lương thành công!", "success");
@@ -816,11 +788,10 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   fetchJoinRequests: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/join-requests`);
-      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ sectJoinRequests: data || [] });
@@ -832,7 +803,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   actionJoinRequest: async (requestId, action) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -841,7 +812,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thao tác thất bại.");
       get().addToast(data.message || "Thao tác thành công!", "success");
@@ -857,11 +827,10 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   fetchPromotionRequests: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/promotion-requests`);
-      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ sectPromotionRequests: data || [] });
@@ -873,7 +842,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   actionPromotionRequest: async (requestId, action) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("sect")) return false;
     set({ error: null });
     try {
@@ -882,7 +851,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thao tác thất bại.");
       get().addToast(data.message || "Thao tác thành công!", "success");
@@ -911,7 +879,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   attackSect: async (targetSectId: string, attackerId?: string) => {
-    const { token, logout, addToast, addLog } = get();
+    const { token, addToast, addLog } = get();
     if (!token || !get().beginAction("sect")) return false;
 
     try {
@@ -920,7 +888,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ target_sect_id: targetSectId, attacker_id: attackerId || "" }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (response.status === 409 && data.formation_cancelled) {
         addToast(data.error || "Hộ Sơn Đại Trận đã chặn cuộc tấn công.", "info");
@@ -944,7 +911,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   toggleDefendSect: async () => {
-    const { token, logout, addToast, addLog, mySectStatus } = get();
+    const { token, addToast, addLog, mySectStatus } = get();
     if (!token || !get().beginAction("sect")) return false;
 
     try {
@@ -952,7 +919,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cập nhật trạng thái thất bại");
       addToast(data.message || "Đã cập nhật trạng thái Trấn Thủ!", "success");
@@ -970,7 +936,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   defendSect: async (defenderType: 'member' | 'beast', playerId?: string, monsterId?: string, monsterRank?: number) => {
-    const { token, logout, addToast, addLog } = get();
+    const { token, addToast, addLog } = get();
     if (!token || !get().beginAction("sect")) return false;
 
     try {
@@ -984,7 +950,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
           monster_rank: monsterRank || 1,
         }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bố trí phòng thủ thất bại.");
       addToast(data.message || "Đã bố trí phòng thủ!", "success");
@@ -1002,7 +967,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   undefendSect: async (defenderId: string) => {
-    const { token, logout, addToast, addLog } = get();
+    const { token, addToast, addLog } = get();
     if (!token || !get().beginAction("sect")) return false;
 
     try {
@@ -1011,7 +976,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ defender_id: defenderId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Rút phòng thủ thất bại.");
       addToast(data.message || "Đã rút phòng thủ!", "success");
@@ -1029,7 +993,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   upgradeSectBuilding: async (buildingName: string) => {
-    const { token, logout, addToast, addLog } = get();
+    const { token, addToast, addLog } = get();
     if (!token || !get().beginAction("sect")) return false;
 
     try {
@@ -1038,7 +1002,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ building_name: buildingName }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Nâng cấp kiến trúc thất bại.");
       addToast(data.message || "Đã nâng cấp kiến trúc!", "success");
@@ -1055,11 +1018,10 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   getRelocationEstimate: async () => {
-    const { token, logout, addToast } = get();
+    const { token, addToast } = get();
     if (!token) return null;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/sects/relocate/estimate`);
-      if (response.status === 401) { logout(); return null; }
       const data = await response.json();
       if (!response.ok) {
         addToast(data.error || "Không thể tải dự toán di dời", "error");
@@ -1074,7 +1036,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   relocateSect: async () => {
-    const { token, logout, addToast, addLog } = get();
+    const { token, addToast, addLog } = get();
     if (!token || !get().beginAction("sect")) return false;
 
     try {
@@ -1082,7 +1044,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Di dời sơn môn thất bại.");
       addToast(data.message || "Di dời sơn môn thành công!", "success");
@@ -1100,7 +1061,7 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   claimSectLeadership: async () => {
-    const { token, logout, addToast, addLog } = get();
+    const { token, addToast, addLog } = get();
     if (!token || !get().beginAction("sect")) return false;
 
     try {
@@ -1108,7 +1069,6 @@ export const createSectSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tiếp quản Chưởng Môn thất bại.");
       addToast(data.message || "Tiếp quản chức vụ Chưởng Môn thành công!", "success");

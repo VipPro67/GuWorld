@@ -396,7 +396,7 @@ func ExecuteSendBaoHoangChat(ctx context.Context, authID uuid.UUID, req BaoHoang
 	var sectID sql.NullString
 	if req.Channel == "sect" {
 		var sID string
-		err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, player.ID).Scan(&sID)
+		sID, err = LoadSectID(tx, player.ID)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return http.StatusBadRequest, gin.H{"error": "Đạo hữu chưa gia nhập tông môn nào, không thể gửi tin nhắn kênh tông môn!"}

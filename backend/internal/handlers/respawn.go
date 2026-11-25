@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/models"
+	"github.com/vippro67/GuWorld/backend/internal/playerstate"
 	"github.com/vippro67/GuWorld/backend/pkg/notify"
 )
 
@@ -63,26 +64,32 @@ func (r RespawnResult) Message() string {
 	return fmt.Sprintf("Hồi sinh tại %s (%d, %d).", name, r.X, r.Y)
 }
 
+// statusMutationOptions keeps a status-only write inside the mutation pipeline
+// without re-running passive mana/durability evaluation. Equipped-Gu scope and
+// no snapshot publish keep the cost close to the old single-column UPDATE while
+// still bumping version/state_revision.
+func statusMutationOptions() PlayerMutationOptions {
+	return PlayerMutationOptions{
+		Scope:                 playerstate.GuEquipped,
+		SkipManaEvaluation:    true,
+		SkipDurabilityHealing: true,
+		SkipSnapshotPublish:   true,
+	}
+}
+
 // GrantPvpImmunity grants the pvp_immunity status to a player upon respawning.
 func GrantPvpImmunity(tx *sql.Tx, playerID uuid.UUID, duration time.Duration) {
 	if duration <= 0 {
 		duration = 10 * time.Minute
 	}
 
-	var rawStatuses []byte
-	err := tx.QueryRow(`SELECT statuses FROM players WHERE id = $1 FOR UPDATE`, playerID).Scan(&rawStatuses)
+	_, err := MutatePlayerInTx(tx, playerID, statusMutationOptions(), func(_ *sql.Tx, player *models.Player) error {
+		player.Statuses.Add("pvp_immunity", "respawn", duration, 1.0)
+		return nil
+	})
 	if err != nil {
 		return
 	}
-
-	var sl models.StatusList
-	if len(rawStatuses) > 0 {
-		_ = json.Unmarshal(rawStatuses, &sl)
-	}
-
-	sl.Add("pvp_immunity", "respawn", duration, 1.0)
-	newBytes, _ := json.Marshal(sl)
-	_, _ = tx.Exec(`UPDATE players SET statuses = $1 WHERE id = $2`, newBytes, playerID)
 
 	notify.SendBestEffort(tx, playerID, "pvp_immunity", "Thiên Đạo Hộ Thể!",
 		"Bạn vừa hồi sinh và được Thiên Đạo ban cho trạng thái Miễn Chiến PvP trong 10 phút. Nếu chủ động tấn công người khác, trạng thái này sẽ bị phá vỡ!")
@@ -94,23 +101,15 @@ func GrantPvpInitiatorCooldown(tx *sql.Tx, playerID uuid.UUID, duration time.Dur
 	if duration <= 0 {
 		duration = 30 * time.Second
 	}
-	var rawStatuses []byte
-	if err := tx.QueryRow(`SELECT statuses FROM players WHERE id=$1 FOR UPDATE`, playerID).Scan(&rawStatuses); err != nil {
-		return
-	}
-	var statuses models.StatusList
-	if len(rawStatuses) > 0 {
-		_ = json.Unmarshal(rawStatuses, &statuses)
-	}
-	statuses.Add("pvp_initiator_cooldown", "pvp_combat", duration, 1)
-	encoded, err := json.Marshal(statuses)
+	_, err := MutatePlayerInTx(tx, playerID, statusMutationOptions(), func(_ *sql.Tx, player *models.Player) error {
+		player.Statuses.Add("pvp_initiator_cooldown", "pvp_combat", duration, 1)
+		return nil
+	})
 	if err != nil {
 		return
 	}
-	if _, err := tx.Exec(`UPDATE players SET statuses=$1 WHERE id=$2`, encoded, playerID); err == nil {
-		notify.SendBestEffort(tx, playerID, "pvp_initiator_cooldown", "Dư âm chiến đấu",
-			"Bạn cần chờ một lát trước khi chủ động khai chiến PvP lần nữa.")
-	}
+	notify.SendBestEffort(tx, playerID, "pvp_initiator_cooldown", "Dư âm chiến đấu",
+		"Bạn cần chờ một lát trước khi chủ động khai chiến PvP lần nữa.")
 }
 
 // RemovePvpImmunity removes pvp_immunity when a player actively initiates PvP.

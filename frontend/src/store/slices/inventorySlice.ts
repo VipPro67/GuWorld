@@ -105,16 +105,12 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
     if (fetchGuInventoryPromise && !forceRefresh) return fetchGuInventoryPromise;
     const inventoryRequestRevision = guInventoryRequests.next();
     const executeFetch = async () => {
-      const { token, logout } = get();
+      const { token } = get();
       if (!token) return;
 
       try {
         const response = await authFetch(`${BACKEND_URL}/api/player/inventory/gus`);
 
-        if (response.status === 401) {
-          logout();
-          return;
-        }
 
         if (!response.ok) {
           throw new Error("Failed to fetch inventory");
@@ -203,11 +199,10 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
   },
 
   fetchMerchants: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/merchant`);
-      if (response.status === 401) { logout(); return; }
       if (!response.ok) return;
       const data = await response.json();
       set({
@@ -220,7 +215,7 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
   },
 
   quoteMerchant: async (merchantId, items) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return [];
     try {
       const response = await authFetch(`${BACKEND_URL}/api/merchant/quote`, {
@@ -228,7 +223,6 @@ export const createInventorySlice: StateCreator<ApiResponseData, ApiResponseData
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ merchant_id: merchantId, items }),
       });
-      if (response.status === 401) { logout(); return []; }
       if (!response.ok) return [];
       const data = await response.json();
       return (data.items || []) as MerchantQuoteItem[];

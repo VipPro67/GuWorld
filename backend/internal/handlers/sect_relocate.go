@@ -154,13 +154,12 @@ func GetSectRelocationEstimate(c *gin.Context) {
 	}
 
 	var m SectMember
-	err = db.DB.QueryRowContext(c.Request.Context(), `
-		SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1
-	`, playerID).Scan(&m.SectID, &m.MemberRank)
+	membership, err := LoadSectMembershipContext(c.Request.Context(), db.DB, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	m.SectID, m.MemberRank = membership.SectID, membership.Rank
 
 	var sectName, sectRegion string
 	var sectX, sectY int
@@ -298,13 +297,12 @@ func RelocateSect(c *gin.Context) {
 	}
 
 	var m SectMember
-	err = tx.QueryRow(`
-		SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1
-	`, playerID).Scan(&m.SectID, &m.MemberRank)
+	membership, err := LoadSectMembership(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	m.SectID, m.MemberRank = membership.SectID, membership.Rank
 
 	if m.MemberRank != "CHUONG_MON" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Chưởng Môn mới có quyền kích hoạt đại điển di dời sơn môn!"})

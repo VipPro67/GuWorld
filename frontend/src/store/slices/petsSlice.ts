@@ -19,11 +19,11 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   playerPetsLoaded: false,
 
   fetchPlayerPets: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/pets`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       if (response.ok) {
         set({ playerPets: data.pets || [], playerPetsLoaded: true });
@@ -32,7 +32,7 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   feedPet: async (petId, itemId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("pets")) return false;
     set({ error: null });
     try {
@@ -41,7 +41,6 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pet_id: petId, item_id: itemId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cho ăn thất bại");
       get().addToast(data.message || `Đã cho ăn +${data.restored} hunger`, "success");
@@ -56,7 +55,7 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   setPetFormation: async (petIds) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("pets")) return false;
     set({ error: null });
     try {
@@ -65,7 +64,6 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slots: petIds }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cập nhật đội hình thất bại");
       get().addToast("Đội hình đã cập nhật", "success");
@@ -80,7 +78,7 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   setPetSleep: async (petId, sleeping) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("pets")) return false;
     set({ error: null });
     try {
@@ -89,7 +87,6 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pet_id: petId, sleeping }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cập nhật trạng thái thất bại");
       await get().fetchPlayerPets();
@@ -103,7 +100,7 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   releasePet: async (petId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("pets")) return false;
     set({ error: null });
     try {
@@ -112,7 +109,6 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pet_id: petId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thả pet thất bại");
       get().addToast("Đã thả pet", "success");
@@ -127,7 +123,7 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   mergePets: async (targetId, sourceIds) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("pets")) return false;
     set({ error: null });
     try {
@@ -136,7 +132,6 @@ export const createPetsSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ target_id: targetId, source_ids: sourceIds }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gộp bầy thất bại");
       get().addToast(data.message || `Đã gộp thành ${data.count} cá thể!`, "success");

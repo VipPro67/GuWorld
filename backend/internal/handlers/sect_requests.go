@@ -22,11 +22,12 @@ func GetJoinRequests(c *gin.Context) {
 	}
 
 	var sectID, callerRank string
-	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	membership, err := LoadSectMembershipContext(c.Request.Context(), db.DB, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	sectID, callerRank = membership.SectID, membership.Rank
 
 	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Không đủ quyền hạn!"})
@@ -90,11 +91,12 @@ func ActionJoinRequest(c *gin.Context) {
 	defer tx.Rollback()
 
 	var sectID, callerRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	membership, err := LoadSectMembership(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	sectID, callerRank = membership.SectID, membership.Rank
 
 	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Không đủ quyền hạn để duyệt yêu cầu!"})
@@ -117,8 +119,7 @@ func ActionJoinRequest(c *gin.Context) {
 
 	if strings.ToLower(req.Action) == "approve" {
 		// Check if player is already in a sect
-		var existingSect string
-		err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, targetPlayerID).Scan(&existingSect)
+		_, err = LoadSectID(tx, targetPlayerID)
 		if err == nil {
 			// Delete their requests since they already joined somewhere else
 			_, _ = tx.Exec(`DELETE FROM sect_join_requests WHERE player_id = $1`, targetPlayerID)
@@ -182,11 +183,12 @@ func GetPromotionRequests(c *gin.Context) {
 	}
 
 	var sectID, callerRank string
-	err := db.DB.QueryRowContext(c.Request.Context(), `SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	membership, err := LoadSectMembershipContext(c.Request.Context(), db.DB, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	sectID, callerRank = membership.SectID, membership.Rank
 
 	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Không đủ quyền hạn!"})
@@ -250,11 +252,12 @@ func ActionPromotionRequest(c *gin.Context) {
 	defer tx.Rollback()
 
 	var sectID, callerRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&sectID, &callerRank)
+	membership, err := LoadSectMembership(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	sectID, callerRank = membership.SectID, membership.Rank
 
 	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Không đủ quyền hạn để duyệt yêu cầu thăng chức!"})

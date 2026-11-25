@@ -81,11 +81,11 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   tradeOffers: [],
 
   fetchMarketplaceListings: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/listings`, {});
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ marketplaceListings: Array.isArray(data) ? data : [] });
     } catch (err) {
@@ -95,7 +95,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   createMarketplaceListing: async (payload) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     set({ error: null });
     try {
@@ -115,7 +115,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
           target_buyer_username: payload.targetBuyerUsername || "",
         }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Đăng bán thất bại");
       get().addLog(data.message || "Đăng bán thành công");
@@ -134,12 +133,11 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   placeMarketplaceBid: async (listingId, amount) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/bid`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listing_id: listingId, amount }) });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Đặt giá thất bại");
       get().addLog(data.message || "Đặt giá thành công");
@@ -151,12 +149,11 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   cancelMarketplaceListing: async (listingId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listing_id: listingId }) });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy listing thất bại");
       get().addLog(data.message || "Đã hủy");
@@ -169,7 +166,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   buyMarketplaceListing: async (listingId, quantity) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     set({ error: null });
     try {
@@ -178,7 +175,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ listing_id: listingId, quantity }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Mua hàng thất bại");
       get().addLog(data.message || "Mua hàng thành công");
@@ -196,11 +192,11 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
 
   // Buyback Orders
   fetchBuybackOrders: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/buyback`, {});
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ buybackOrders: Array.isArray(data) ? data : [] });
     } catch (err) {
@@ -209,7 +205,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   createBuybackOrder: async (payload) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     set({ error: null });
     try {
@@ -228,7 +224,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
           duration_hours: payload.durationHours,
         }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tạo đơn thu mua thất bại");
       get().addLog(data.message || "Tạo đơn thu mua thành công");
@@ -245,7 +240,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   sellToBuybackOrder: async (payload) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     set({ error: null });
     try {
@@ -259,7 +254,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
           gu_instance_ids: payload.guInstanceIds || [],
         }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bán vào đơn thu mua thất bại");
       get().addLog(data.message || "Bán vật phẩm thành công");
@@ -277,7 +271,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   cancelBuybackOrder: async (orderId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     set({ error: null });
     try {
@@ -286,7 +280,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ order_id: orderId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy đơn thu mua thất bại");
       get().addLog(data.message || "Hủy đơn thu mua thành công");
@@ -304,11 +297,11 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
 
   // Async Trade Offers
   fetchTradeOffers: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/shop/bao-hoang/trade-offers`, {});
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ tradeOffers: Array.isArray(data) ? data : [] });
     } catch (err) {
@@ -317,7 +310,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   createTradeOffer: async (payload) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     set({ error: null });
     try {
@@ -331,7 +324,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
           target_username: payload.targetUsername || "",
         }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Đăng đơn trao đổi thất bại");
       get().addLog(data.message || "Đăng đơn trao đổi thành công");
@@ -349,7 +341,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   acceptTradeOffer: async (offerId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     set({ error: null });
     try {
@@ -358,7 +350,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ offer_id: offerId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Chấp nhận trao đổi thất bại");
       get().addLog(data.message || "Trao đổi tự động thành công");
@@ -376,7 +367,7 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   cancelTradeOffer: async (offerId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     set({ error: null });
     try {
@@ -385,7 +376,6 @@ export const createMarketplaceSlice: StateCreator<ApiResponseData, ApiResponseDa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ offer_id: offerId }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Hủy đơn trao đổi thất bại");
       get().addLog(data.message || "Hủy đơn trao đổi thành công");

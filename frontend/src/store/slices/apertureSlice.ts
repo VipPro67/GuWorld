@@ -188,7 +188,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     }
     if (fetchAperturePromise) return fetchAperturePromise;
     const executeFetch = async () => {
-      const { token, logout } = get();
+      const { token } = get();
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture`);
@@ -270,14 +270,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     }
     if (fetchDaoMarksPromise) return fetchDaoMarksPromise;
     const executeFetch = async () => {
-      const { token, logout } = get();
+      const { token } = get();
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/dao-marks`);
-        if (response.status === 401) {
-          logout();
-          return;
-        }
         if (response.ok) {
           const data = await response.json();
           lastDaoMarksPlayerId = currentPlayerId;
@@ -308,14 +304,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     }
     if (fetchDaoNganPromise) return fetchDaoNganPromise;
     const executeFetch = async () => {
-      const { token, logout } = get();
+      const { token } = get();
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/dao-marks/dao-ngan`);
-        if (response.status === 401) {
-          logout();
-          return;
-        }
         if (response.ok) {
           const data = await response.json();
           lastDaoNganPlayerId = currentPlayerId;
@@ -333,7 +325,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   cleanseDaoMarks: async (path: string, marks: number) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
@@ -342,10 +334,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path, marks }),
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thanh Đạo Tẩy Thể thất bại");
       get().addToast(data.message || "Thanh Đạo Tẩy Thể thành công!", "success");
@@ -377,14 +365,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     }
     if (fetchApertureNodesPromise) return fetchApertureNodesPromise;
     const executeFetch = async () => {
-      const { token, logout } = get();
+      const { token } = get();
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes`);
-        if (response.status === 401) {
-          logout();
-          return;
-        }
         if (response.ok) {
           const data = await response.json();
           lastApertureNodesPlayerId = currentPlayerId;
@@ -403,7 +387,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   placeApertureNode: async (nodeType: string, x: number, y: number, path?: string, prodKey?: string, cells?: { x: number; y: number }[]) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
@@ -412,10 +396,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ node_type: nodeType, x, y, path, prod_key: prodKey, cells }),
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Không thể xây dựng điểm tài nguyên");
@@ -648,17 +628,13 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   uninstallApertureNode: async (nodeId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/uninstall`, {
         method: "POST",
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Không thể tháo dỡ mỏ tài nguyên");
@@ -680,17 +656,13 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   deleteApertureNode: async (nodeId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}`, {
         method: "DELETE",
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Không thể san phẳng mỏ tài nguyên");
@@ -714,14 +686,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   fetchVariantHumans: async () => {
     if (fetchVariantHumansPromise) return fetchVariantHumansPromise;
     const executeFetch = async () => {
-      const { token, logout } = get();
+      const { token } = get();
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/variant-humans`);
-        if (response.status === 401) {
-          logout();
-          return;
-        }
         if (response.ok) {
           const data = await response.json();
           set({ variantHumans: data });
@@ -739,11 +707,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
 
   // --- Node Workers ---
   fetchNodeWorkers: async (nodeId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers`);
-      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ nodeWorkers: data.workers || [] });
@@ -754,7 +721,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   assignWorkerToNode: async (nodeId: string, variantHumanId: string, population: number) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
@@ -763,7 +730,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ variant_human_id: variantHumanId, assigned_population: population }),
       });
-      if (response.status === 401) { logout(); return false; }
       if (response.ok) {
         get().addToast("Phân công lao động thành công", "success");
         get().fetchNodeWorkers(nodeId);
@@ -781,14 +747,13 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   removeWorkerFromNode: async (nodeId: string, workerId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers/${workerId}`, {
         method: "DELETE",
       });
-      if (response.status === 401) { logout(); return false; }
       if (response.ok) {
         get().addToast("Đã xóa phân công", "success");
         get().fetchNodeWorkers(nodeId);
@@ -805,11 +770,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
 
   // --- Refinement Queue ---
   fetchRefinementQueue: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/refinement-queue`);
-      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ refinementQueue: data.queue || [] });
@@ -820,7 +784,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   createRefinementJob: async (recipeId: string, mode: string, targetQuantity: number) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
@@ -829,7 +793,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recipe_id: recipeId, mode, target_quantity: targetQuantity }),
       });
-      if (response.status === 401) { logout(); return false; }
       if (response.ok) {
         get().addToast("Tạo lệnh luyện cổ thành công", "success");
         get().fetchRefinementQueue();
@@ -847,14 +810,13 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   deleteRefinementJob: async (jobId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/refinement-queue/${jobId}`, {
         method: "DELETE",
       });
-      if (response.status === 401) { logout(); return false; }
       if (response.ok) {
         get().addToast("Đã xóa lệnh luyện cổ", "success");
         get().fetchRefinementQueue();
@@ -871,11 +833,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
 
   // --- Settlements ---
   fetchSettlements: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/settlements`);
-      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ settlements: data.settlements || [] });
@@ -886,7 +847,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   buildSettlement: async (race: string, name?: string, settlementType?: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
@@ -895,7 +856,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ race, name, settlement_type: settlementType }),
       });
-      if (response.status === 401) { logout(); return false; }
       const res = await response.json();
       if (response.ok) {
         get().addToast(res.message || "Xây dựng cơ sở định cư thành công!", "success");
@@ -914,7 +874,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   upgradeSettlement: async (settlementId: string, data: { name?: string; population_capacity?: number; housing?: number; food_storage?: number }) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
@@ -923,7 +883,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (response.status === 401) { logout(); return false; }
       if (response.ok) {
         get().addToast("Cập nhật settlement thành công", "success");
         get().fetchSettlements();
@@ -942,11 +901,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
 
   // --- Variant NPCs ---
   fetchNPCs: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs`);
-      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ variantNPCs: data.npcs || [] });
@@ -957,7 +915,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   assignNPCRole: async (npcId: string, role: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
@@ -966,7 +924,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role }),
       });
-      if (response.status === 401) { logout(); return false; }
       if (response.ok) {
         get().addToast("Phân công vai trò thành công", "success");
         get().fetchNPCs();
@@ -1008,14 +965,13 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   dismissNPC: async (npcId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs/${npcId}`, {
         method: "DELETE",
       });
-      if (response.status === 401) { logout(); return false; }
       if (response.ok) {
         get().addToast("Đã sa thải NPC", "success");
         get().fetchNPCs();
@@ -1031,7 +987,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   setApertureTimeRate: async (rate: number) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
@@ -1040,10 +996,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ time_rate: rate }),
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Không thể điều chỉnh dòng thời gian");
@@ -1063,7 +1015,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   setApertureLabor: async (race: string, intensity: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
@@ -1072,10 +1024,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ race, labor_intensity: intensity }),
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Không thể điều chỉnh cường độ lao động");
@@ -1095,17 +1043,13 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   repairApertureNode: async (nodeId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/repair`, {
         method: "POST",
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Không thể sửa chữa điểm tài nguyên");
@@ -1127,17 +1071,13 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   repairAllApertureNodes: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/repair-all`, {
         method: "POST",
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Không thể sửa chữa công trình");
@@ -1159,17 +1099,13 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   upgradeApertureNode: async (nodeId: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/upgrade`, {
         method: "POST",
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Không thể nâng cấp công trình");
@@ -1190,7 +1126,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   manageApertureNodesBatch: async (action: "repair" | "upgrade" | "delete", nodeIds: string[]) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !nodeIds.length || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
@@ -1199,10 +1135,6 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, node_ids: nodeIds }),
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn.");
-      }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể thao tác các node đã chọn");
       get().addToast(data.message || "Đã thao tác các node đã chọn.", "success");
@@ -1233,14 +1165,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     }
     if (fetchActiveTribulationPromise) return fetchActiveTribulationPromise;
     const executeFetch = async () => {
-      const { token, logout } = get();
+      const { token } = get();
       if (!token) return;
       try {
         const response = await authFetch(`${BACKEND_URL}/api/tribulations/active`);
-        if (response.status === 401) {
-          logout();
-          return;
-        }
         if (response.ok) {
           const data = await response.json();
           lastActiveTribulationPlayerId = currentPlayerId;
@@ -1273,11 +1201,10 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   engageTribulation: async (eventId: string) => {
-    const { token, logout, player } = get();
+    const { token, player } = get();
     if (!token || !player || !get().beginAction("aperture")) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/tribulations/${eventId}/engage`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Xuất trận nghênh chiến thất bại.");
       get().setPlayerFromServer(data.player || data);
@@ -1472,12 +1399,11 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   useGutsGu: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/soul/use-guts`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Sử dụng Cổ trùng Can Đảm thất bại.");
       get().applyInventoryFromResponse(data);
@@ -1493,12 +1419,11 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   refineSoul: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/soul/refine`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Luyện hồn thất bại.");
       get().applyInventoryFromResponse(data);

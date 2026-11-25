@@ -166,7 +166,6 @@ export const createRefineSessionSlice: StateCreator<ApiResponseData, ApiResponse
         body: JSON.stringify({ step_index: stepIndex, nonce, action, payload, client_ts: Date.now() }),
       });
       const data = await response.json().catch(() => ({}));
-      if (response.status === 401) return null;
       if (!response.ok) {
         get().addToast(data.error || "Bước luyện thất bại.", "error");
         if (data.session) set({ refineSession: data.session });

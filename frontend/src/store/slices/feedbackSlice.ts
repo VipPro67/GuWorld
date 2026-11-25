@@ -20,7 +20,7 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
   feedbackComments: {},
 
   fetchFeedbacks: async (category, status) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       let url = `${BACKEND_URL}/api/feedback`;
@@ -31,7 +31,6 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
         url += `?${params.join("&")}`;
       }
       const response = await authFetch(url);
-      if (response.status === 401) { logout(); return; }
       if (response.ok) {
         const data = await response.json();
         set({ feedbacks: data || [] });
@@ -43,7 +42,7 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   submitFeedback: async (title, description, category) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("feedback")) return false;
     set({ error: null });
     try {
@@ -52,7 +51,6 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, description, category }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gửi góp ý thất bại.");
       get().addToast(data.message || "Gửi góp ý thành công!", "success");
@@ -67,7 +65,7 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   voteFeedback: async (feedbackId, voteType) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("feedback")) return false;
     set({ error: null });
 
@@ -100,7 +98,6 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ vote_type: voteType }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bình chọn thất bại.");
       get().addToast(data.message || "Bình chọn thành công!", "success");
@@ -121,7 +118,7 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   updateFeedbackStatus: async (feedbackId, status, developerResponse) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("feedback")) return false;
     set({ error: null });
     try {
@@ -130,7 +127,6 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, developer_response: developerResponse }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Cập nhật trạng thái thất bại.");
       get().addToast(data.message || "Cập nhật trạng thái thành công!", "success");
@@ -149,11 +145,10 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   fetchFeedbackComments: async (feedbackId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/feedback/${feedbackId}/comments`);
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tải góp ý thất bại.");
       set((state: ApiResponseData) => ({ feedbackComments: { ...state.feedbackComments, [feedbackId]: data || [] } }));
@@ -167,7 +162,7 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   addFeedbackComment: async (feedbackId, content) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("feedback")) return false;
     set({ error: null });
     try {
@@ -176,7 +171,6 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Góp ý thất bại.");
       get().addToast(data.message || "Đã góp ý!", "success");
@@ -196,14 +190,13 @@ export const createFeedbackSlice: StateCreator<ApiResponseData, ApiResponseData,
   },
 
   deleteFeedbackComment: async (feedbackId, commentId) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("feedback")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/feedback/${feedbackId}/comments/${commentId}`, {
         method: "DELETE",
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Xóa góp ý thất bại.");
       get().addToast(data.message || "Đã xóa góp ý!", "success");

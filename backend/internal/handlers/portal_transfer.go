@@ -25,9 +25,6 @@ func PortalTransfer(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	if rejectRealtimeOwned(c, authID) {
-		return
-	}
 
 	var req PortalTransferReq
 	if err := c.ShouldBindJSON(&req); err != nil {

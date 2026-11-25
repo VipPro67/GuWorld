@@ -223,9 +223,6 @@ func SkyfallDescent(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-	if rejectRealtimeOwned(c, authID) {
-		return
-	}
 
 	tx, err := db.DB.Begin()
 	if err != nil {

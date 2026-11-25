@@ -48,7 +48,7 @@ type CombatResolution struct {
 //
 // winner is always derived from the simulation, never from log text.
 func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, loadoutGuIDs []string) (*CombatResolution, error) {
-	return resolveCombat(tx, player, loadout, loadoutGuIDs, nil)
+	return settleCombat(tx, player, loadout, loadoutGuIDs, nil, nil, nil)
 }
 
 // ResolveCombatFromSession settles a completed interactive replay through the
@@ -56,14 +56,16 @@ func ResolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatL
 // The supplied state must be the immutable pre-battle state, not a partial
 // simulation. This keeps retry/reconnect results deterministic.
 func ResolveCombatFromSession(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, initialState *simulator.CombatState) (*CombatResolution, error) {
-	return resolveCombat(tx, player, loadout, loadout.GuIds, initialState)
+	return settleCombat(tx, player, loadout, loadout.GuIds, initialState, nil, nil)
 }
 
-func resolveCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, loadoutGuIDs []string, initialState *simulator.CombatState) (*CombatResolution, error) {
-	return resolveCombatWithTerminalState(tx, player, loadout, loadoutGuIDs, initialState, nil, nil)
-}
-
-func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, loadoutGuIDs []string, initialState *simulator.CombatState, terminalState *simulator.CombatState, terminalLogs []simulator.CombatLog) (*CombatResolution, error) {
+// settleCombat is the single settlement core behind the public entrances
+// (ResolveCombat, ResolveCombatFromSession, SettleCombatSession). It runs inside
+// the caller's transaction and executes the phases in order: region policy,
+// simulation (or supplied terminal state), typed post-combat settlement, item
+// consumption, outcome evaluation, and the win/loss branch with rewards, loot,
+// defeat, arena ranking, history and post-commit notifications.
+func settleCombat(tx *sql.Tx, player *models.Player, loadout *simulator.CombatLoadout, loadoutGuIDs []string, initialState *simulator.CombatState, terminalState *simulator.CombatState, terminalLogs []simulator.CombatLog) (*CombatResolution, error) {
 	var err error
 	var pendingNotifications []notify.Notification
 	var immortalAnnouncements []immortalGuLootAnnouncement
@@ -261,22 +263,9 @@ func resolveCombatWithTerminalState(tx *sql.Tx, player *models.Player, loadout *
 			}
 			// Beating a higher-ranked opponent swaps arena ranks.
 			if !isPractice && !isTower && player.ActiveCombat != nil && player.ActiveCombat.TargetPlayerID != "" && player.ActiveCombat.TargetPlayerID != "dummy" {
-				targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID)
-				if parseErr == nil {
-					var playerRank, targetRank int
-					errPR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", player.ID).Scan(&playerRank)
-					errTR := tx.QueryRow("SELECT rank FROM arena_rankings WHERE player_id = $1", targetUUID).Scan(&targetRank)
-					if errPR == nil && errTR == nil && playerRank > targetRank {
-						_, _ = tx.Exec("UPDATE arena_rankings SET rank = -1 WHERE player_id = $1", player.ID)
-						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", playerRank, targetUUID)
-						_, _ = tx.Exec("UPDATE arena_rankings SET rank = $1 WHERE player_id = $2", targetRank, player.ID)
-						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", playerRank, targetUUID)
-						_, _ = tx.Exec("UPDATE players SET arena_rank = $1 WHERE id = $2", targetRank, player.ID)
-						logs = append(logs, simulator.CombatLog{
-							Turn:   simState.Turn,
-							Action: "ARENA_RANK_UP",
-							Detail: fmt.Sprintf("Chúc mừng! Đạo hữu đã vượt cấp khiêu chiến thành công, thăng lên Hạng %d Võ Đài!", targetRank),
-						})
+				if targetUUID, parseErr := uuid.Parse(player.ActiveCombat.TargetPlayerID); parseErr == nil {
+					if rankLog := settleArenaRankSwap(tx, player.ID, targetUUID, simState.Turn); rankLog != nil {
+						logs = append(logs, *rankLog)
 					}
 				}
 			}

@@ -195,6 +195,7 @@ _Avoid_: move handler, teleport logic, ad-hoc coordinate update
 
 ### Chuỗi Đột Biến Người Chơi (Player Mutation Pipeline)
 Module thực thi các đột biến trạng thái người chơi nguyên tử và nhất quán dùng chung cho mọi hành vi gameplay làm thay đổi chỉ số hoặc tài sản nhân vật: mở transaction `sql.Tx` & khóa dòng `FOR UPDATE` → chiếu nạp Player Snapshot → tính toán thụ động (mana / ôn dưỡng độ bền) → thực thi closure đột biến nghiệp vụ → cập nhật đầy đủ các cột khả biến với bước tăng đơn điệu `version` và `state_revision` → commit nguyên tử → phát sự kiện đồng bộ post-commit qua Redis / SSE.
+Có hai lối vào: `MutatePlayer` tự mở transaction và tự phát sự kiện; `MutatePlayerInTx` chạy trong transaction do caller sở hữu cho luồng nhiều bản ghi (kết toán combat, giao dịch, tổ đội), và caller gọi `PublishPlayerMutation` sau khi commit cho từng người chơi đã đột biến.
 _Avoid_: ad-hoc SQL update, unversioned mutation, manual snapshot broadcast
 
 ## Strategic Combat & Turn-Based Engine (Chiến Đấu Theo Lượt & Mô Phỏng Chiến Thuật)
@@ -222,6 +223,14 @@ _Avoid_: combat AI profile
 **Combat AI Profile**:
 Quy tắc chọn action chiến đấu của NPC/quái/boss từ các lựa chọn đã trang bị; tách biệt với hành vi actor ngoài chiến đấu.
 _Avoid_: Behavior Profile
+
+**Hiệu Ứng Kết Toán Có Kiểu (Typed Settlement Effect)**:
+Hệ quả áp lên người chơi sau trận (mất Tư chất gốc, tuổi thọ, Nguyên Thạch…) được ghi thành `SettlementEffect` có `Code`/`Amount` trên log hành động, thay vì suy ra từ chuỗi `Detail` hiển thị. Hook kết toán đọc trường có kiểu; `Detail` chỉ còn là lời kể cho người chơi.
+_Avoid_: parse log text, hard-code câu tiếng Việt làm protocol
+
+**Sự Kiện Nhật Ký Chiến Đấu (Typed Combat Log Event)**:
+Log chiến đấu từ server mang `action` dạng chuỗi. `frontend/src/lib/combatLog.ts` là nơi duy nhất biết bộ chuỗi đó: chuẩn hóa thành `CombatLogKind`, gom các nhóm ngữ nghĩa (sát thương lên HP, sát thương nổi, hồi máu, cộng giáp, phần thưởng, dấu hiệu thua) và tách tên chiêu khỏi `detail`. View render theo kind, không tự so sánh `action` hay parse câu tiếng Việt.
+_Avoid_: `log.action === "..."` trong view, regex `detail` rải rác
 
 ### Chiến Đấu Realtime (Retired Real-Time Combat)
 Mô hình chiến đấu liên tục theo thời gian thực đã bị loại bỏ khỏi gameplay hiện hành. Combat và các effect chiến đấu hiện hành được giải quyết theo lượt; realtime combat không còn là một chế độ chiến đấu hay kênh effect cần hỗ trợ.
@@ -406,3 +415,9 @@ Hậu quả môi trường còn sót lại trên thổ nhưỡng và vách ngăn
 _Avoid_: Instant clean reset, magic auto-heal after battle
 
 
+
+## Tông Môn (Sect)
+
+### Thành Viên Tông Môn (Sect Membership)
+Bản đọc "người chơi thuộc tông môn nào, cấp bậc gì, có đang phòng thủ không" (`SectMembership` trong `internal/handlers/sect_membership.go`). Mọi handler đọc quan hệ này qua `LoadSectMembership`/`LoadSectID`; chỉ handler sở hữu thao tác gia nhập/phản môn/thăng cấp mới ghi `sect_members`.
+_Avoid_: rải `SELECT ... FROM sect_members WHERE player_id = $1` trong từng handler

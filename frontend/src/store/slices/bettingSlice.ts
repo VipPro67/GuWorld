@@ -23,7 +23,6 @@ export const createBettingSlice: StateCreator<ApiResponseData, ApiResponseData, 
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/beast-betting/current`);
-      if (response.status === 401) return;
       if (response.ok) {
         const data = await response.json();
         set({
@@ -43,7 +42,6 @@ export const createBettingSlice: StateCreator<ApiResponseData, ApiResponseData, 
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/beast-betting/history`);
-      if (response.status === 401) return;
       if (response.ok) {
         const data = await response.json();
         set({ bettingHistory: data.history || [] });
@@ -55,7 +53,7 @@ export const createBettingSlice: StateCreator<ApiResponseData, ApiResponseData, 
   },
 
   placeBeastBet: async (team, amount) => {
-    const { player, token, logout } = get();
+    const { player, token } = get();
     if (!player || !token || !get().beginAction("betting")) return null;
     set({ error: null });
     try {
@@ -64,7 +62,6 @@ export const createBettingSlice: StateCreator<ApiResponseData, ApiResponseData, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ team, amount }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) { throw new Error(data.error || "Đặt cược thất bại."); }
 

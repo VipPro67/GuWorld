@@ -892,6 +892,21 @@ type DamageBreakdown struct {
 	ShieldFinal     float64 `json:"shield_final,omitempty"`
 }
 
+// SettlementEffect is a typed, post-combat consequence attached to a CombatLog.
+// Codes are stable rule keys ("aptitude_10", "lifespan_5", "luck_50"); Amount is
+// the numeric size in the code's own unit (percent, years, percent of stones).
+type SettlementEffect struct {
+	Code   string  `json:"code"`
+	Amount float64 `json:"amount,omitempty"`
+}
+
+// Settlement codes emitted by Chaos Gamble (Love Gu).
+const (
+	SettlementAptitude10 = "aptitude_10"
+	SettlementLifespan5  = "lifespan_5"
+	SettlementLuck50     = "luck_50"
+)
+
 // CombatLog represents a granular event to be stringified as JSON.
 type CombatLog struct {
 	Turn      int     `json:"turn"`
@@ -903,6 +918,13 @@ type CombatLog struct {
 	IsCrit    bool    `json:"is_crit,omitempty"`
 	Trigger   string  `json:"trigger,omitempty"` // Name of the fixed trigger e.g. "THIET_HUYET_CO"
 	Detail    string  `json:"detail,omitempty"`  // Human readable flavor text
+	// Settlement is the typed side effect this log applies to the owning
+	// player after the battle (permanent aptitude/lifespan loss, stone cost).
+	// Settlement hooks read Code/Amount instead of parsing Detail, so the
+	// player-facing prose can change without breaking the rule. It is applied
+	// in memory before the log is persisted, so it is not part of the JSON
+	// payload or the replay contract.
+	Settlement *SettlementEffect `json:"-"`
 	// SourceGuID is the Gu (or killer-move) ID of the action that produced
 	// this log. Lets post-combat hooks attribute hits to data-driven Gu
 	// effects without parsing Detail strings.

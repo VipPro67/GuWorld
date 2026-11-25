@@ -243,15 +243,11 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
   },
 
   fetchCombatSettings: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     set({ combatSettingsLoading: true });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/player/combat-settings`);
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể tải cài đặt chiến đấu.");
       set({ combatSettings: data.combat_settings || null, combatSettingsLoading: false });
@@ -262,7 +258,7 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
   },
 
   saveCombatSettings: async (settings) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:combat")) return false;
     set({ error: null });
     try {
@@ -271,10 +267,6 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ combat_settings: settings }),
       });
-      if (response.status === 401) {
-        logout();
-        throw new Error("Phiên làm việc hết hạn hoặc không có quyền.");
-      }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Lưu cài đặt thất bại.");
       set({ combatSettings: data.combat_settings || settings });
@@ -360,13 +352,13 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
   },
 
   fetchCombatHistory: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
 
     set({ combatHistoryLoading: true });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/combat/history`, { method: "GET" });
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       if (response.ok) {
         set({ combatHistory: data.entries || [] });
@@ -379,12 +371,11 @@ export const createCombatSlice: StateCreator<ApiResponseData, ApiResponseData, A
   },
 
   fetchCombatHistoryEntry: async (id: string) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return null;
 
     try {
       const response = await authFetch(`${BACKEND_URL}/api/combat/history/${id}`, { method: "GET" });
-      if (response.status === 401) { logout(); return null; }
       const data = await response.json();
       if (response.ok) return data;
     } catch {

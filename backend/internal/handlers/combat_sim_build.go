@@ -414,22 +414,25 @@ func buildSimPlayerDefender(tx *sql.Tx, enemy *models.Combatant, activeCombat *m
 	return simDef, true
 }
 
-// applyLoveGuPenalties scans the combat log for Chaos Gamble (Love Gu) penalties
-// and applies them to the player. Shared by all auto-combat paths
-// so both paths penalize identically.
+// applyLoveGuPenalties applies the typed Chaos Gamble (Love Gu) settlements
+// recorded on the combat log. Shared by all auto-combat paths so both paths
+// penalize identically. It reads SettlementEffect, never the localized Detail,
+// and does not depend on the settlement log surviving consolidation: the fold
+// moves the settlement onto the action log.
 func applyLoveGuPenalties(player *models.Player, logs []simulator.CombatLog) {
 	loveAptitudePenalty := 0
 	loveLifespanPenalty := 0.0
 	loveStonesPenalty := false
 	for _, logMsg := range logs {
-		if logMsg.Action != "CHAOS_GAMBLE" {
+		if logMsg.Settlement == nil {
 			continue
 		}
-		if strings.Contains(logMsg.Detail, "Trừ 10% Tư chất gốc vĩnh viễn") {
-			loveAptitudePenalty += 10
-		} else if strings.Contains(logMsg.Detail, "Trừ 5 năm tuổi thọ vĩnh viễn") {
-			loveLifespanPenalty += 5.0
-		} else if strings.Contains(logMsg.Detail, "Trừ 50% Nguyên Thạch hiện tại") {
+		switch logMsg.Settlement.Code {
+		case simulator.SettlementAptitude10:
+			loveAptitudePenalty += int(logMsg.Settlement.Amount)
+		case simulator.SettlementLifespan5:
+			loveLifespanPenalty += logMsg.Settlement.Amount
+		case simulator.SettlementLuck50:
 			loveStonesPenalty = true
 		}
 	}

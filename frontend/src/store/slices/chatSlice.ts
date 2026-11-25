@@ -201,7 +201,7 @@ export const createChatSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   unsubscribeAllBaoHoangMessages: () => {},
 
   sendPrivateMail: async (receiverUsername, content) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("chat")) return false;
     set({ error: null });
     try {
@@ -210,7 +210,6 @@ export const createChatSlice: StateCreator<ApiResponseData, ApiResponseData, Api
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ receiver_username: receiverUsername, content }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gửi thư thất bại");
       get().addLog(data.message || "Đã gửi thư truyền tin!");
@@ -225,11 +224,11 @@ export const createChatSlice: StateCreator<ApiResponseData, ApiResponseData, Api
   },
 
   fetchInbox: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/chat/mail/inbox`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ inbox: Array.isArray(data.inbox) ? data.inbox : [] });
     } catch (err) {
@@ -273,7 +272,6 @@ export const createChatSlice: StateCreator<ApiResponseData, ApiResponseData, Api
     if (!token) return null;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/chat/bao-hoang/messages?channel=${encodeURIComponent(channel)}`);
-      if (response.status === 401) return null;
       const data = await response.json();
       const messages = Array.isArray(data.messages) ? data.messages : [];
       set((state: ApiResponseData) => ({

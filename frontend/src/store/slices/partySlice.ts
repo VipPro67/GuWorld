@@ -26,12 +26,11 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   partyInvitations: [],
 
   createParty: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("party")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/party/create`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Tạo tổ đội thất bại");
       set({ party: data.party });
@@ -47,11 +46,11 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   fetchPartyStatus: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/party/status`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ party: data.party });
     } catch (err) {
@@ -61,7 +60,7 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   invitePlayer: async (username) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("party")) return false;
     set({ error: null });
     try {
@@ -70,7 +69,6 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể mời");
       set({ party: data.party });
@@ -85,12 +83,11 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   leaveParty: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("party")) return false;
     set({ error: null });
     try {
       const response = await authFetch(`${BACKEND_URL}/api/party/leave`, { method: "POST" });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Rời tổ đội thất bại");
       set({ party: null });
@@ -106,11 +103,11 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   fetchPartyInvitations: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/party/invitations`);
-      if (response.status === 401) { logout(); return; }
+      if (!response.ok) return;
       const data = await response.json();
       set({ partyInvitations: data.invitations || [] });
     } catch (err) {
@@ -119,7 +116,7 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   respondPartyInvitation: async (id, action) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("party")) return false;
     set({ error: null });
     try {
@@ -128,7 +125,6 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Thao tác thất bại.");
       if (action === "accept") {
@@ -149,7 +145,7 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
   },
 
   savePartyFormation: async (order) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("party")) return false;
     set({ error: null });
     try {
@@ -158,7 +154,6 @@ export const createPartySlice: StateCreator<ApiResponseData, ApiResponseData, Ap
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ order }),
       });
-      if (response.status === 401) { logout(); throw new Error("Phiên làm việc hết hạn hoặc không có quyền."); }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Lưu đội hình thất bại");
       get().addToast(data.message || "Đã lưu đội hình xuất trận", "success");

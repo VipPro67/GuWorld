@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { LogOut, Shield, Sparkles, Swords, Zap } from "lucide-react";
 import { Num } from "@/components/Num";
 import { MonsterSprite } from "@/components/MonsterSprite";
+import { combatLogKind } from "@/lib/combatLog";
 
 type GuHouseView = {
   id?: string;
@@ -545,8 +546,9 @@ export function InteractiveCombatPanel({
               </div>
             ) : logs.map((log, index) => {
               const action = String(log.action || "");
-              const isSystem = ["BATTLE_START", "TURN_START", "AWAIT_COMMAND"].includes(action);
-              const isSkill = action === "GU_SKILL" || action === "KILLER_MOVE";
+              const kind = combatLogKind(log);
+              const isSystem = kind === "battleStart" || kind === "turnStart" || kind === "awaitCommand";
+              const isSkill = kind === "guSkill" || kind === "killerMove";
               const damage = value(log.hp_damage ?? log.damage);
               const shield = value(log.shield_absorbed);
               const actionLabel: Record<string, string> = {

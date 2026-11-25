@@ -21,12 +21,11 @@ export const createNotificationsSlice: StateCreator<ApiResponseData, ApiResponse
   unreadNotifications: 0,
 
   fetchNotifications: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     await fetchWithDedupe("fetchNotifications", async () => {
       try {
         const response = await authFetch(`${BACKEND_URL}/api/player/notifications?page=1&pageSize=50`);
-        if (response.status === 401) { logout(); return; }
         const data = await response.json();
         const list = Array.isArray(data.notifications) ? data.notifications : [];
         set({

@@ -94,8 +94,7 @@ func CreateSect(c *gin.Context) {
 	}
 
 	// Check if already in a sect
-	var existingSectID string
-	err = tx.QueryRow(`SELECT sect_id FROM sect_members WHERE player_id = $1`, playerID).Scan(&existingSectID)
+	existingSectID, err := LoadSectID(tx, playerID)
 	if err == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu đang thuộc tông môn \"" + existingSectID + "\" rồi, hãy phản môn trước!"})
 		return
@@ -423,11 +422,12 @@ func SetMemberRank(c *gin.Context) {
 
 	// Fetch caller's sect and rank
 	var callerSectID, callerRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&callerSectID, &callerRank)
+	membership, err := LoadSectMembership(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	callerSectID, callerRank = membership.SectID, membership.Rank
 
 	if callerRank != "CHUONG_MON" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ có Chưởng môn mới có quyền định đoạt chức vụ!"})
@@ -436,11 +436,12 @@ func SetMemberRank(c *gin.Context) {
 
 	// Verify target member is in the same sect
 	var targetSectID, targetRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, targetMemberID).Scan(&targetSectID, &targetRank)
+	targetMembership, err := LoadSectMembership(tx, targetMemberID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy đệ tử này trong môn phái!"})
 		return
 	}
+	targetSectID, targetRank = targetMembership.SectID, targetMembership.Rank
 
 	if targetSectID != callerSectID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đệ tử này thuộc tông môn khác!"})
@@ -513,11 +514,12 @@ func KickMember(c *gin.Context) {
 
 	// Fetch caller's sect and rank
 	var callerSectID, callerRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, playerID).Scan(&callerSectID, &callerRank)
+	membership, err := LoadSectMembership(tx, playerID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Đạo hữu không thuộc tông môn nào!"})
 		return
 	}
+	callerSectID, callerRank = membership.SectID, membership.Rank
 
 	if !canManageSect(callerRank) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Đạo hữu không đủ quyền hạn (cần Trưởng Lão hoặc Chưởng môn)!"})
@@ -526,11 +528,12 @@ func KickMember(c *gin.Context) {
 
 	// Verify target member is in the same sect
 	var targetSectID, targetRank string
-	err = tx.QueryRow(`SELECT sect_id, member_rank FROM sect_members WHERE player_id = $1`, targetMemberID).Scan(&targetSectID, &targetRank)
+	targetMembership, err := LoadSectMembership(tx, targetMemberID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy thành viên này!"})
 		return
 	}
+	targetSectID, targetRank = targetMembership.SectID, targetMembership.Rank
 
 	if targetSectID != callerSectID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Thành viên này thuộc tông môn khác!"})

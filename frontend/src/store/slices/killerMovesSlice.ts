@@ -204,7 +204,7 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
   killerMovesLoading: false,
 
   fetchKillerMoves: async () => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return;
     set({ killerMovesLoading: true });
     try {
@@ -212,7 +212,6 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
         authFetch(`${BACKEND_URL}/api/killer-moves/options`),
         authFetch(`${BACKEND_URL}/api/killer-moves`),
       ]);
-      if (optionsRes.status === 401 || movesRes.status === 401) { logout(); return; }
       const options = await optionsRes.json();
       const moves = await movesRes.json();
       if (!optionsRes.ok) throw new Error(options.error || "Không thể tải Cổ và hiệu ứng");
@@ -234,13 +233,12 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   previewKillerMove: async (draft) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return null;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/killer-moves/preview`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft),
       });
-      if (response.status === 401) { logout(); return null; }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Công thức sát chiêu chưa hợp lệ");
       return data as KillerMovePreview;
@@ -251,13 +249,12 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   createKillerMove: async (draft) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/killer-moves`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft),
       });
-      if (response.status === 401) { logout(); return false; }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể lưu sát chiêu");
       get().addToast(data.message || "Đã sáng tạo sát chiêu", "success");
@@ -270,11 +267,10 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   toggleKillerMoveEquip: async (id) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/killer-moves/${encodeURIComponent(id)}/equip`, { method: "POST" });
-      if (response.status === 401) { logout(); return false; }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể trang bị sát chiêu");
       await get().fetchKillerMoves();
@@ -286,11 +282,10 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   deleteKillerMove: async (id) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/killer-moves/${encodeURIComponent(id)}`, { method: "DELETE" });
-      if (response.status === 401) { logout(); return false; }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể xóa sát chiêu");
       await get().fetchKillerMoves();
@@ -302,11 +297,10 @@ export const createKillerMovesSlice: StateCreator<ApiResponseData, ApiResponseDa
   },
 
   useKillerMove: async (id) => {
-    const { token, logout } = get();
+    const { token } = get();
     if (!token || !get().beginAction("player:inventory")) return false;
     try {
       const response = await authFetch(`${BACKEND_URL}/api/killer-moves/${encodeURIComponent(id)}/use`, { method: "POST" });
-      if (response.status === 401) { logout(); return false; }
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Không thể dùng sát chiêu");
       get().applyInventoryFromResponse(data);

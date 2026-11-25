@@ -78,6 +78,8 @@ func marshalJSONOrDefault(v any, defaultJSON string) []byte {
 // 6. Child domain updates (immortal apertures dao marks).
 // 7. Atomic transaction commit.
 // 8. Post-commit Redis/SSE event publication and pending queue clearing.
+//
+// Callers that already own a transaction use MutatePlayerInTx instead.
 func MutatePlayer(playerID uuid.UUID, opts PlayerMutationOptions, fn func(tx *sql.Tx, player *models.Player) error) (*models.Player, error) {
 	if db.DB == nil {
 		return nil, fmt.Errorf("database connection unavailable")
@@ -88,6 +90,60 @@ func MutatePlayer(playerID uuid.UUID, opts PlayerMutationOptions, fn func(tx *sq
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer tx.Rollback()
+
+	player, err := mutatePlayerInTx(tx, playerID, opts, fn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Atomic transaction commit
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit player mutation: %w", err)
+	}
+
+	// Post-commit event publications & queue clearing
+	publishPlayerMutation(player, opts)
+	return player, nil
+}
+
+// MutatePlayerInTx runs the same mutation pipeline inside a transaction owned by
+// the caller. It never commits and never publishes; a caller that later commits
+// must call PublishPlayerMutation once for each mutated player. This is the seam
+// for multi-record flows (combat settlement, trade, party) so they keep one
+// atomic transaction without re-implementing column writes and version bumps.
+func MutatePlayerInTx(tx *sql.Tx, playerID uuid.UUID, opts PlayerMutationOptions, fn func(tx *sql.Tx, player *models.Player) error) (*models.Player, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("transaction is required for player mutation")
+	}
+	return mutatePlayerInTx(tx, playerID, opts, fn)
+}
+
+// PublishPlayerMutation emits the post-commit events for a player mutated by
+// MutatePlayerInTx. Call it only after the owning transaction has committed.
+func PublishPlayerMutation(player *models.Player, opts PlayerMutationOptions) {
+	if player == nil {
+		return
+	}
+	publishPlayerMutation(player, opts)
+}
+
+func publishPlayerMutation(player *models.Player, opts PlayerMutationOptions) {
+	ClearPendingPlayerQueues(player.ID.String())
+	if opts.SkipSnapshotPublish {
+		return
+	}
+	domains := opts.EventDomains
+	if len(domains) == 0 {
+		domains = []PlayerEventDomain{PlayerDomain}
+	}
+	PublishPlayerSnapshot(player, PlayerEventUpdated, domains...)
+	PublishPlayerManaDelta(player.ID, player.CurrentMana, player.MaxMana)
+}
+
+// mutatePlayerInTx is the implementation shared by MutatePlayer and
+// MutatePlayerInTx.
+func mutatePlayerInTx(tx *sql.Tx, playerID uuid.UUID, opts PlayerMutationOptions, fn func(tx *sql.Tx, player *models.Player) error) (*models.Player, error) {
+	var err error
 
 	// 1. Passive durability healing
 	if !opts.SkipDurabilityHealing {
@@ -195,22 +251,6 @@ func MutatePlayer(playerID uuid.UUID, opts PlayerMutationOptions, fn func(tx *sq
 			SET dao_marks = $1
 			WHERE player_id = $2
 		`, daoMarksJSON, player.ID)
-	}
-
-	// 6. Atomic transaction commit
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit player mutation: %w", err)
-	}
-
-	// 7. Post-commit event publications & queue clearing
-	ClearPendingPlayerQueues(player.ID.String())
-	if !opts.SkipSnapshotPublish {
-		domains := opts.EventDomains
-		if len(domains) == 0 {
-			domains = []PlayerEventDomain{PlayerDomain}
-		}
-		PublishPlayerSnapshot(&player, PlayerEventUpdated, domains...)
-		PublishPlayerManaDelta(player.ID, player.CurrentMana, player.MaxMana)
 	}
 
 	return &player, nil

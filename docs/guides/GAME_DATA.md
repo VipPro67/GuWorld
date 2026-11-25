@@ -213,6 +213,8 @@ Combat `DAMAGE` subtype `MULTIPLIER` nhân hệ số sát thương của operati
 
 `NOTIFY` dùng trong block `ON_USE`/`SELF` của luồng dùng Cổ (`GU_USE` context) để trả phản hồi, hoặc `ON_ACTION`/`SELF` trong combat để ghi combat log. Combat `NOTIFY` mặc định ghi cùng action log; phase `PRE_CHAIN` ghi đúng seam trước chain rider. Field `message` bắt buộc chứa 1–500 ký tự; placeholder `{gu}` được thay bằng tên Cổ khi tạo phản hồi sử dụng; `{actor}` và `{target}` được thay khi ghi combat log; `log_action` tùy chọn đặt mã log combat. `RECORD_MESSAGE` cũ đã chuyển sang `NOTIFY`; native hook vẫn được giữ để đọc dữ liệu cũ. Nó không thuộc allowlist effect world-use của Trận Pháp/Gu House.
 
+Log combat có thể mang thêm `SettlementEffect` (`Code`/`Amount`) cho hình phạt áp sau trận, ví dụ cái giá của `CHAOS_GAMBLE`. Hook kết toán đọc `Code`/`Amount` thay vì phân tích chuỗi `Detail`; khi log hành động được gộp, hiệu ứng kết toán được chuyển sang entry hành động còn lại để không bị mất. Field này chỉ tồn tại trong bộ nhớ (`json:"-"`), không nằm trong payload hay replay.
+
 
 ### Combat effects targeting allies and authored logs
 
