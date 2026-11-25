@@ -4,6 +4,7 @@ import React from "react";
 import { useGameStore } from "@/store/useGameStore";
 import { LegalModal, LegalDocType } from "@/components/legal/LegalModal";
 import { AccountDeletionModal } from "@/components/legal/AccountDeletionModal";
+import { LobbyGridSettingsEditor } from "@/components/LobbyGridSettingsEditor";
 import { Scale, Trash2, Shield } from "lucide-react";
 import {
   useUiPreferences,
@@ -128,6 +129,10 @@ export const LobbySettingsPanel: React.FC = () => {
             className="h-4 w-4 shrink-0 rounded border-zinc-700 text-amber-500 focus:ring-amber-500 disabled:opacity-50"
           />
         </label>
+      </div>
+
+      <div className="border-t border-zinc-800 pt-4">
+        <LobbyGridSettingsEditor />
       </div>
 
       <div className="border-t border-zinc-800 pt-4 space-y-3">

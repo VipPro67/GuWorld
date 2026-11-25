@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PROTOTYPE — Lobby Menu Groups &amp; Grid Customizer (GuWorld)</title>
+  <style>
+    :root {
+      --bg: #120d09;
+      --surface: #1f1711;
+      --surface-2: #2b2017;
+      --border: rgba(168, 137, 82, 0.35);
+      --border-strong: rgba(228, 185, 108, 0.7);
+      --text: #f4e8cb;
+      --muted: #ad9878;
+      --accent: #e4b96c;
+      --emerald: #34d399;
+      --rose: #fb7185;
+      --violet: #a78bfa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(circle at top, #241910, var(--bg) 60%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .proto-banner {
+      background: #2b1d0e;
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .proto-banner strong { color: var(--accent); }
+    .proto-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .btn {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    }
+    .btn:hover { border-color: var(--border-strong); background: #36281c; }
+    .btn:active { transform: scale(0.98); }
+    .btn.active {
+      background: rgba(228, 185, 108, 0.18);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .btn.primary {
+      background: linear-gradient(135deg, #b88635, #8a5e1e);
+      border-color: var(--accent);
+      color: #fff8e7;
+    }
+    .btn.danger { border-color: rgba(251, 113, 133, 0.4); color: var(--rose); }
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 16px;
+      transition: max-width 0.2s;
+    }
+    .container.mobile-preview {
+      max-width: 410px;
+      border-left: 1px dashed var(--border);
+      border-right: 1px dashed var(--border);
+      min-height: calc(100vh - 50px);
+    }
+    .lobby-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      margin-bottom: 14px;
+    }
+    .lobby-header h1 {
+      margin: 0;
+      font-family: Georgia, serif;
+      font-size: 20px;
+      color: var(--text);
+    }
+    .lobby-header p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+    .header-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .mobile-preview .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    @media (max-width: 640px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    .tile {
+      position: relative;
+      min-height: 96px;
+      background: linear-gradient(135deg, rgba(43, 32, 23, 0.95), rgba(24, 18, 13, 0.98));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      cursor: pointer;
+      color: var(--text);
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .tile:hover:not(.locked) { border-color: var(--border-strong); transform: translateY(-1px); }
+    .tile.locked { opacity: 0.52; cursor: not-allowed; }
+    .tile.group-tile {
+      border-color: rgba(228, 185, 108, 0.45);
+      background: linear-gradient(135deg, rgba(58, 41, 24, 0.95), rgba(26, 18, 12, 0.98));
+    }
+    .tile-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .tile-body { min-width: 0; flex: 1; }
+    .tile-title {
+      font-family: Georgia, serif;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.25;
+      display: block;
+    }
+    .tile-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px;
+      display: block;
+    }
+    .group-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(228, 185, 108, 0.15);
+      border: 1px solid rgba(228, 185, 108, 0.4);
+      color: var(--accent);
+    }
+
+    .state-bar {
+      margin-top: 18px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .state-bar code { color: var(--accent); font-family: ui-monospace, monospace; }
+
+    /* Modal / Bottom Sheet */
+    .backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 50;
+    }
+    .backdrop.open { display: flex; }
+    .modal {
+      width: 100%;
+      max-width: 620px;
+      max-height: 88vh;
+      background: #18120d;
+      border: 1px solid var(--border-strong);
+      border-radius: 18px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+    }
+    @media (max-width: 640px) {
+      .backdrop { align-items: flex-end; padding: 0; }
+      .modal {
+        max-width: 100%;
+        border-radius: 18px 18px 0 0;
+        max-height: 86vh;
+      }
+    }
+    .modal-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .modal-header h2 { margin: 0; font-family: Georgia, serif; font-size: 16px; color: var(--accent); }
+    .modal-body { padding: 16px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+
+    .sub-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    @media (max-width: 500px) {
+      .sub-grid { grid-template-columns: 1fr; }
+    }
+    .sub-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .sub-item-main {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex: 1;
+      cursor: pointer;
+    }
+    .sub-item-main strong { font-size: 13px; display: block; }
+    .sub-item-main span { font-size: 11px; color: var(--muted); display: block; }
+
+    /* Settings List */
+    .preset-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .section-title { font-size: 12px; font-weight: 700; color: var(--accent); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .order-list { display: flex; flex-direction: column; gap: 6px; }
+    .order-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .order-row.cutoff {
+      opacity: 0.55;
+      border-style: dashed;
+    }
+    .order-row-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .tag {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--muted);
+    }
+    .tag.group { color: var(--accent); background: rgba(228, 185, 108, 0.14); }
+    .tag.cutoff-tag { color: var(--rose); background: rgba(251, 113, 133, 0.14); }
+    .order-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .icon-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+    }
+    .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .search-input {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 13px;
+    }
+    .toast {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2b2017;
+      border: 1px solid var(--accent);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      z-index: 100;
+      display: none;
+    }
+    .toast.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="proto-banner">
+    <div><strong>PROTOTYPE (#458)</strong> — Nhóm Menu Lobby &amp; Tùy biến Lưới Lobby</div>
+    <div class="proto-controls">
+      <button class="btn active" id="btnDesktop" onclick="setPreviewMode(false)">Desktop</button>
+      <button class="btn" id="btnMobile" onclick="setPreviewMode(true)">Mobile (410px)</button>
+      <button class="btn" onclick="toggleRank()">Rank: <span id="rankLabel">6 (Tiên)</span></button>
+      <button class="btn" onclick="toggleApertureRegion()">Vị trí: <span id="regionLabel">Dã Ngoại</span></button>
+    </div>
+  </div>
+
+  <main class="container" id="mainContainer">
+    <div class="lobby-header">
+      <div>
+        <h1>Điểm Đến Cổ Giới</h1>
+        <p>Chọn một nơi để tiếp tục hành trình</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn" onclick="openAllModal()">📚 Xem tất cả (25)</button>
+        <button class="btn primary" onclick="openSettingsModal()">⚙️ Cài đặt lưới</button>
+      </div>
+    </div>
+
+    <div class="grid" id="lobbyGrid"></div>
+
+    <div class="state-bar" id="stateBar"></div>
+  </main>
+
+  <!-- Modal: Nhóm Menu -->
+  <div class="backdrop" id="groupBackdrop" onclick="if(event.target===this) closeModal('groupBackdrop')">
+    <section class="modal">
+      <header class="modal-header">
+        <h2 id="groupModalTitle">Nhóm Menu</h2>
+        <button class="btn" onclick="closeModal('groupBackdrop')">Đóng</button>
+      </header>
+      <div class="modal-body" id="groupModalBody"></div>
+    </section>
+  </div>
+
+  <!-- Modal: Xem tất cả 25 tính năng -->
+  <div class="backdrop" id="allBackdrop" onclick="if(event.target===this) closeModal('allBackdrop')">
+    <section class="modal">
+      <header class="modal-header">
+        <h2>Tất Cả Chức Năng (25)</h2>
+        <button class="btn" onclick="closeModal('allBackdrop')">Đóng</button>
+      </header>
+      <div class="modal-body">
+        <input class="search-input" id="allSearch" placeholder="Tìm nhanh tính năng..." oninput="renderAllModal()" />
+        <div id="allModalBody" style="display:flex;flex-direction:column;gap:14px;"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Modal: Cài đặt Lưới Lobby -->
+  <div class="backdrop" id="settingsBackdrop" onclick="if(event.target===this) closeModal('settingsBackdrop')">
+    <section class="modal">
+      <header class="modal-header">
+        <h2>Cài Đặt Lưới Lobby</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn danger" onclick="resetDefaults()">Khôi phục mặc định</button>
+          <button class="btn" onclick="closeModal('settingsBackdrop')">Xong</button>
+        </div>
+      </header>
+      <div class="modal-body" id="settingsModalBody"></div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const GROUPS = [
+      {
+        id: "combat-hub",
+        label: "Đấu Trường & Thí Luyện",
+        icon: "⚔️",
+        children: ["practice-room", "arena", "infinite-tower", "death-arena", "martial-arena"]
+      },
+      {
+        id: "commerce-hub",
+        label: "Thương Hội",
+        icon: "⚖️",
+        children: ["shop", "premium-store", "auction"]
+      },
+      {
+        id: "adventure-hub",
+        label: "Bí Cảnh & Cơ Duyên",
+        icon: "🌌",
+        children: ["dream-realm", "spatial-realms", "divination", "gacha"]
+      },
+      {
+        id: "system-hub",
+        label: "Tiện Ích & Ký Sự",
+        icon: "📜",
+        children: ["achievements", "leaderboard", "utilities", "combat-history", "audit-logs", "feedback"]
+      }
+    ];
+
+    const FEATURES = {
+      "character": { label: "Nhân Vật", icon: "🧘", desc: "Thuộc tính, cảnh giới, trang bị" },
+      "inventory": { label: "Túi Đồ", icon: "🎒", desc: "Cổ trùng & vật phẩm" },
+      "refine": { label: "Luyện Cổ", icon: "🔥", desc: "Luyện chế cổ trùng" },
+      "explore": { label: "Khám Phá Dã Ngoại", icon: "🧭", desc: "Bản đồ thế giới" },
+      "aperture": { label: "Tiên Khiếu", icon: "✨", desc: "Phúc địa / Động thiên (Cấp 6+)" },
+      "pets": { label: "Nô Thú", icon: "🐾", desc: "Quản lý dị thú" },
+      "sect": { label: "Tông Môn", icon: "🏯", desc: "Tông môn & cống hiến" },
+      "practice-room": { label: "Phòng Tập", icon: "🥋", desc: "Thử nghiệm chiêu thức" },
+      "arena": { label: "Võ Đài", icon: "🏟️", desc: "Khiêu chiến đối thủ" },
+      "infinite-tower": { label: "Tháp Chiến Thuật", icon: "🗼", desc: "Leo tháp vượt ải" },
+      "death-arena": { label: "Đấu Trường Sinh Tử", icon: "💀", desc: "PvP sinh tử" },
+      "martial-arena": { label: "Đại Hội Võ Thuật", icon: "🏆", desc: "Giải đấu định kỳ" },
+      "shop": { label: "Cửa Hàng", icon: "🏪", desc: "Mua bán vật tư" },
+      "premium-store": { label: "Cát Bảo Các", icon: "💎", desc: "Kỳ trân dị bảo" },
+      "auction": { label: "Chợ, Đấu Giá", icon: "🔨", desc: "Giao dịch người chơi" },
+      "dream-realm": { label: "Mộng Cảnh", icon: "🌙", desc: "Thám hiểm mộng cảnh" },
+      "spatial-realms": { label: "Bí Cảnh & Truyền Thừa", icon: "🌀", desc: "Phó bản & truyền thừa" },
+      "divination": { label: "Thiên Cơ Các", icon: "👁️", desc: "Chiêm bốc thiên cơ" },
+      "gacha": { label: "Giải Trí", icon: "🎲", desc: "Mini-game & vận may" },
+      "achievements": { label: "Nhiệm Vụ & Thành Tựu", icon: "🎖️", desc: "Nhiệm vụ & mốc thưởng" },
+      "leaderboard": { label: "Bảng Xếp Hạng", icon: "📊", desc: "Danh bảng cao thủ" },
+      "utilities": { label: "Phong Ấn Cổ Trùng", icon: "🔒", desc: "Phong ấn / giải phong ấn" },
+      "combat-history": { label: "Lịch Sử Chiến Đấu", icon: "⚔️", desc: "Xem lại chiến báo" },
+      "audit-logs": { label: "Ký Sự Tu Hành", icon: "📖", desc: "Nhật ký biến động" },
+      "feedback": { label: "Thỉnh Thiên Đạo", icon: "✉️", desc: "Góp ý & báo lỗi" }
+    };
+
+    const DEFAULT_VISIBLE = [
+      "character", "inventory", "refine", "explore", "aperture", "pets", "sect",
+      "combat-hub", "commerce-hub", "adventure-hub", "system-hub"
+    ];
+
+    let state = {
+      rank: 6,
+      inAperture: false,
+      visibleOrder: [...DEFAULT_VISIBLE],
+      limit: 12, // 6 | 8 | 12 | 0 (0 = Tất cả)
+    };
+
+    function getEntry(id) {
+      const g = GROUPS.find(x => x.id === id);
+      if (g) return { id: g.id, label: g.label, icon: g.icon, isGroup: true, count: g.children.length, group: g };
+      const f = FEATURES[id];
+      const label = (id === "explore" && state.inAperture) ? "Lưới Địa Hình Tiên Khiếu" : f.label;
+      const locked = id === "aperture" && state.rank < 6;
+      return { id, label, icon: f.icon, desc: f.desc, isGroup: false, locked };
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => el.classList.remove("show"), 2000);
+    }
+
+    function setPreviewMode(mobile) {
+      document.getElementById("mainContainer").classList.toggle("mobile-preview", mobile);
+      document.getElementById("btnDesktop").classList.toggle("active", !mobile);
+      document.getElementById("btnMobile").classList.toggle("active", mobile);
+    }
+
+    function toggleRank() {
+      state.rank = state.rank >= 6 ? 4 : 6;
+      document.getElementById("rankLabel").textContent = state.rank >= 6 ? "6 (Tiên)" : "4 (Phàm)";
+      renderLobby();
+    }
+
+    function toggleApertureRegion() {
+      state.inAperture = !state.inAperture;
+      document.getElementById("regionLabel").textContent = state.inAperture ? "Trong Tiên Khiếu" : "Dã Ngoại";
+      renderLobby();
+    }
+
+    function openModal(id) { document.getElementById(id).classList.add("open"); }
+    function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+
+    function renderLobby() {
+      const effectiveLimit = state.limit === 0 ? state.visibleOrder.length : state.limit;
+      const shownIds = state.visibleOrder.slice(0, effectiveLimit);
+      const grid = document.getElementById("lobbyGrid");
+      grid.innerHTML = shownIds.map(id => {
+        const item = getEntry(id);
+        return `
+          <button class="tile ${item.isGroup ? "group-tile" : ""} ${item.locked ? "locked" : ""}"
+            onclick="handleTileClick('${item.id}')">
+            ${item.isGroup ? `<span class="group-badge">${item.count} mục</span>` : ""}
+            <div class="tile-icon">${item.locked ? "🔒" : item.icon}</div>
+            <div class="tile-body">
+              <span class="tile-title">${item.label}</span>
+              <span class="tile-sub">${item.isGroup ? "Nhóm menu" : (item.locked ? "Cần Rank 6" : "Mở nhanh")}</span>
+            </div>
+          </button>
+        `;
+      }).join("");
+
+      const cutoffCount = Math.max(0, state.visibleOrder.length - effectiveLimit);
+      document.getElementById("stateBar").innerHTML = `
+        <strong>State hiện tại:</strong>
+        Đang hiện <code>${shownIds.length}/${state.visibleOrder.length}</code> mục đã bật
+        (Giới hạn: <code>${state.limit === 0 ? "Tất cả" : state.limit}</code>${cutoffCount > 0 ? `, tạm cắt <code>${cutoffCount}</code> mục cuối` : ""}).
+        Thứ tự: <code>[${shownIds.join(", ")}]</code>
+      `;
+    }
+
+    function handleTileClick(id) {
+      const item = getEntry(id);
+      if (item.locked) { showToast("Tiên Khiếu yêu cầu Rank 6+"); return; }
+      if (item.isGroup) {
+        openGroupModal(item.group);
+      } else {
+        showToast(`Đã mở màn hình: ${item.label}`);
+      }
+    }
+
+    function openGroupModal(group) {
+      document.getElementById("groupModalTitle").textContent = `${group.icon} ${group.label}`;
+      const body = document.getElementById("groupModalBody");
+      body.innerHTML = `<div class="sub-grid">` + group.children.map(cid => {
+        const f = getEntry(cid);
+        const isPinned = state.visibleOrder.includes(cid);
+        return `
+          <div class="sub-item">
+            <div class="sub-item-main" onclick="showToast('Mở ${f.label}'); closeModal('groupBackdrop')">
+              <div class="tile-icon" style="width:36px;height:36px;font-size:16px;">${f.icon}</div>
+              <div>
+                <strong>${f.label}</strong>
+                <span>${f.desc}</span>
+              </div>
+            </div>
+            <button class="btn ${isPinned ? "active" : ""}" onclick="togglePin('${cid}', '${group.id}')">
+              ${isPinned ? "Đã ghim" : "+ Ghim"}
+            </button>
+          </div>
+        `;
+      }).join("") + `</div>`;
+      openModal("groupBackdrop");
+    }
+
+    function togglePin(id, reopenGroupId) {
+      const idx = state.visibleOrder.indexOf(id);
+      if (idx >= 0) {
+        state.visibleOrder.splice(idx, 1);
+        showToast(`Đã gỡ "${getEntry(id).label}" khỏi Lưới Lobby`);
+      } else {
+        state.visibleOrder.push(id);
+        showToast(`Đã ghim "${getEntry(id).label}" ra Lưới Lobby`);
+      }
+      renderLobby();
+      if (reopenGroupId) openGroupModal(GROUPS.find(g => g.id === reopenGroupId));
+    }
+
+    function openAllModal() {
+      document.getElementById("allSearch").value = "";
+      renderAllModal();
+      openModal("allBackdrop");
+    }
+
+    function renderAllModal() {
+      const q = document.getElementById("allSearch").value.trim().toLowerCase();
+      const coreIds = ["character", "inventory", "refine", "explore", "aperture", "pets", "sect"];
+      const sections = [
+        { title: "Cốt Lõi", ids: coreIds },
+        ...GROUPS.map(g => ({ title: `${g.icon} ${g.label}`, ids: g.children }))
+      ];
+      const html = sections.map(sec => {
+        const matched = sec.ids.filter(id => getEntry(id).label.toLowerCase().includes(q));
+        if (!matched.length) return "";
+        return `
+          <div>
+            <div class="section-title">${sec.title}</div>
+            <div class="sub-grid">
+              ${matched.map(id => {
+                const f = getEntry(id);
+                return `
+                  <div class="sub-item" style="${f.locked ? "opacity:0.5" : ""}">
+                    <div class="sub-item-main" onclick="${f.locked ? "showToast('Cần Rank 6+')" : `showToast('Mở ${f.label}'); closeModal('allBackdrop')`}">
+                      <div class="tile-icon" style="width:34px;height:34px;font-size:15px;">${f.locked ? "🔒" : f.icon}</div>
+                      <div><strong>${f.label}</strong><span>${f.desc}</span></div>
+                    </div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          </div>
+        `;
+      }).join("");
+      document.getElementById("allModalBody").innerHTML = html || `<p style="color:var(--muted)">Không tìm thấy tính năng phù hợp.</p>`;
+    }
+
+    function openSettingsModal() {
+      renderSettingsModal();
+      openModal("settingsBackdrop");
+    }
+
+    function setLimit(val) {
+      state.limit = val;
+      renderLobby();
+      renderSettingsModal();
+    }
+
+    function moveItem(index, delta) {
+      const target = index + delta;
+      if (target < 0 || target >= state.visibleOrder.length) return;
+      const arr = state.visibleOrder;
+      [arr[index], arr[target]] = [arr[target], arr[index]];
+      renderLobby();
+      renderSettingsModal();
+    }
+
+    function removeVisible(id) {
+      state.visibleOrder = state.visibleOrder.filter(x => x !== id);
+      renderLobby();
+      renderSettingsModal();
+    }
+
+    function addVisible(id) {
+      if (!state.visibleOrder.includes(id)) state.visibleOrder.push(id);
+      renderLobby();
+      renderSettingsModal();
+    }
+
+    function resetDefaults() {
+      state.visibleOrder = [...DEFAULT_VISIBLE];
+      state.limit = 12;
+      renderLobby();
+      renderSettingsModal();
+      showToast("Đã khôi phục cấu hình mặc định (11 ô, giới hạn 12)");
+    }
+
+    function renderSettingsModal() {
+      const effectiveLimit = state.limit === 0 ? Infinity : state.limit;
+      const allIds = [...GROUPS.map(g => g.id), ...Object.keys(FEATURES)];
+      const available = allIds.filter(id => !state.visibleOrder.includes(id));
+
+      document.getElementById("settingsModalBody").innerHTML = `
+        <div>
+          <div class="section-title">1. Số lượng tối đa ngoài Lobby</div>
+          <div class="preset-row">
+            ${[6, 8, 12, 0].map(val => `
+              <button class="btn ${state.limit === val ? "active" : ""}" onclick="setLimit(${val})">
+                ${val === 0 ? "Tất cả" : `${val} ô`}
+              </button>
+            `).join("")}
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">2. Thứ tự &amp; các mục đang bật (${state.visibleOrder.length})</div>
+          <div class="order-list">
+            ${state.visibleOrder.map((id, idx) => {
+              const item = getEntry(id);
+              const isCutoff = idx >= effectiveLimit;
+              return `
+                <div class="order-row ${isCutoff ? "cutoff" : ""}">
+                  <div class="order-row-left">
+                    <span style="color:var(--muted);font-family:monospace;width:20px;">${idx + 1}.</span>
+                    <span>${item.icon}</span>
+                    <strong>${item.label}</strong>
+                    ${item.isGroup ? `<span class="tag group">Nhóm</span>` : ""}
+                    ${isCutoff ? `<span class="tag cutoff-tag">Ngoài top ${state.limit}</span>` : ""}
+                  </div>
+                  <div class="order-actions">
+                    <button class="icon-btn" ${idx === 0 ? "disabled" : ""} onclick="moveItem(${idx}, -1)" title="Lên">▲</button>
+                    <button class="icon-btn" ${idx === state.visibleOrder.length - 1 ? "disabled" : ""} onclick="moveItem(${idx}, 1)" title="Xuống">▼</button>
+                    <button class="icon-btn" onclick="removeVisible('${id}')" title="Ẩn khỏi lưới">✕</button>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">3. Thêm mục hoặc nhóm vào Lưới Lobby (${available.length})</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            ${available.map(id => {
+              const item = getEntry(id);
+              return `<button class="btn" onclick="addVisible('${id}')">+ ${item.icon} ${item.label}</button>`;
+            }).join("") || `<span style="color:var(--muted);font-size:12px;">Tất cả mục đã được thêm ra Lưới Lobby.</span>`}
+          </div>
+        </div>
+      `;
+    }
+
+    renderLobby();
+  </script>
+</body>
+</html>

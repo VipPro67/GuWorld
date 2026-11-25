@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  CORE_LOBBY_FEATURE_IDS,
+  DEFAULT_LOBBY_GRID_ITEMS,
+  DEFAULT_LOBBY_GRID_LIMIT,
+  LOBBY_GRID_LIMIT_OPTIONS,
+  LOBBY_MENU_GROUPS,
+  LOBBY_MENU_VERSION,
+  VALID_LOBBY_GRID_IDS,
+  type LobbyGridLimit,
+} from "./lobby-menu.ts";
 
 /**
  * Single local save for UI settings. Everything device-specific that the client
@@ -50,6 +60,9 @@ export const DEFAULT_MENU_COLOR: MenuColorConfig = {
 export type UiPreferences = {
   lobbyItems: string[];
   hiddenLobbyItems: string[];
+  lobbyGridItems: string[];
+  lobbyGridLimit: LobbyGridLimit;
+  lobbyMenuVersion: number;
   playerViewMode: HudViewMode | "";
   targetViewMode: HudViewMode | "";
   changelogHideUntil: string;
@@ -129,11 +142,47 @@ function normalizeMenuColor(value: unknown): MenuColorConfig {
   return { preset, customBgColor, opacity, enableTexture };
 }
 
+function normalizeLobbyGridItems(value: unknown): string[] {
+  if (!Array.isArray(value)) return [...DEFAULT_LOBBY_GRID_ITEMS];
+  return [...new Set(value.filter((id): id is string => typeof id === "string" && VALID_LOBBY_GRID_IDS.has(id)))];
+}
+
+function normalizeLobbyGridLimit(value: unknown): LobbyGridLimit {
+  if (typeof value === "number" && (LOBBY_GRID_LIMIT_OPTIONS as readonly number[]).includes(value)) {
+    return value as LobbyGridLimit;
+  }
+  return DEFAULT_LOBBY_GRID_LIMIT;
+}
+
+function migrateLegacyLobbyGridItems(hiddenItems: string[]): string[] {
+  if (hiddenItems.length === 0) return [...DEFAULT_LOBBY_GRID_ITEMS];
+  const hiddenSet = new Set(hiddenItems);
+  const migrated: string[] = [];
+  for (const coreId of CORE_LOBBY_FEATURE_IDS) {
+    if (!hiddenSet.has(coreId)) migrated.push(coreId);
+  }
+  for (const group of LOBBY_MENU_GROUPS) {
+    if (group.children.some((childId) => !hiddenSet.has(childId))) {
+      migrated.push(group.id);
+    }
+  }
+  return migrated;
+}
+
 export function normalizeUiPreferences(value: unknown): UiPreferences {
   const stored = value && typeof value === "object" ? (value as Partial<UiPreferences>) : {};
+  const legacyHidden = normalizeHiddenLobbyItems(stored.hiddenLobbyItems);
+  const isV2 = typeof stored.lobbyMenuVersion === "number" && stored.lobbyMenuVersion >= LOBBY_MENU_VERSION;
+  const lobbyGridItems = isV2
+    ? normalizeLobbyGridItems(stored.lobbyGridItems)
+    : migrateLegacyLobbyGridItems(legacyHidden);
+
   return {
     lobbyItems: normalizeLobbyItems(stored.lobbyItems),
-    hiddenLobbyItems: normalizeHiddenLobbyItems(stored.hiddenLobbyItems),
+    hiddenLobbyItems: legacyHidden,
+    lobbyGridItems,
+    lobbyGridLimit: normalizeLobbyGridLimit(stored.lobbyGridLimit),
+    lobbyMenuVersion: LOBBY_MENU_VERSION,
     playerViewMode: isViewMode(stored.playerViewMode) ? stored.playerViewMode : "",
     targetViewMode: isViewMode(stored.targetViewMode) ? stored.targetViewMode : "",
     changelogHideUntil: typeof stored.changelogHideUntil === "string" ? stored.changelogHideUntil : "",
@@ -470,6 +519,9 @@ export function resetUiPreferences(): UiPreferences {
   return updateUiPreferences({
     lobbyItems: [...DEFAULT_LOBBY_ITEMS],
     hiddenLobbyItems: [],
+    lobbyGridItems: [...DEFAULT_LOBBY_GRID_ITEMS],
+    lobbyGridLimit: DEFAULT_LOBBY_GRID_LIMIT,
+    lobbyMenuVersion: LOBBY_MENU_VERSION,
     menuColor: { ...DEFAULT_MENU_COLOR },
   });
 }

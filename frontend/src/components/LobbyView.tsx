@@ -29,12 +29,19 @@ import {
   Settings2,
   ChevronRight,
   MapPin,
+  LayoutGrid,
+  Pin,
+  Search,
+  SlidersHorizontal,
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 import { Num } from "./Num";
 import { SpatialRealmsModal } from "./SpatialRealmsModal";
 import { LobbySettingsPanel } from "./LobbySettingsPanel";
-import { useUiPreferences } from "@/lib/ui-preferences";
+import { LobbyGridSettingsEditor } from "./LobbyGridSettingsEditor";
+import { CORE_LOBBY_FEATURE_IDS, LOBBY_FEATURE_IDS, LOBBY_MENU_GROUPS } from "@/lib/lobby-menu";
+import { updateUiPreferences, useUiPreferences } from "@/lib/ui-preferences";
+import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import Link from "next/link";
 
 interface HubItem {
@@ -47,6 +54,9 @@ interface HubItem {
   iconColor: string;
   artwork?: string;
   locked?: boolean;
+  desc?: string;
+  isGroup?: boolean;
+  childCount?: number;
 }
 
 const formatRelativeTime = (createdAtStr: string): string => {
@@ -88,8 +98,25 @@ export const LobbyView: React.FC = () => {
   } = useGameStore();
   const [manaNow, setManaNow] = useState(() => Date.now());
   const [combatSettingsOpen, setCombatSettingsOpen] = useState(false);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [allFeaturesOpen, setAllFeaturesOpen] = useState(false);
+  const [allFeaturesQuery, setAllFeaturesQuery] = useState("");
+  const [gridSettingsOpen, setGridSettingsOpen] = useState(false);
   const combatSettingsDialogRef = useRef<HTMLElement>(null);
-  const { lobbyItems, hiddenLobbyItems } = useUiPreferences();
+  const { lobbyGridItems, lobbyGridLimit } = useUiPreferences();
+  const { dialogRef: groupDialogRef, onKeyDown: groupDialogKeyDown } = useAccessibleDialog<HTMLElement>(
+    () => setActiveGroupId(null),
+    Boolean(activeGroupId),
+    activeGroupId ?? undefined
+  );
+  const { dialogRef: allFeaturesDialogRef, onKeyDown: allFeaturesDialogKeyDown } = useAccessibleDialog<HTMLElement>(
+    () => setAllFeaturesOpen(false),
+    allFeaturesOpen
+  );
+  const { dialogRef: gridSettingsDialogRef, onKeyDown: gridSettingsDialogKeyDown } = useAccessibleDialog<HTMLElement>(
+    () => setGridSettingsOpen(false),
+    gridSettingsOpen
+  );
 
   useEffect(() => {
     if (!combatSettingsOpen) return;
@@ -331,7 +358,7 @@ export const LobbyView: React.FC = () => {
     },
     {
       id: "utilities",
-      label: "Tiện Ích",
+      label: "Phong Ấn Cổ Trùng",
       icon: Layers,
       gradient: "from-amber-600 to-orange-700",
       glow: "group-hover:shadow-[0_0_25px_rgba(245,158,11,0.45)]",
@@ -426,8 +453,34 @@ export const LobbyView: React.FC = () => {
     },
   ];
 
+  const groupIconMap: Record<string, React.ComponentType<ApiResponseData>> = {
+    "combat-hub": Swords,
+    "commerce-hub": Store,
+    "adventure-hub": Compass,
+    "system-hub": Layers,
+  };
+
+  const groupItems: HubItem[] = LOBBY_MENU_GROUPS.map((group) => ({
+    id: group.id,
+    label: group.label,
+    desc: group.desc,
+    icon: groupIconMap[group.id] || LayoutGrid,
+    gradient: "from-amber-500 to-orange-600",
+    glow: "group-hover:shadow-[0_0_25px_rgba(245,158,11,0.45)]",
+    borderColor: "border-amber-400/30",
+    iconColor: "text-amber-200",
+    isGroup: true,
+    childCount: group.children.length,
+  }));
+
   const handleItemClick = (item: HubItem) => {
     if (item.locked) return;
+    if (item.isGroup) {
+      setActiveGroupId(item.id);
+      return;
+    }
+    setActiveGroupId(null);
+    setAllFeaturesOpen(false);
     if (item.id === "divination") {
       openDivinationModal();
       return;
@@ -443,10 +496,19 @@ export const LobbyView: React.FC = () => {
     setView(item.id);
   };
 
-  const orderLobbyItems = (items: HubItem[]) => items
-    .filter((item) => !hiddenLobbyItems.includes(item.id))
-    .sort((a, b) => lobbyItems.indexOf(a.id) - lobbyItems.indexOf(b.id));
+  const togglePinFeature = (featureId: string) => {
+    const exists = lobbyGridItems.includes(featureId);
+    const next = exists
+      ? lobbyGridItems.filter((id) => id !== featureId)
+      : [...lobbyGridItems, featureId];
+    updateUiPreferences({ lobbyGridItems: next });
+  };
+
   const lobbyArtwork: Record<string, string> = {
+    "combat-hub": "/assets/world/form-six-arm-ice-demon.webp",
+    "commerce-hub": "/assets/items/icons/chest.webp",
+    "adventure-hub": "/assets/world/spirit-beast.webp",
+    "system-hub": "/assets/items/icons/scroll.webp",
     character: "/assets/world/form-reckless-savage.webp",
     inventory: "/assets/items/preview.webp",
     refine: "/assets/world/spirit-herb.webp",
@@ -474,10 +536,21 @@ export const LobbyView: React.FC = () => {
     "combat-history": "/assets/items/icons/blade.webp",
     "audit-logs": "/assets/items/icons/map.webp",
   };
-  const visibleLobbyItems = orderLobbyItems([...managementItems, ...activityItems]).map((item) => ({
-    ...item,
-    artwork: lobbyArtwork[item.id],
-  }));
+
+  const entryById = new Map<string, HubItem>(
+    [...managementItems, ...activityItems, ...groupItems].map((item) => [
+      item.id,
+      { ...item, artwork: lobbyArtwork[item.id] },
+    ])
+  );
+  const effectiveGridLimit = lobbyGridLimit === 0 ? lobbyGridItems.length : lobbyGridLimit;
+  const visibleLobbyItems = lobbyGridItems
+    .slice(0, effectiveGridLimit)
+    .map((id) => entryById.get(id))
+    .filter((item): item is HubItem => Boolean(item));
+  const activeGroup = activeGroupId
+    ? LOBBY_MENU_GROUPS.find((group) => group.id === activeGroupId) ?? null
+    : null;
 
   const getRankName = (rank: number, sub: number, aperture?: ImmortalAperture | null): string => {
     const ranks = ["Sơ giai", "Trung giai", "Cao giai", "Đỉnh phong"];
@@ -665,7 +738,7 @@ export const LobbyView: React.FC = () => {
       </div>
 
       <div className="flex flex-col gap-3 sm:gap-4">
-        <div className="flex items-end justify-between border-b border-[var(--border-default)]/60 pb-2">
+        <div className="flex flex-wrap items-end justify-between gap-2 border-b border-[var(--border-default)]/60 pb-2">
           <div>
             <h2 className="font-serif text-base sm:text-lg font-bold tracking-wide text-[var(--text-primary,#f4e8cb)]">
               Điểm Đến Cổ Giới
@@ -674,9 +747,27 @@ export const LobbyView: React.FC = () => {
               Chọn một nơi để tiếp tục hành trình
             </p>
           </div>
-          <span className="rounded-full border border-[var(--border-default)]/70 bg-black/20 px-2.5 py-1 text-[10px] text-[var(--text-muted,#ad9878)] font-mono">
-            {visibleLobbyItems.length} chức năng
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setAllFeaturesQuery("");
+                setAllFeaturesOpen(true);
+              }}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[var(--border-default)]/80 bg-black/25 px-3 py-1 text-[11px] font-semibold text-[var(--text-primary,#f4e8cb)] transition hover:border-[var(--mmo-menu-accent,#e4b96c)] hover:bg-black/40 cursor-pointer"
+            >
+              <LayoutGrid className="h-3.5 w-3.5 text-[var(--mmo-menu-accent,#e4b96c)]" />
+              <span>Xem tất cả ({LOBBY_FEATURE_IDS.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setGridSettingsOpen(true)}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[var(--mmo-menu-border-soft,rgba(168,137,82,0.45))] bg-[var(--mmo-theme-elevated,#352618)] px-3 py-1 text-[11px] font-semibold text-[var(--text-primary,#f4e8cb)] transition hover:border-[var(--mmo-menu-accent,#e4b96c)] hover:brightness-110 cursor-pointer"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5 text-[var(--mmo-menu-accent,#e4b96c)]" />
+              <span>Cài đặt lưới</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 gap-2 sm:gap-3">
@@ -718,13 +809,20 @@ export const LobbyView: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <span className={`relative z-[1] min-w-0 flex-1 font-serif text-[11px] font-semibold leading-snug tracking-wide transition-colors sm:text-xs ${
-                  item.locked
-                    ? "text-zinc-500"
-                    : "text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]"
-                }`}>
-                  {item.label}
-                </span>
+                <div className="relative z-[1] min-w-0 flex-1">
+                  <span className={`block font-serif text-[11px] font-semibold leading-snug tracking-wide transition-colors sm:text-xs ${
+                    item.locked
+                      ? "text-zinc-500"
+                      : "text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]"
+                  }`}>
+                    {item.label}
+                  </span>
+                  {item.isGroup && (
+                    <span className="mt-0.5 block text-[10px] text-[var(--text-muted,#ad9878)]">
+                      Nhóm menu • {item.childCount} mục
+                    </span>
+                  )}
+                </div>
                 {!item.locked && <ChevronRight className="relative z-[1] h-4 w-4 shrink-0 text-amber-500/65 transition-transform group-hover:translate-x-0.5 group-hover:text-amber-300" />}
               </button>
             );
@@ -771,6 +869,211 @@ export const LobbyView: React.FC = () => {
           </section>
         </div>
       )}
+      {activeGroup && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setActiveGroupId(null);
+          }}
+        >
+          <section
+            ref={groupDialogRef}
+            onKeyDown={groupDialogKeyDown}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lobby-group-modal-title"
+            tabIndex={-1}
+            className="flex max-h-[86dvh] w-full max-w-xl flex-col overflow-hidden overscroll-contain rounded-t-2xl border border-amber-900/60 bg-zinc-950 shadow-2xl sm:rounded-2xl"
+          >
+            <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3 sm:px-5">
+              <div>
+                <h2 id="lobby-group-modal-title" className="font-serif text-base font-bold text-amber-100">
+                  {activeGroup.label}
+                </h2>
+                <p className="text-[11px] text-zinc-500">{activeGroup.desc}</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Đóng nhóm menu"
+                onClick={() => setActiveGroupId(null)}
+                className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-zinc-800 p-2 text-zinc-400 hover:bg-zinc-900 hover:text-white cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="grid grid-cols-1 gap-2.5 overflow-y-auto p-4 sm:grid-cols-2 sm:p-5">
+              {activeGroup.children.map((childId) => {
+                const child = entryById.get(childId);
+                if (!child) return null;
+                const ChildIcon = child.icon;
+                const isPinned = lobbyGridItems.includes(child.id);
+                return (
+                  <div
+                    key={child.id}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-900/70 p-2.5"
+                  >
+                    <button
+                      type="button"
+                      disabled={child.locked}
+                      onClick={() => handleItemClick(child)}
+                      className={`flex min-w-0 flex-1 items-center gap-2.5 text-left ${
+                        child.locked ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:text-amber-200"
+                      }`}
+                    >
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-zinc-700/70 bg-zinc-950">
+                        <ChildIcon className="h-4 w-4 text-amber-300" />
+                      </div>
+                      <span className="truncate font-serif text-xs font-semibold text-zinc-100">
+                        {child.label}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => togglePinFeature(child.id)}
+                      className={`inline-flex min-h-8 shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold transition cursor-pointer ${
+                        isPinned
+                          ? "border-amber-400/60 bg-amber-950/50 text-amber-200"
+                          : "border-zinc-700 bg-zinc-950 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                      }`}
+                    >
+                      <Pin className="h-3 w-3" />
+                      <span>{isPinned ? "Đã ghim" : "Ghim"}</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {allFeaturesOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setAllFeaturesOpen(false);
+          }}
+        >
+          <section
+            ref={allFeaturesDialogRef}
+            onKeyDown={allFeaturesDialogKeyDown}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lobby-all-features-title"
+            tabIndex={-1}
+            className="flex max-h-[88dvh] w-full max-w-2xl flex-col overflow-hidden overscroll-contain rounded-t-2xl border border-amber-900/60 bg-zinc-950 shadow-2xl sm:rounded-2xl"
+          >
+            <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3 sm:px-5">
+              <div>
+                <h2 id="lobby-all-features-title" className="font-serif text-base font-bold text-amber-100">
+                  Tất Cả Chức Năng ({LOBBY_FEATURE_IDS.length})
+                </h2>
+                <p className="text-[11px] text-zinc-500">Truy cập nhanh mọi tính năng dù đã ẩn khỏi Lưới Lobby</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Đóng danh sách chức năng"
+                onClick={() => setAllFeaturesOpen(false)}
+                className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-zinc-800 p-2 text-zinc-400 hover:bg-zinc-900 hover:text-white cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="border-b border-zinc-800 px-4 py-2.5 sm:px-5">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <input
+                  type="text"
+                  value={allFeaturesQuery}
+                  onChange={(event) => setAllFeaturesQuery(event.target.value)}
+                  placeholder="Tìm nhanh tính năng..."
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 py-2 pl-9 pr-3 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-amber-500/60 focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="space-y-4 overflow-y-auto p-4 sm:p-5">
+              {[
+                { title: "Cốt Lõi", ids: CORE_LOBBY_FEATURE_IDS as readonly string[] },
+                ...LOBBY_MENU_GROUPS.map((group) => ({ title: group.label, ids: group.children })),
+              ].map((section) => {
+                const q = allFeaturesQuery.trim().toLowerCase();
+                const matched = section.ids
+                  .map((id) => entryById.get(id))
+                  .filter((item): item is HubItem => Boolean(item && (!q || item.label.toLowerCase().includes(q))));
+                if (matched.length === 0) return null;
+                return (
+                  <div key={section.title}>
+                    <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-amber-300/80">
+                      {section.title}
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {matched.map((item) => {
+                        const ItemIcon = item.icon;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            disabled={item.locked}
+                            onClick={() => handleItemClick(item)}
+                            className={`flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/70 px-2.5 py-2 text-left text-xs font-semibold transition ${
+                              item.locked
+                                ? "cursor-not-allowed opacity-50 text-zinc-500"
+                                : "cursor-pointer text-zinc-200 hover:border-amber-500/50 hover:bg-zinc-900"
+                            }`}
+                          >
+                            <ItemIcon className="h-4 w-4 shrink-0 text-amber-300" />
+                            <span className="truncate">{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {gridSettingsOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setGridSettingsOpen(false);
+          }}
+        >
+          <section
+            ref={gridSettingsDialogRef}
+            onKeyDown={gridSettingsDialogKeyDown}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lobby-grid-settings-title"
+            tabIndex={-1}
+            className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden overscroll-contain rounded-t-2xl border border-amber-900/60 bg-zinc-950 shadow-2xl sm:rounded-2xl"
+          >
+            <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3 sm:px-5">
+              <div>
+                <h2 id="lobby-grid-settings-title" className="font-serif text-base font-bold text-amber-100">
+                  Cài Đặt Lưới Lobby
+                </h2>
+                <p className="text-[11px] text-zinc-500">Chỉnh số lượng, thứ tự và ghim tính năng ra Lobby</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Đóng cài đặt lưới Lobby"
+                onClick={() => setGridSettingsOpen(false)}
+                className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-zinc-800 p-2 text-zinc-400 hover:bg-zinc-900 hover:text-white cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="overflow-y-auto p-4 sm:p-5">
+              <LobbyGridSettingsEditor />
+            </div>
+          </section>
+        </div>
+      )}
+
       <SpatialRealmsModal />
     </div>
   );
