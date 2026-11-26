@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
@@ -111,7 +112,7 @@ func TestPublicApertureEcologyIsStableAndInstanceScoped(t *testing.T) {
 			first := resolvePublicApertureCell("public-aperture-one", x, y)
 			repeated := resolvePublicApertureCell("public-aperture-one", x, y)
 			second := resolvePublicApertureCell("public-aperture-two", x, y)
-			if first != repeated {
+			if !reflect.DeepEqual(first, repeated) {
 				t.Fatalf("same aperture cell changed across resolutions at (%d,%d): first=%+v repeat=%+v", x, y, first, repeated)
 			}
 			if first.Type == "Monster" {

@@ -657,6 +657,9 @@ func UnanchorAperture(c *gin.Context) {
 
 	layer := worldMapIDForRegion(destRegion)
 	heavenMultiplier, earthMultiplier := LayerQiMultipliers(layer)
+	domQiMult := ApertureDominionQiMultiplier(playerID.String(), destRegion)
+	heavenMultiplier *= domQiMult
+	earthMultiplier *= domQiMult
 
 	// Nạp Tam Khí: mỗi phút hạ khiếu nạp lại +1% trần max_heaven_qi và max_earth_qi theo hệ số tầng không gian
 	gainedHeavenQi := elapsedMinutes * (ap.MaxHeavenQi * 0.01) * heavenMultiplier

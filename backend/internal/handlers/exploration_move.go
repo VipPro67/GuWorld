@@ -1037,7 +1037,7 @@ func buildMovePathPlayerUpdate(player *models.Player, beforeGus models.GuInvento
 // ExecuteMovePlayerPath moves the player along a straight path from its current cell
 // to the requested cell, decoupled from HTTP gin.Context.
 func ExecuteMovePlayerPath(ctx context.Context, authID uuid.UUID, req MoveRequest) (int, gin.H) {
-	spec := movementSpec{kind: movementWalk, x: req.X, y: req.Y, hasTarget: true}
+	spec := movementSpec{kind: movementWalk, x: req.X, y: req.Y, hasTarget: true, allowBorderWalk: true}
 	if err := validateMovementTarget(spec); err != nil {
 		status, payload, _ := movementErrorPayload(err)
 		return status, payload

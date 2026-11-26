@@ -288,6 +288,17 @@ export function getRegionDetailsFromCache(
   };
 }
 
+function normalizeWorldLayer(region: Region | undefined): string {
+  const wm = region?.world_map_id;
+  if (wm === "dia_uyen" || wm === "bai_thien" || wm === "hac_thien" || wm === "world_map") {
+    return wm;
+  }
+  if (region?.id.startsWith("du_") || region?.parent_id?.startsWith("du_")) return "dia_uyen";
+  if (region?.id.startsWith("bt_") || region?.parent_id?.startsWith("bt_")) return "bai_thien";
+  if (region?.id.startsWith("ht_") || region?.parent_id?.startsWith("ht_")) return "hac_thien";
+  return "world_map";
+}
+
 export function findNeighborRegion(
   current: Region | undefined,
   dirX: number,
@@ -299,12 +310,12 @@ export function findNeighborRegion(
   const stepY = current.height || 1000;
   const targetAtlasX = (current.atlas_x ?? 0) + dirX * stepX;
   const targetAtlasY = (current.atlas_y ?? 0) + dirY * stepY;
-  const currLayer = current.world_map_id || "world_map";
+  const currLayer = normalizeWorldLayer(current);
 
   // 1. Direct match (both X and Y)
   const exact = allRegions.find((r) => {
     if (!["KHU_VUC", "SAFE_ZONE", "HUB"].includes(r.zone_type || "")) return false;
-    const rLayer = r.world_map_id || "world_map";
+    const rLayer = normalizeWorldLayer(r);
     if (rLayer !== currLayer) return false;
     return r.atlas_x === targetAtlasX && r.atlas_y === targetAtlasY;
   });
@@ -314,7 +325,7 @@ export function findNeighborRegion(
   if (dirX !== 0 && dirY !== 0) {
     const matchX = allRegions.find((r) => {
       if (!["KHU_VUC", "SAFE_ZONE", "HUB"].includes(r.zone_type || "")) return false;
-      const rLayer = r.world_map_id || "world_map";
+      const rLayer = normalizeWorldLayer(r);
       if (rLayer !== currLayer) return false;
       return r.atlas_x === targetAtlasX && r.atlas_y === (current.atlas_y ?? 0);
     });
@@ -322,7 +333,7 @@ export function findNeighborRegion(
 
     const matchY = allRegions.find((r) => {
       if (!["KHU_VUC", "SAFE_ZONE", "HUB"].includes(r.zone_type || "")) return false;
-      const rLayer = r.world_map_id || "world_map";
+      const rLayer = normalizeWorldLayer(r);
       if (rLayer !== currLayer) return false;
       return r.atlas_x === (current.atlas_x ?? 0) && r.atlas_y === targetAtlasY;
     });

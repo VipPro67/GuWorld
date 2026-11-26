@@ -756,8 +756,9 @@ type CombatState struct {
 
 	// Interactive is optional. A caller can replay the initial state with the
 	// accepted command log to reach the next human decision deterministically.
-	Interactive *InteractiveCombat `json:"interactive,omitempty"`
-	FledBy      string             `json:"fled_by,omitempty"`
+	Interactive *InteractiveCombat       `json:"interactive,omitempty"`
+	FledBy      string                   `json:"fled_by,omitempty"`
+	EnvDao      *gamefx.EnvCombatContext `json:"env_dao,omitempty"`
 }
 
 // CombatCommand is either one legacy action or a locked multi-action plan.

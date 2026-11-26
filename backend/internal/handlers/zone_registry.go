@@ -43,6 +43,7 @@ type zoneRegistry struct {
 	mu         sync.RWMutex
 	zones      []models.Region
 	byID       map[string]*models.Region
+	dominions  map[string]models.RegionDaoDominion
 	persistent map[persistentCellKey]persistentCell
 	spawnPools map[string][]models.MonsterSpawn
 }
@@ -86,6 +87,7 @@ func LoadZoneRegistry(db *sql.DB) error {
 	}
 	newReg := &zoneRegistry{
 		byID:       make(map[string]*models.Region),
+		dominions:  make(map[string]models.RegionDaoDominion),
 		persistent: make(map[persistentCellKey]persistentCell),
 		spawnPools: make(map[string][]models.MonsterSpawn),
 	}
@@ -97,7 +99,7 @@ func LoadZoneRegistry(db *sql.DB) error {
 		       COALESCE(min_x,0), COALESCE(min_y,0), COALESCE(max_x,0), COALESCE(max_y,0),
 		       COALESCE(entry_x,0), COALESCE(entry_y,0), COALESCE(pool_weights::text,'{}'), COALESCE(rules::text,'{}'),
 		       COALESCE(safe_zone_x,0), COALESCE(safe_zone_y,0), COALESCE(rwm.world_map_id,'world_map'),
-		       COALESCE(r.atlas_x,0), COALESCE(r.atlas_y,0)
+		       COALESCE(r.atlas_x,0), COALESCE(r.atlas_y,0), COALESCE(r.natural_dao_marks::text,'{}')
 		FROM regions r LEFT JOIN region_world_maps rwm ON rwm.region_id = r.id
 		WHERE is_active = TRUE
 	`)
@@ -109,14 +111,14 @@ func LoadZoneRegistry(db *sql.DB) error {
 	for rows.Next() {
 		var z models.Region
 		var active bool
-		var poolRaw, rulesRaw string
+		var poolRaw, rulesRaw, natDaoRaw string
 		var safeX, safeY sql.NullInt64
 		if err := rows.Scan(&z.ID, &z.Name, &z.Description, &z.Width, &z.Height,
 			&z.MinRank, &z.MaxRank, &active,
 			&z.ParentID, &z.ZoneType,
 			&z.MinX, &z.MinY, &z.MaxX, &z.MaxY,
 			&z.EntryX, &z.EntryY, &poolRaw, &rulesRaw, &safeX, &safeY, &z.WorldMapID,
-			&z.AtlasX, &z.AtlasY); err != nil {
+			&z.AtlasX, &z.AtlasY, &natDaoRaw); err != nil {
 
 			logger.S.Warnf("zone registry scan: %v", err)
 			continue
@@ -137,6 +139,9 @@ func LoadZoneRegistry(db *sql.DB) error {
 		if poolRaw != "" && poolRaw != "{}" {
 			_ = json.Unmarshal([]byte(poolRaw), &z.PoolWeights)
 		}
+		if natDaoRaw != "" && natDaoRaw != "{}" {
+			_ = json.Unmarshal([]byte(natDaoRaw), &z.NaturalDaoMarks)
+		}
 		z.Rules = json.RawMessage(rulesRaw)
 		// legacy width/height backfill
 		if z.MaxX == 0 && z.MaxY == 0 && z.Width > 1 && z.Height > 1 {
@@ -156,7 +161,7 @@ func LoadZoneRegistry(db *sql.DB) error {
 	cells, err := db.Query(`
 		SELECT region_id, x, y, cell_type, COALESCE(content_id,''), COALESCE(metadata::text,'{}'),
 		       COALESCE(respawn_seconds,300), COALESCE(last_cleared_at, NOW() - INTERVAL '999 days'),
-		       COALESCE(is_active, TRUE)
+		       COALESCE(is_active, TRUE), COALESCE(dao_marks::text,'{}')
 		FROM map_cells
 		WHERE is_active = TRUE
 	`)
@@ -166,12 +171,15 @@ func LoadZoneRegistry(db *sql.DB) error {
 	defer cells.Close()
 	for cells.Next() {
 		var pc persistentCell
-		var metaRaw string
+		var metaRaw, daoRaw string
 		var isActive bool
 		if err := cells.Scan(&pc.RegionID, &pc.X, &pc.Y, &pc.Type, &pc.Content, &metaRaw,
-			&pc.RespawnSeconds, &pc.LastCleared, &isActive); err != nil {
+			&pc.RespawnSeconds, &pc.LastCleared, &isActive, &daoRaw); err != nil {
 			logger.S.Warnf("persistent cell scan: %v", err)
 			continue
+		}
+		if daoRaw != "" && daoRaw != "{}" {
+			_ = json.Unmarshal([]byte(daoRaw), &pc.DaoMarks)
 		}
 		if metaRaw != "" && metaRaw != "{}" {
 			var meta struct {
@@ -227,9 +235,27 @@ func LoadZoneRegistry(db *sql.DB) error {
 		return err
 	}
 
+	domRows, domErr := db.Query(`
+		SELECT region_id, owner_player_id::text, COALESCE(owner_name,''), path,
+		       COALESCE(control_pct,0), COALESCE(refined_marks,0),
+		       COALESCE(last_reinforced_at, NOW()), COALESCE(updated_at, NOW())
+		FROM region_dao_dominions
+	`)
+	if domErr == nil {
+		defer domRows.Close()
+		for domRows.Next() {
+			var d models.RegionDaoDominion
+			if err := domRows.Scan(&d.RegionID, &d.OwnerPlayerID, &d.OwnerName, &d.Path,
+				&d.ControlPct, &d.RefinedMarks, &d.LastReinforcedAt, &d.UpdatedAt); err == nil {
+				newReg.dominions[d.RegionID] = d
+			}
+		}
+	}
+
 	zoneReg.mu.Lock()
 	zoneReg.zones = newReg.zones
 	zoneReg.byID = newReg.byID
+	zoneReg.dominions = newReg.dominions
 	zoneReg.persistent = newReg.persistent
 	zoneReg.spawnPools = newReg.spawnPools
 	zoneReg.mu.Unlock()

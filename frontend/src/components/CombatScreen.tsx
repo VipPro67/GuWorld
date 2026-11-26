@@ -14,6 +14,7 @@ import { rankLabel, subRankLabel, typeColor, gridXLabel, getCombatEffects } from
 import { captureBonus, investigation, isCombatEligible, operationsBy } from "@/lib/effect-blocks";
 import { useTribulationCombatResolution } from "@/hooks/useTribulationCombatResolution";
 import { InteractiveCombatPanel } from "./InteractiveCombatPanel";
+import { EnvDaoPanel } from "./EnvDaoPanel";
 // UI migrated to shared components
 
 interface CombatScreenProps {
@@ -1761,6 +1762,7 @@ export const CombatScreen: React.FC<CombatScreenProps> = ({
 
   return (
     <GamePanel variant="default" className="w-full mx-auto">
+      <EnvDaoPanel compactBanner />
       {simulationLogs.length === 0
         ? (player?.active_combat || isPracticeMode ? renderLoadoutPhase() : null)
         : renderReplayPhase()}

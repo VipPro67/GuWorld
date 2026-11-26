@@ -44,9 +44,24 @@ type Region struct {
 	AtlasX         int             `json:"atlas_x"`
 	AtlasY         int             `json:"atlas_y"`
 	PoolWeights    ZonePools       `json:"pool_weights"`
-	Paths          []string        `json:"paths"`
-	Rules          json.RawMessage `json:"rules"`
-	EffectiveRules json.RawMessage `json:"effective_rules,omitempty"`
-	HasBoss        bool            `json:"has_boss"`
-	MonsterCount   int             `json:"monster_count"`
+	Paths             []string           `json:"paths"`
+	NaturalDaoMarks   map[string]float64 `json:"natural_dao_marks,omitempty"`
+	EffectiveDaoMarks map[string]float64 `json:"effective_dao_marks,omitempty"`
+	Dominion          *RegionDaoDominion `json:"dominion,omitempty"`
+	Rules             json.RawMessage    `json:"rules"`
+	EffectiveRules    json.RawMessage    `json:"effective_rules,omitempty"`
+	HasBoss           bool               `json:"has_boss"`
+	MonsterCount      int                `json:"monster_count"`
+}
+
+// RegionDaoDominion represents a Rank 9 Venerable's refined Dao Domain over a region.
+type RegionDaoDominion struct {
+	RegionID         string    `json:"region_id"`
+	OwnerPlayerID    string    `json:"owner_player_id"`
+	OwnerName        string    `json:"owner_name"`
+	Path             string    `json:"path"`
+	ControlPct       float64   `json:"control_pct"`
+	RefinedMarks     float64   `json:"refined_marks"`
+	LastReinforcedAt time.Time `json:"last_reinforced_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }

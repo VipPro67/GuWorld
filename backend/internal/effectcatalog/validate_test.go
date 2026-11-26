@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"testing"
+
+	"github.com/vippro67/GuWorld/backend/internal/statusfx"
 )
 
 func TestNormalizeLegacyFlatEffect(t *testing.T) {
@@ -252,5 +254,17 @@ func TestValidateBlocks(t *testing.T) {
 				t.Fatalf("%s: expected path %q, got %q (issue: %+v)", tt.name, tt.path, report.Issues[0].Path, report.Issues[0])
 			}
 		})
+	}
+}
+
+func TestStatusDefinitionsIncludesStatusFXRegistry(t *testing.T) {
+	for id := range statusfx.Registry {
+		if _, ok := StatusDefinitionFor(id); !ok {
+			t.Fatalf("statusfx.Registry status %q missing from StatusDefinitionFor", id)
+		}
+	}
+	raw := []byte(`{"blocks":[{"trigger":"ON_ACTION","target":{"selector":"ALL_ALLIES"},"operations":[{"op":"STATUS","status_id":"ALL_PEOPLE_UNITED","value":35,"turns":4}]}]}`)
+	if _, report, err := NormalizeAndValidate(raw); err != nil || report.HasErrors() {
+		t.Fatalf("ALL_PEOPLE_UNITED rejected: err=%v issues=%+v", err, report.Issues)
 	}
 }

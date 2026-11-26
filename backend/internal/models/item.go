@@ -459,19 +459,23 @@ func LoadItemRegistry(db *sql.DB) error {
 		item.ItemType = item.Type // align for backward compatibility
 		if blocks, err := gameplayeffects.DecodeBlockSet(rawEffects); err == nil && len(blocks) > 0 {
 			if err := ValidateItemBlocks(blocks); err != nil {
-				return fmt.Errorf("item %s: %w", item.ID, err)
+				logger.S.Warnf("skipping item %s with invalid effect blocks: %v", item.ID, err)
+				continue
 			}
 			item.Blocks = blocks
 			if err := item.compile(); err != nil {
-				return fmt.Errorf("compile item %s effects: %w", item.ID, err)
+				logger.S.Warnf("skipping item %s with uncompilable effect blocks: %v", item.ID, err)
+				continue
 			}
 		}
 		if err := item.Effects.Scan(rawEffects); err != nil {
-			return fmt.Errorf("scan item %s effects: %w", item.ID, err)
+			logger.S.Warnf("skipping item %s with invalid effects: %v", item.ID, err)
+			continue
 		}
 
 		if _, compileErr := CompileItemEffects(item.Effects); compileErr != nil {
-			return fmt.Errorf("compile item %s effects: %w", item.ID, compileErr)
+			logger.S.Warnf("skipping item %s with uncompilable effects: %v", item.ID, compileErr)
+			continue
 		}
 		newRegistry[item.ID] = item
 		count++

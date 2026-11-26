@@ -1,6 +1,10 @@
 package effectcatalog
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/vippro67/GuWorld/backend/internal/statusfx"
+)
 
 type Disposition string
 
@@ -169,16 +173,13 @@ var statusDefinitions = func() map[string]Definition {
 			result[id] = Definition{Section: "status", Key: id, Disposition: disposition, Owner: owner}
 		}
 	}
-	add(DispositionSupported, "statusfx", "BLEED", "POISON", "BURN", "FEAR", "CONFUSE", "STEALTH", "SLEEP", "BLIND", "CHARM", "BIND", "FORGET_EGO", "FORGET_REALITY",
-		"SLOW", "SLOW1", "SLOW_DAMAGE", "WEAK", "REGEN", "ATK_UP", "DEF_UP", "THORNS", "TAUNT",
-		"HASTE", "ARMOR_BREAK", "DAMAGE_REDUCTION_UP", "INVINCIBLE", "LAST_STAND", "EVASION", "REVIVE_LOCK",
-		"ESSENCE_LEAK", "GU_SEAL", "SOUL_WOUND", "THOUGHT_CHAOS", "DAO_CONFLICT", "BACKLASH", "FLYING", "PHI_HANH",
-		"DREAM_PRISON", "DREAM_ILLUSION", "LUCK_SIPHON", "LUCK_CURSE_REVERSE",
-		"BERSERK", "CALCULATED", "BLOOD_SACRIFICE",
-		"BEAR_FORM", "EAGLE_FORM", "ADAPTIVE_RESIST", "BONE_ARMOR",
-		"METAL_AEGIS", "CLOUD_MIST", "SWORD_MARK")
 	add(DispositionPartial, "combat-legacy", "STUN", "FREEZE", "SILENCE")
 	add(DispositionMigrate, "effect-runtime-v2", "ROOT", "CONFUSION", "DECAY")
+	for id := range statusfx.Registry {
+		if _, exists := result[id]; !exists {
+			add(DispositionSupported, "statusfx", id)
+		}
+	}
 	return result
 }()
 

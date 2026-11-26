@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prototype #466 — Đạo Ngân Môi Trường & Đạo Vực Tôn Giả</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel-2: #1c222b;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --gold: #d4a72c;
+      --green: #3fb950;
+      --red: #f85149;
+      --blue: #58a6ff;
+      --purple: #bc8cff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: #090c10;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .brand { font-weight: 700; color: var(--gold); font-size: 15px; }
+    .persona-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .persona-bar span { font-size: 12px; color: var(--muted); margin-right: 4px; }
+    button {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--gold); }
+    button.active { background: #2d2310; border-color: var(--gold); color: var(--gold); font-weight: 600; }
+    button.primary { background: #1f6feb; border-color: #388bfd; color: #fff; font-weight: 600; }
+    button.danger { background: #49171a; border-color: var(--red); color: #ffb4b0; font-weight: 600; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .container { max-width: 1120px; margin: 20px auto; padding: 0 16px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; }
+    @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .card h3 { margin: 0 0 10px; font-size: 15px; color: var(--gold); display: flex; align-items: center; justify-content: space-between; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+    }
+    .badge.good { color: var(--green); border-color: rgba(63,185,80,0.4); background: rgba(63,185,80,0.1); }
+    .badge.bad { color: var(--red); border-color: rgba(248,81,73,0.4); background: rgba(248,81,73,0.1); }
+    .badge.gold { color: var(--gold); border-color: rgba(212,167,44,0.4); background: rgba(212,167,44,0.1); }
+    .badge.info { color: var(--blue); border-color: rgba(88,166,255,0.4); background: rgba(88,166,255,0.1); }
+    .region-item {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      background: var(--panel-2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .region-item.selected { border-color: var(--gold); background: #201c14; }
+    .progress-wrap { background: #090c10; border: 1px solid var(--border); border-radius: 999px; height: 10px; overflow: hidden; margin: 8px 0; }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, #b08819, #f2cc60); transition: width 0.25s; }
+    .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #262c34; font-size: 13px; }
+    .row:last-child { border-bottom: none; }
+    .combat-banner {
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--gold);
+      background: linear-gradient(135deg, #1b170e, #151922);
+      margin-bottom: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .skill-card {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .feed-log {
+      max-height: 210px;
+      overflow-y: auto;
+      font-size: 12px;
+      background: #090c10;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .feed-entry { padding: 5px 0; border-bottom: 1px solid #1b2028; }
+    .feed-entry:last-child { border-bottom: none; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">PROTOTYPE #466 — Đạo Ngân Môi Trường &amp; Đạo Vực Tôn Giả</div>
+    <div class="persona-bar">
+      <span>Góc nhìn người chơi:</span>
+      <button onclick="setPersona('mortal')" id="p-mortal">Cổ Sư (Rank 4 - Hỏa)</button>
+      <button onclick="setPersona('immortal')" id="p-immortal">Cổ Tiên (Rank 7 - Thủy)</button>
+      <button onclick="setPersona('owner')" id="p-owner" class="active">Tôn Giả Chủ Vực (Rank 9 - Luyện)</button>
+      <button onclick="setPersona('rival')" id="p-rival">Tôn Giả Đối Địch (Rank 9 - Huyết)</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="tabs">
+      <button onclick="setTab('world')" id="t-world" class="active">1. Bản đồ &amp; Khu vực</button>
+      <button onclick="setTab('combat')" id="t-combat">2. Giao chiến (Combat HUD)</button>
+      <button onclick="setTab('venerable')" id="t-venerable">3. Bảng Luyện Hóa &amp; World Feed</button>
+    </div>
+
+    <div id="view-world" class="grid">
+      <div class="card">
+        <h3>Danh sách Khu vực (Regions) <span class="badge info">2 tầng kế thừa</span></h3>
+        <div id="region-list"></div>
+      </div>
+      <div class="card" id="region-detail"></div>
+    </div>
+
+    <div id="view-combat" style="display:none;">
+      <div class="combat-banner" id="combat-banner"></div>
+      <div class="grid">
+        <div class="card">
+          <h3>Chiêu thức / Sát Chiêu (Combat Actions)</h3>
+          <div id="skill-list"></div>
+        </div>
+        <div class="card">
+          <h3>Chi tiết Ngữ cảnh Môi trường (CombatState)</h3>
+          <div id="combat-context"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-venerable" style="display:none;" class="grid">
+      <div class="card" id="venerable-console"></div>
+      <div class="card">
+        <h3>World Change Feed (world:change) <span class="badge gold">Realtime</span></h3>
+        <div class="feed-log" id="feed-log"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const personas = {
+      mortal: { name: 'Hàn Lập (Rank 4)', rank: 4, path: 'Hỏa Đạo', nonConflict: false },
+      immortal: { name: 'Bạch Ngưng Băng (Rank 7)', rank: 7, path: 'Thủy Đạo', nonConflict: false },
+      owner: { name: 'Phương Nguyên (Rank 9)', rank: 9, path: 'Luyện Đạo', nonConflict: true },
+      rival: { name: 'Cự Dương (Rank 9)', rank: 9, path: 'Huyết Đạo', nonConflict: false },
+    };
+
+    const regions = [
+      {
+        id: 'nghia_thien',
+        name: 'Nam Cương — Nghĩa Thiên Sơn',
+        type: 'PVP_ZONE',
+        naturalMarks: { 'Thổ Đạo': 12000, 'Hỏa Đạo': 4500 },
+        cellHotspot: { 'Hỏa Đạo': 3000 },
+        dominion: { ownerKey: 'owner', ownerName: 'Phương Nguyên', path: 'Luyện Đạo', controlPct: 100 }
+      },
+      {
+        id: 'hoa_hai',
+        name: 'Đông Hải — Hỏa Hải Đảo',
+        type: 'BOSS_ZONE',
+        naturalMarks: { 'Hỏa Đạo': 25000 },
+        cellHotspot: { 'Hỏa Đạo': 8000 },
+        dominion: { ownerKey: 'rival', ownerName: 'Cự Dương', path: 'Huyết Đạo', controlPct: 60 }
+      },
+      {
+        id: 'bach_cot',
+        name: 'Bắc Nguyên — Bạch Cốt Sơn',
+        type: 'KHU_VUC',
+        naturalMarks: { 'Thủy Đạo': 14000, 'Cốt Đạo': 9000 },
+        cellHotspot: {},
+        dominion: null
+      },
+      {
+        id: 'thien_dinh',
+        name: 'Trung Châu — Thiên Đình Thành',
+        type: 'SAFE_ZONE',
+        naturalMarks: { 'Quang Đạo': 10000 },
+        cellHotspot: {},
+        dominion: null,
+        exempt: true
+      }
+    ];
+
+    const feedEvents = [
+      '[22:25] ✨ Phương Nguyên đã hoàn thiện Đạo Vực Luyện Đạo tại Nam Cương — Nghĩa Thiên Sơn (100%).',
+      '[22:28] ⚠️ Cảnh báo Đạo Vực: Cự Dương đang nắm giữ 60% Đạo Vực Huyết Đạo tại Đông Hải — Hỏa Hải Đảo.'
+    ];
+
+    let currentPersona = 'owner';
+    let currentTab = 'world';
+    let selectedRegionId = 'nghia_thien';
+    let aperturePlaced = false;
+
+    function addFeed(msg) {
+      const now = new Date();
+      const t = now.toTimeString().slice(0, 5);
+      feedEvents.unshift(`[${t}] ${msg}`);
+      render();
+    }
+
+    function setPersona(p) {
+      currentPersona = p;
+      document.querySelectorAll('.persona-bar button').forEach(b => b.classList.remove('active'));
+      document.getElementById('p-' + p).classList.add('active');
+      render();
+    }
+
+    function setTab(t) {
+      currentTab = t;
+      ['world', 'combat', 'venerable'].forEach(id => {
+        document.getElementById('t-' + id).classList.toggle('active', id === t);
+        document.getElementById('view-' + id).style.display = id === t ? (id === 'combat' ? 'block' : 'grid') : 'none';
+      });
+      render();
+    }
+
+    function computeSkillEffect(skillPath, region, pKey) {
+      const p = personas[pKey];
+      if (region.dominion && region.dominion.controlPct > 0) {
+        const pct = region.dominion.controlPct / 100;
+        if (region.dominion.ownerKey === pKey) {
+          if (skillPath === region.dominion.path) {
+            return { mult: +(1 + 1.2 * pct).toFixed(2), manaTax: 1.0, successDelta: 0, note: 'Bá chủ Đạo Vực (Thuận phái)' };
+          }
+          return { mult: 1.0, manaTax: 1.0, successDelta: 0, note: 'Bá chủ Đạo Vực (Miễn phạt)' };
+        }
+        // Enemy in Dao Domain
+        const floor = p.rank <= 5 ? 0.85 : 0.45;
+        const mult = skillPath === region.dominion.path
+          ? +(1 - 0.15 * pct).toFixed(2)
+          : +(1 - (1 - floor) * pct).toFixed(2);
+        const manaTax = p.rank <= 5 || mult >= 0.9 ? 1.0 : +(1 + 0.3 * pct).toFixed(2);
+        const successDelta = p.rank <= 5 || mult >= 0.9 ? 0 : Math.round(-15 * pct);
+        return { mult, manaTax, successDelta, note: `Bị Đạo Vực ${region.dominion.ownerName} áp chế` };
+      }
+      // Natural Dao Marks
+      const dominant = Object.entries(region.naturalMarks).sort((a,b) => b[1] - a[1])[0]?.[0];
+      if (skillPath === dominant) {
+        return { mult: 1.30, manaTax: 1.0, successDelta: 0, note: 'Cộng hưởng Đạo Ngân Tự Nhiên' };
+      }
+      if (p.nonConflict) {
+        return { mult: 1.0, manaTax: 1.0, successDelta: 0, note: 'Miễn bài xích tự nhiên (Chí Tôn Tiên Thể)' };
+      }
+      if ((dominant === 'Thủy Đạo' && skillPath === 'Hỏa Đạo') || (dominant === 'Thổ Đạo' && skillPath === 'Thủy Đạo')) {
+        return { mult: p.rank <= 5 ? 0.85 : 0.78, manaTax: p.rank <= 5 ? 1.0 : 1.15, successDelta: p.rank <= 5 ? 0 : -8, note: 'Xung khắc Đạo Ngân Tự Nhiên' };
+      }
+      return { mult: 1.0, manaTax: 1.0, successDelta: 0, note: 'Trung tính' };
+    }
+
+    function refineRegion(id) {
+      const r = regions.find(x => x.id === id);
+      const p = personas[currentPersona];
+      if (p.rank < 9 || r.exempt) return;
+      if (!r.dominion) {
+        r.dominion = { ownerKey: currentPersona, ownerName: p.name.split(' (')[0], path: p.path, controlPct: 25 };
+        addFeed(`🔥 ${r.dominion.ownerName} bắt đầu luyện hóa Đạo Ngân tại [${r.name}] (${r.dominion.path} 25%).`);
+      } else if (r.dominion.ownerKey === currentPersona) {
+        r.dominion.controlPct = Math.min(100, r.dominion.controlPct + 25);
+        addFeed(`✨ ${r.dominion.ownerName} gia cố Đạo Vực [${r.name}] lên ${r.dominion.controlPct}%.`);
+      } else {
+        r.dominion.controlPct = Math.max(0, r.dominion.controlPct - 25);
+        addFeed(`⚠️ CẢNH BÁO: ${p.name.split(' (')[0]} đang phá vực [${r.name}] của ${r.dominion.ownerName} (còn ${r.dominion.controlPct}%)!`);
+        if (r.dominion.controlPct === 0) {
+          addFeed(`💥 Đạo Vực của ${r.dominion.ownerName} tại [${r.name}] đã sụp đổ, trở về vô chủ!`);
+          r.dominion = null;
+        }
+      }
+      render();
+    }
+
+    function releaseRegion(id) {
+      const r = regions.find(x => x.id === id);
+      if (r.dominion && r.dominion.ownerKey === currentPersona) {
+        addFeed(`🕊️ ${r.dominion.ownerName} đã giải phóng Đạo Vực [${r.name}].`);
+        r.dominion = null;
+        render();
+      }
+    }
+
+    function toggleAperture() {
+      aperturePlaced = !aperturePlaced;
+      const r = regions.find(x => x.id === selectedRegionId);
+      addFeed(aperturePlaced ? `🏯 Hạ Khiếu tại [${r.name}] (Hưởng hệ số Đạo Vực vào Thiên Địa Nhị Khí).` : `⬆️ Thu Khiếu từ [${r.name}].`);
+      render();
+    }
+
+    function render() {
+      const r = regions.find(x => x.id === selectedRegionId);
+      const p = personas[currentPersona];
+
+      // 1. Region list
+      document.getElementById('region-list').innerHTML = regions.map(reg => {
+        const domBadge = reg.exempt
+          ? `<span class="badge">Miễn trừ</span>`
+          : reg.dominion
+            ? `<span class="badge gold">${reg.dominion.ownerName} (${reg.dominion.controlPct}%)</span>`
+            : `<span class="badge info">Vô chủ</span>`;
+        return `<div class="region-item ${reg.id === selectedRegionId ? 'selected' : ''}" onclick="selectedRegionId='${reg.id}';render()">
+          <div>
+            <strong>${reg.name}</strong><br/>
+            <span class="muted">${reg.type}</span>
+          </div>
+          ${domBadge}
+        </div>`;
+      }).join('');
+
+      // 2. Region detail
+      const eff = computeSkillEffect(p.path, r, currentPersona);
+      const pct = r.dominion ? r.dominion.controlPct : 0;
+      const naturalStr = Object.entries(r.naturalMarks).map(([k,v]) => `${k}: ${v.toLocaleString()}`).join(', ');
+      const cellStr = Object.keys(r.cellHotspot).length ? Object.entries(r.cellHotspot).map(([k,v]) => `+${v.toLocaleString()} ${k}`).join(', ') : 'Không có';
+      document.getElementById('region-detail').innerHTML = `
+        <h3>${r.name} <span class="badge ${eff.mult >= 1 ? 'good' : 'bad'}">Hiệu suất ${eff.mult}x</span></h3>
+        <div class="row"><span>Đạo Ngân Tự Nhiên (Region)</span><span>${naturalStr}</span></div>
+        <div class="row"><span>Điểm nóng Ô (Map Cell)</span><span>${cellStr}</span></div>
+        <div class="row"><span>Trạng thái Đạo Vực</span><span>${r.exempt ? 'Miễn trừ (Safe Zone)' : r.dominion ? `${r.dominion.ownerName} — ${r.dominion.path} (${pct}%)` : 'Vô chủ'}</span></div>
+        ${r.dominion ? `<div class="progress-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>` : ''}
+        <div class="row"><span>Ảnh hưởng lên chiêu ${p.path}</span><span>${eff.note}</span></div>
+        <div class="row"><span>Tiêu hao / Tỉ lệ thành công</span><span>${eff.manaTax}x Hao | ${eff.successDelta >= 0 ? '+' : ''}${eff.successDelta}% Thành công</span></div>
+      `;
+
+      // 3. Combat tab
+      document.getElementById('combat-banner').innerHTML = `
+        <div>
+          <strong>Môi trường trận đấu:</strong> ${r.name}
+          ${r.dominion ? `<span class="badge gold" style="margin-left:8px;">Đạo Vực ${r.dominion.path} (${r.dominion.ownerName} - ${r.dominion.controlPct}%)</span>` : `<span class="badge info" style="margin-left:8px;">Đạo Ngân Tự Nhiên</span>`}
+        </div>
+        <span class="muted">Bên trong Tiên Khiếu sẽ chuyển sang dùng Đạo Ngân của Tiên Khiếu đó</span>
+      `;
+      const sampleSkills = [
+        { name: 'Sát Chiêu: Vạn Vật Quy Nguyên', path: p.path },
+        { name: 'Sát Chiêu: Phần Thiên Hỏa Hải', path: 'Hỏa Đạo' },
+        { name: 'Sát Chiêu: Cửu Chuyển Luyện Hải', path: 'Luyện Đạo' },
+      ];
+      document.getElementById('skill-list').innerHTML = sampleSkills.map(s => {
+        const res = computeSkillEffect(s.path, r, currentPersona);
+        const cls = res.mult > 1 ? 'good' : res.mult < 1 ? 'bad' : 'info';
+        return `<div class="skill-card">
+          <div>
+            <strong>${s.name}</strong> <span class="muted">(${s.path})</span><br/>
+            <span class="muted">${res.note}</span>
+          </div>
+          <div style="text-align:right;">
+            <span class="badge ${cls}">${res.mult}x Hiệu lực</span><br/>
+            <span class="muted">${res.manaTax}x Hao | ${res.successDelta}% Tỉ lệ</span>
+          </div>
+        </div>`;
+      }).join('');
+
+      document.getElementById('combat-context').innerHTML = `
+        <div class="row"><span>Tác nhân</span><span>${p.name}</span></div>
+        <div class="row"><span>Chí Tôn Tiên Thể (HasNonConflictingDao)</span><span>${p.nonConflict ? 'Có' : 'Không'}</span></div>
+        <div class="row"><span>Đạo Vực kiểm soát</span><span>${r.dominion ? `${r.dominion.ownerName} (${r.dominion.controlPct}%)` : 'Không'}</span></div>
+        <div class="row"><span>Ranh giới Môn Hộ</span><span>Ngoài Môn Hộ chịu Đạo Vực; vào trong dùng Đạo Ngân Tiên Khiếu</span></div>
+      `;
+
+      // 4. Venerable console
+      const ownedCount = regions.filter(x => x.dominion && x.dominion.ownerKey === currentPersona).length;
+      const isVenerable = p.rank >= 9;
+      let actionLabel = 'Luyện Hóa Đạo Ngân (+25%)';
+      let actionCls = 'primary';
+      if (r.dominion && r.dominion.ownerKey !== currentPersona) {
+        actionLabel = 'Phá Vực / Xâm Thực (-25% Chủ cũ)';
+        actionCls = 'danger';
+      } else if (r.dominion && r.dominion.ownerKey === currentPersona) {
+        actionLabel = r.dominion.controlPct >= 100 ? 'Đã đạt 100% Đạo Vực' : 'Gia Cố Đạo Vực (+25%)';
+      }
+      const qiBonus = r.dominion ? (r.dominion.ownerKey === currentPersona ? '+50%' : '-35%') : '0%';
+
+      document.getElementById('venerable-console').innerHTML = `
+        <h3>Bảng Điều Khiển Tôn Giả <span class="badge gold">Đạo Vực: ${ownedCount} / 5</span></h3>
+        <div class="row"><span>Vùng đang đứng</span><span>${r.name}</span></div>
+        <div class="row"><span>Điều kiện Tôn Giả (Rank 9 + Level 4)</span><span>${isVenerable ? '✅ Đủ điều kiện' : '❌ Cần Rank 9 & Vô Thượng Đại Tông Sư'}</span></div>
+        <div class="row"><span>Hệ số Thiên Địa Nhị Khí khi Hạ Khiếu</span><span>${qiBonus}</span></div>
+        <div class="actions">
+          <button class="${actionCls}" onclick="refineRegion('${r.id}')" ${!isVenerable || r.exempt || (r.dominion && r.dominion.ownerKey === currentPersona && r.dominion.controlPct >= 100) ? 'disabled' : ''}>${actionLabel}</button>
+          <button onclick="releaseRegion('${r.id}')" ${!(r.dominion && r.dominion.ownerKey === currentPersona) ? 'disabled' : ''}>Giải Phóng Đạo Vực</button>
+          <button onclick="toggleAperture()" ${p.rank < 6 ? 'disabled' : ''}>${aperturePlaced ? 'Thu Khiếu' : 'Hạ Khiếu tại vùng này'}</button>
+        </div>
+      `;
+
+      // 5. Feed
+      document.getElementById('feed-log').innerHTML = feedEvents.map(e => `<div class="feed-entry">${e}</div>`).join('');
+    }
+
+    render();
+  </script>
+</body>
+</html>

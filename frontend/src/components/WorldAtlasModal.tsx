@@ -398,7 +398,12 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
   }, [staticRegions, propRegions]);
 
   const player = useGameStore((state) => state.player);
+  const travelPreview = useGameStore((state) => state.travelPreview);
+  const travelJourney = useGameStore((state) => state.travelJourney);
+  const previewTravelJourney = useGameStore((state) => state.previewTravelJourney);
+  const startTravelJourney = useGameStore((state) => state.startTravelJourney);
   const playerRank = player?.rank ?? 1;
+  const [previewingAtlasTravel, setPreviewingAtlasTravel] = useState(false);
 
   const currentRegion = regions.find((region) => region.id === currentRegionId);
   const playerCurrentLayer = useMemo(() => {
@@ -1472,6 +1477,53 @@ export function WorldAtlasModal({ regions: propRegions, currentRegionId, x, y, o
                 <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-zinc-400">
                   {inspectedRegion.description}
                 </p>
+              )}
+              {inspectedRegion && inspectedRegion.zone_type !== "NGU_VUC" && inspectedRegion.id !== currentRegionId && (
+                <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-cyan-800/30 pt-2">
+                  {(() => {
+                    const tx = inspectedRegion.entry_x || Math.floor(((inspectedRegion.min_x ?? 0) + (inspectedRegion.max_x ?? inspectedRegion.width ?? 100)) / 2);
+                    const ty = inspectedRegion.entry_y || Math.floor(((inspectedRegion.min_y ?? 0) + (inspectedRegion.max_y ?? inspectedRegion.height ?? 100)) / 2);
+                    const matchedPreview = travelPreview?.target_region === inspectedRegion.id ? travelPreview : null;
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          disabled={previewingAtlasTravel}
+                          onClick={async () => {
+                            setPreviewingAtlasTravel(true);
+                            try {
+                              await previewTravelJourney(inspectedRegion.id, tx, ty);
+                            } finally {
+                              setPreviewingAtlasTravel(false);
+                            }
+                          }}
+                          className="rounded-lg border border-sky-500/40 bg-sky-500/15 px-2.5 py-1 text-[11px] font-semibold text-sky-200 hover:bg-sky-500/25 disabled:opacity-50"
+                        >
+                          {previewingAtlasTravel ? "Đang tính tuyến..." : "Xem tuyến Auto"}
+                        </button>
+                        {matchedPreview && (
+                          <>
+                            <span className="text-[11px] text-sky-200/90">
+                              {matchedPreview.distance.toFixed(0)} ô · ETA {matchedPreview.eta_seconds ?? "—"}s
+                              {(matchedPreview.region_path?.length || 0) > 1 ? ` · ${matchedPreview.region_path.length} vùng` : ""}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (await startTravelJourney(matchedPreview.target_region, matchedPreview.target_x, matchedPreview.target_y)) {
+                                  onClose();
+                                }
+                              }}
+                              className="rounded-lg border border-emerald-500/50 bg-emerald-600/30 px-2.5 py-1 text-[11px] font-semibold text-emerald-100 hover:bg-emerald-500/40"
+                            >
+                              {travelJourney?.status === "running" || travelJourney?.status.startsWith("paused") ? "Đổi đích & Đi" : "Bắt đầu Auto đi"}
+                            </button>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
               )}
             </div>
 

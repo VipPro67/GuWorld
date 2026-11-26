@@ -94,8 +94,10 @@ func schemaWorld() error {
 		safe_zone_x INT,
 		safe_zone_y INT,
 		atlas_x INT NOT NULL DEFAULT 0,
-		atlas_y INT NOT NULL DEFAULT 0
-	);`); err != nil {
+		atlas_y INT NOT NULL DEFAULT 0,
+		natural_dao_marks JSONB NOT NULL DEFAULT '{}'
+	);
+	ALTER TABLE regions ADD COLUMN IF NOT EXISTS natural_dao_marks JSONB NOT NULL DEFAULT '{}';`); err != nil {
 		return err
 	}
 	if err := execSchema("region_world_maps", `
@@ -187,8 +189,24 @@ func schemaWorld() error {
 		respawn_seconds INT NOT NULL DEFAULT 300,
 		last_cleared_at TIMESTAMPTZ,
 		cleared_by UUID,
-		is_active BOOLEAN NOT NULL DEFAULT TRUE
-	);`); err != nil {
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		dao_marks JSONB NOT NULL DEFAULT '{}'
+	);
+	ALTER TABLE map_cells ADD COLUMN IF NOT EXISTS dao_marks JSONB NOT NULL DEFAULT '{}';`); err != nil {
+		return err
+	}
+	if err := execSchema("region_dao_dominions", `
+	CREATE TABLE IF NOT EXISTS region_dao_dominions (
+		region_id VARCHAR(50) PRIMARY KEY REFERENCES regions(id) ON DELETE CASCADE,
+		owner_player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+		owner_name VARCHAR(100) NOT NULL DEFAULT '',
+		path VARCHAR(50) NOT NULL,
+		control_pct DOUBLE PRECISION NOT NULL DEFAULT 0,
+		refined_marks DOUBLE PRECISION NOT NULL DEFAULT 0,
+		last_reinforced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+	CREATE INDEX IF NOT EXISTS idx_region_dao_dominions_owner ON region_dao_dominions (owner_player_id);`); err != nil {
 		return err
 	}
 	if err := execSchema("map_cells_region_coordinate_unique", `

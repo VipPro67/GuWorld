@@ -6,7 +6,7 @@
     "predev": "node scripts/build-wiki-cache.mjs && node scripts/build-generated-item-icons.mjs",
     "prebuild": "node scripts/build-wiki-cache.mjs && node scripts/build-generated-item-icons.mjs",
     "build": "next build",
-    "dev": "next dev",
+    "dev": "next dev -p 3000",
     "start": "next start",
     "lint": "eslint",
     "validate:landscape": "node scripts/validate-landscape-maps.mjs",

@@ -49,9 +49,38 @@ export interface TravelJourneyPreview {
   first_step: { x: number; y: number };
 }
 
+export interface RegionDaoDominion {
+  region_id: string;
+  owner_player_id: string;
+  owner_name: string;
+  path: string;
+  control_pct: number;
+  refined_marks: number;
+  last_reinforced_at: string;
+  updated_at: string;
+}
+
+export interface EnvDaoStatus {
+  region_id: string;
+  region_name: string;
+  zone_type: string;
+  is_exempt: boolean;
+  natural_dao_marks: Record<string, number>;
+  dominion: RegionDaoDominion | null;
+  my_domains: RegionDaoDominion[];
+  max_domains: number;
+  player_rank: number;
+  domain_activation: number;
+}
+
 export interface WorldSlice {
   groundDrops: GroundDrop[];
   lastDropViewport: GroundDropViewport | null;
+  envDaoStatus: EnvDaoStatus | null;
+  fetchEnvDaoStatus: (regionId?: string) => Promise<EnvDaoStatus | null>;
+  refineEnvDao: (path?: string) => Promise<boolean>;
+  releaseEnvDao: (regionId: string) => Promise<boolean>;
+  applyEnvDaoEvent: (data: { region_id?: string; dominion?: RegionDaoDominion | null; message?: string }) => void;
   fetchGroundDrops: (viewport?: GroundDropViewport) => Promise<void>;
   travelJourney: TravelJourney | null;
   travelPreview: TravelJourneyPreview | null;
@@ -70,6 +99,62 @@ export interface WorldSlice {
 export const createWorldSlice: StateCreator<ApiResponseData, ApiResponseData, ApiResponseData, WorldSlice> = (set, get) => ({
   groundDrops: [],
   lastDropViewport: null,
+  envDaoStatus: null,
+
+  fetchEnvDaoStatus: async (regionId?: string) => {
+    try {
+      const url = regionId
+        ? `${BACKEND_URL}/api/explore/env-dao?region_id=${encodeURIComponent(regionId)}`
+        : `${BACKEND_URL}/api/explore/env-dao`;
+      const res = await authFetch(url);
+      if (!res.ok) return null;
+      const data: EnvDaoStatus = await res.json();
+      set({ envDaoStatus: data });
+      return data;
+    } catch {
+      return null;
+    }
+  },
+
+  refineEnvDao: async (path?: string) => {
+    const res = await executeGameAction<ApiResponseData>(get, set, {
+      endpoint: "/api/explore/env-dao/refine",
+      method: "POST",
+      body: { path: path || "" },
+      onSuccess: (data) => {
+        if (typeof data.mana === "number" && get().player) {
+          set({ player: { ...get().player, current_mana: data.mana } });
+        }
+        void get().fetchEnvDaoStatus();
+      },
+      successToast: (data) => data.message || "Luyện hóa Đạo Ngân thành công!",
+      errorMessage: "Không thể luyện hóa Đạo Ngân",
+    });
+    return res.ok;
+  },
+
+  releaseEnvDao: async (regionId: string) => {
+    const res = await executeGameAction<ApiResponseData>(get, set, {
+      endpoint: `/api/explore/env-dao/${encodeURIComponent(regionId)}`,
+      method: "DELETE",
+      onSuccess: () => {
+        void get().fetchEnvDaoStatus();
+      },
+      successToast: (data) => data.message || "Đã giải phóng Đạo Vực!",
+      errorMessage: "Không thể giải phóng Đạo Vực",
+    });
+    return res.ok;
+  },
+
+  applyEnvDaoEvent: (data) => {
+    if (data?.message) {
+      get().addToast(data.message, "info");
+    }
+    const cur = get().envDaoStatus as EnvDaoStatus | null;
+    if (cur && (!data?.region_id || cur.region_id === data.region_id)) {
+      set({ envDaoStatus: { ...cur, dominion: data.dominion ?? null } });
+    }
+  },
   travelJourney: null,
   travelPreview: null,
 

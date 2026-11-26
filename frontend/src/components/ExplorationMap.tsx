@@ -17,6 +17,7 @@ import { TeleportManagementModal } from "@/components/Teleport/TeleportManagemen
 import type { TeleportArray } from "@/store/slices/teleportSlice";
 import { useUIStore } from "@/store/useUIStore";
 import { MonsterSprite } from "@/components/MonsterSprite";
+import { EnvDaoPanel } from "@/components/EnvDaoPanel";
 
 interface ExplorationMapProps {
   player: Player;
@@ -93,10 +94,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const fetchGrid = useGameStore((state) => state.fetchGrid);
   const movePlayer = useGameStore((state) => state.movePlayer);
   const travelJourney = useGameStore((state) => state.travelJourney);
-  const travelPreview = useGameStore((state) => state.travelPreview);
   const fetchTravelJourney = useGameStore((state) => state.fetchTravelJourney);
-  const previewTravelJourney = useGameStore((state) => state.previewTravelJourney);
-  const startTravelJourney = useGameStore((state) => state.startTravelJourney);
   const stopTravelJourney = useGameStore((state) => state.stopTravelJourney);
   const resumeTravelJourney = useGameStore((state) => state.resumeTravelJourney);
   const skyfall = useGameStore((state) => state.skyfall);
@@ -150,7 +148,6 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const [selectedCalamityActor, setSelectedCalamityActor] = useState<WorldMonsterActor | null>(null);
   const [selectedAperturePoint, setSelectedAperturePoint] = useState<ApertureResourcePoint | null>(null);
   const [autoFarmRunning, setAutoFarmRunning] = useState(false);
-  const [selectedTravelTarget, setSelectedTravelTarget] = useState<{ x: number; y: number } | null>(null);
   const autoFarmRunningRef = useRef(false);
   const [showAtlas, setShowAtlas] = useState(false);
   const [showBuildTeleport, setShowBuildTeleport] = useState(false);
@@ -167,25 +164,24 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
   const activeTravelTarget = travelJourney?.target_region === player.current_region
     ? { x: travelJourney.target_x, y: travelJourney.target_y }
     : null;
-  const displayedTravelTarget = selectedTravelTarget || activeTravelTarget;
   const travelPathCells = useMemo(() => {
     const cells = new Set<string>();
-    if (!displayedTravelTarget) return cells;
+    if (!activeTravelTarget) return cells;
     let x = player.x;
     let y = player.y;
-    const dx = Math.abs(displayedTravelTarget.x - x);
-    const dy = Math.abs(displayedTravelTarget.y - y);
-    const sx = x < displayedTravelTarget.x ? 1 : -1;
-    const sy = y < displayedTravelTarget.y ? 1 : -1;
+    const dx = Math.abs(activeTravelTarget.x - x);
+    const dy = Math.abs(activeTravelTarget.y - y);
+    const sx = x < activeTravelTarget.x ? 1 : -1;
+    const sy = y < activeTravelTarget.y ? 1 : -1;
     let error = dx - dy;
-    while (x !== displayedTravelTarget.x || y !== displayedTravelTarget.y) {
+    while (x !== activeTravelTarget.x || y !== activeTravelTarget.y) {
       const doubled = 2 * error;
       if (doubled > -dy) { error -= dy; x += sx; }
       if (doubled < dx) { error += dx; y += sy; }
       cells.add(`${x},${y}`);
     }
     return cells;
-  }, [displayedTravelTarget, player.x, player.y]);
+  }, [activeTravelTarget, player.x, player.y]);
 
   useEffect(() => () => {
     autoFarmRunningRef.current = false;
@@ -429,26 +425,16 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
       return;
     }
 
-    let targetRegion = player.current_region;
-    let targetX = x;
-    let targetY = y;
-    if (transitionRegion && currentRegion) {
-      targetRegion = transitionRegion.id;
-      const currentMinX = currentRegion.min_x ?? 0;
-      const currentMinY = currentRegion.min_y ?? 0;
-      const currentMaxX = currentRegion.max_x ?? currentMinX + currentRegion.width - 1;
-      const currentMaxY = currentRegion.max_y ?? currentMinY + currentRegion.height - 1;
-      const targetMinX = transitionRegion.min_x ?? 0;
-      const targetMinY = transitionRegion.min_y ?? 0;
-      const targetMaxX = transitionRegion.max_x ?? targetMinX + transitionRegion.width - 1;
-      const targetMaxY = transitionRegion.max_y ?? targetMinY + transitionRegion.height - 1;
-      const dirX = x > currentMaxX ? 1 : x < currentMinX ? -1 : 0;
-      const dirY = y > currentMaxY ? 1 : y < currentMinY ? -1 : 0;
-      targetX = dirX > 0 ? 4 : dirX < 0 ? Math.max(targetMinX, targetMaxX - 4) : Math.min(targetMaxX, Math.max(targetMinX, x));
-      targetY = dirY > 0 ? 4 : dirY < 0 ? Math.max(targetMinY, targetMaxY - 4) : Math.min(targetMaxY, Math.max(targetMinY, y));
+    const now = Date.now();
+    if (now - lastMoveTimeRef.current < 600) return;
+    lastMoveTimeRef.current = now;
+
+    setLastLog(null);
+    const res = await movePlayer(x, y);
+    if (res) {
+      setLastLog(res.log);
+      await loadGrid();
     }
-    if (await previewTravelJourney(targetRegion, targetX, targetY)) setSelectedTravelTarget({ x, y });
-    else setSelectedTravelTarget(null);
   };
 
   const stopAutoFarm = () => {
@@ -740,6 +726,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
             <h2 className="text-lg font-serif font-bold text-zinc-100">
               {isApertureMap ? "Lưới Địa Hình" : regionName}
             </h2>
+            {!isApertureMap && <div className="mt-2"><EnvDaoPanel regionId={player.current_region} /></div>}
           </div>
         </div>
 
@@ -756,13 +743,6 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
               {(travelJourney.status === "running" || travelJourney.status.startsWith("paused")) && <button onClick={() => void stopTravelJourney()} className="rounded bg-rose-500/20 px-2 py-1 text-rose-200">Dừng</button>}
             </div>
           ) : null}
-          {selectedTravelTarget && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-950/50 px-3 py-2 text-xs text-emerald-100">
-              <span>Đích {regions.find((region) => region.id === travelPreview?.target_region)?.name || travelPreview?.target_region || `(${selectedTravelTarget.x}, ${selectedTravelTarget.y})`} ({travelPreview?.target_x ?? selectedTravelTarget.x}, {travelPreview?.target_y ?? selectedTravelTarget.y}) · {travelPreview ? `${travelPreview.distance.toFixed(1)} ô · ETA ${travelPreview.eta_seconds ?? "không khả dụng"} giây` : "Đang tính tuyến…"}{(travelPreview?.region_path.length || 0) > 1 ? ` · ${travelPreview?.region_path.length} khu vực` : ""}</span>
-              <button disabled={!travelPreview} onClick={async () => { if (travelPreview && await startTravelJourney(travelPreview.target_region,travelPreview.target_x,travelPreview.target_y)) setSelectedTravelTarget(null); }} className="rounded bg-emerald-500/20 px-2 py-1 disabled:opacity-50">{travelJourney?.status === "running" || travelJourney?.status.startsWith("paused") ? "Đổi đích" : "Bắt đầu"}</button>
-              <button onClick={() => setSelectedTravelTarget(null)} className="rounded bg-zinc-700/50 px-2 py-1">Bỏ chọn</button>
-            </div>
-          )}
           {isApertureMap && (
             <button
               type="button"
@@ -1068,7 +1048,7 @@ export const ExplorationMap: React.FC<ExplorationMapProps> = ({ player }) => {
             {gridArray.map(({ x, y, isOutOfBounds, transitionRegion }) => {
               const cellData = cellMap.get(`${x},${y}`) || { x, y, cell_type: "Empty", content: "" };
               const isPlayerCell = x === player.x && y === player.y;
-              const isTravelTargetCell = displayedTravelTarget?.x === x && displayedTravelTarget.y === y;
+              const isTravelTargetCell = activeTravelTarget?.x === x && activeTravelTarget.y === y;
               const isTravelPathCell = travelPathCells.has(`${x},${y}`);
               const isMovable = (!isOutOfBounds || Boolean(transitionRegion)) && !isPlayerCell && !isMemberNotLeader;
               const otherPlayersOnCell = isOutOfBounds

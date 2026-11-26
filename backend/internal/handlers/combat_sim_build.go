@@ -32,6 +32,7 @@ func buildSimCombatState(tx *sql.Tx, player *models.Player, loadout *simulator.C
 		VirtualMode:         isVirtual,
 		ApertureHP:          player.ActiveCombat.ApertureHP,
 		ApertureMaxHP:       player.ActiveCombat.ApertureMaxHP,
+		EnvDao:              buildEnvCombatContext(tx, player),
 	}
 
 	simPlayer, err := buildSimCombatant(tx, player, isVirtual, true, loadout)

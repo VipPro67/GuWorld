@@ -6,6 +6,7 @@ type Cell struct {
 	Y       int    `json:"y"`
 	Type    string `json:"cell_type"` // "Empty", "Resource", "Monster", "WildGu", "PVP", "Boss"
 	Content string `json:"content"`   // name/ID of item, beast, or Gu
-	Rank    int    `json:"rank,omitempty"`
-	SubRank int    `json:"sub_rank,omitempty"`
+	Rank     int                `json:"rank,omitempty"`
+	SubRank  int                `json:"sub_rank,omitempty"`
+	DaoMarks map[string]float64 `json:"dao_marks,omitempty"`
 }

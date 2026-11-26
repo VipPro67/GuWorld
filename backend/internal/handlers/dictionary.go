@@ -230,15 +230,31 @@ func invalidateCachedDictionaryPart(key string) {
 
 // GetGuDictionary returns only the Gu catalog used by gameplay screens.
 func GetGuDictionary(c *gin.Context) {
-	getCachedDictionaryPart(c, "game_dictionary_gus", &[]models.GuDictionaryItem{}, func() interface{} {
-		return flatGuDictionary()
+	getCachedDictionaryPartWithError(c, "game_dictionary_gus", &[]models.GuDictionaryItem{}, func() (interface{}, error) {
+		return flatGuDictionary(), nil
+	}, func(val interface{}) bool {
+		if list, ok := val.(*[]models.GuDictionaryItem); ok && list != nil {
+			return len(*list) > 0
+		}
+		if list, ok := val.([]models.GuDictionaryItem); ok {
+			return len(list) > 0
+		}
+		return false
 	})
 }
 
 // GetItemDictionary returns only the item catalog used by gameplay screens.
 func GetItemDictionary(c *gin.Context) {
-	getCachedDictionaryPart(c, "game_dictionary_items", &map[string]models.ItemSpec{}, func() interface{} {
-		return models.ItemRegistry
+	getCachedDictionaryPartWithError(c, "game_dictionary_items", &map[string]models.ItemSpec{}, func() (interface{}, error) {
+		return models.ItemRegistry, nil
+	}, func(val interface{}) bool {
+		if items, ok := val.(*map[string]models.ItemSpec); ok && items != nil {
+			return len(*items) > 0
+		}
+		if items, ok := val.(map[string]models.ItemSpec); ok {
+			return len(items) > 0
+		}
+		return false
 	})
 }
 
@@ -319,10 +335,45 @@ func buildUnifiedDictionary() DictionaryResponse {
 	}
 }
 
+func isUnifiedDictionaryValid(val interface{}) bool {
+	var resp DictionaryResponse
+	switch v := val.(type) {
+	case *DictionaryResponse:
+		if v == nil {
+			return false
+		}
+		resp = *v
+	case DictionaryResponse:
+		resp = v
+	default:
+		return false
+	}
+	return isNonEmptyCollection(resp.Gu) && isNonEmptyCollection(resp.Items)
+}
+
+func isNonEmptyCollection(v interface{}) bool {
+	switch c := v.(type) {
+	case []models.GuDictionaryItem:
+		return len(c) > 0
+	case []interface{}:
+		return len(c) > 0
+	case map[string]models.ItemSpec:
+		return len(c) > 0
+	case map[string]interface{}:
+		return len(c) > 0
+	default:
+		return false
+	}
+}
+
 // WarmDictionaryCache builds the unified catalog once at process start so the
 // first player request does not pay build + marshal cost on a cold cache.
 func WarmDictionaryCache() {
 	val := buildUnifiedDictionary()
+	if !isUnifiedDictionaryValid(val) {
+		logger.S.Warn("skipping dictionary cache warm: gu or item registry is empty")
+		return
+	}
 	raw, err := json.Marshal(val)
 	if err != nil {
 		return
@@ -335,9 +386,9 @@ func WarmDictionaryCache() {
 
 // GetDictionary returns the unified Gu and Item master catalogs, cached in memory/Redis with ETag support.
 func GetDictionary(c *gin.Context) {
-	getCachedDictionaryPart(c, "game_dictionary_unified", &DictionaryResponse{}, func() interface{} {
-		return buildUnifiedDictionary()
-	})
+	getCachedDictionaryPartWithError(c, "game_dictionary_unified", &DictionaryResponse{}, func() (interface{}, error) {
+		return buildUnifiedDictionary(), nil
+	}, isUnifiedDictionaryValid)
 }
 
 // loadAllLootTables returns every loot table, preferring the in-memory cache.

@@ -173,9 +173,10 @@ func (r *combatActionRunner) runOne(actor *CombatantAuto, a *SimAction, isAlly b
 		guRank = a.Rank
 	}
 	conflictMult := actionConflictMult(actor, a.Path)
+	envMod := resolveEnvModifiersForAction(r.state, actor, a.Path)
 	effectiveManaCost := a.ManaCost
 	if effectiveManaCost > 0 {
-		effectiveManaCost *= gamefx.ManaTaxMultiplier(conflictMult)
+		effectiveManaCost *= gamefx.ManaTaxMultiplier(conflictMult) * envMod.ManaTaxMult
 	}
 	if (actor.Kind == "Player" || actor.Kind == "VariantNPC") && effectiveManaCost > 0 && actor.Mana < effectiveManaCost {
 		(*r.turnLogs) = append((*r.turnLogs), CombatLog{Turn: r.turn, ActorId: actor.ID, ActorName: actor.Name, Action: "INSUFFICIENT_MANA", Detail: fmt.Sprintf("%s không đủ Chân Nguyên (cần %.0f, còn %.0f) để kích hoạt [%s]!", actor.Name, effectiveManaCost, actor.Mana, a.Name)})
@@ -310,11 +311,22 @@ func (r *combatActionRunner) runOne(actor *CombatantAuto, a *SimAction, isAlly b
 			// chance. Preserve legacy/synthetic actions as guaranteed casts.
 			chance = 1
 		}
+		if envMod.SuccessChanceDelta < 0 {
+			floor := gamefx.DefaultEnvDaoConfig.SuccessChanceFloor
+			if chance >= floor {
+				chance = math.Max(floor, chance+envMod.SuccessChanceDelta)
+			} else {
+				chance = math.Max(0.05, chance+envMod.SuccessChanceDelta)
+			}
+		}
 		roll := r.rng.Float64()
 		if roll >= chance {
 			backfireDmg := a.BackfireDamage
 			if backfireDmg <= 0 {
 				backfireDmg = math.Round(actor.MaxHP * 0.12)
+			}
+			if envMod.BackfireBonus > 0 {
+				backfireDmg *= (1.0 + envMod.BackfireBonus)
 			}
 			if actor.GuHouse != nil && !actor.GuHouse.IsDestroyed {
 				(*r.turnLogs) = append((*r.turnLogs), CombatLog{
@@ -639,7 +651,7 @@ func (r *combatActionRunner) runOne(actor *CombatantAuto, a *SimAction, isAlly b
 		if hasDao && daoMult > 1.0 {
 			daoShield = baseShield * (daoMult - 1.0)
 		}
-		totalShield := baseShield + daoShield
+		totalShield := (baseShield + daoShield) * envMod.PowerMult
 		actor.VirtualShield += totalShield
 		shieldReason := a.Reason
 		conflictMult := actionConflictMult(actor, a.Path)
@@ -682,7 +694,7 @@ func (r *combatActionRunner) runOne(actor *CombatantAuto, a *SimAction, isAlly b
 		if hasDao && daoMult > 1.0 {
 			daoHeal = baseHeal * (daoMult - 1.0)
 		}
-		heal := (baseHeal + daoHeal) * effectiveHealingReceived(actor)
+		heal := (baseHeal + daoHeal) * envMod.PowerMult * effectiveHealingReceived(actor)
 		actor.HP += heal
 		if actor.HP > actor.MaxHP {
 			actor.HP = actor.MaxHP
@@ -3260,7 +3272,7 @@ func (r *combatActionRunner) runOne(actor *CombatantAuto, a *SimAction, isAlly b
 
 			totalHitDmg := 0.0
 			for h := 0; h < hitCount; h++ {
-				hitDmg := a.Damage * skillMult * dmgMultiplier * daoMult * conflictPenaltyMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path)) * (1.0 + raceDamageBonus) * targetResonance
+				hitDmg := a.Damage * skillMult * dmgMultiplier * daoMult * envMod.PowerMult * conflictPenaltyMult * (1.0 + pathBonus(actor.PathDamageBonus, a.Path)) * (1.0 + raceDamageBonus) * targetResonance
 				if h > 0 {
 					hitDmg *= 0.7
 				}
@@ -3872,4 +3884,34 @@ func (r *combatActionRunner) runOne(actor *CombatantAuto, a *SimAction, isAlly b
 		}
 	}
 	return res
+}
+
+func resolveEnvModifiersForAction(state *CombatState, actor *CombatantAuto, paths []string) gamefx.EnvSkillModifiers {
+	if state == nil || state.EnvDao == nil || actor == nil {
+		return gamefx.EnvSkillModifiers{PowerMult: 1.0, ManaTaxMult: 1.0}
+	}
+	isAlly := false
+	if state.EnvDao.DomainOwnerID != "" && actor.ID != state.EnvDao.DomainOwnerID {
+		for _, a := range state.Allies {
+			if a != nil && a.ID == state.EnvDao.DomainOwnerID {
+				// Same side as the domain owner
+				for _, al := range state.Allies {
+					if al == actor {
+						isAlly = true
+						break
+					}
+				}
+				break
+			}
+		}
+	}
+	return gamefx.ResolveEnvSkillModifiers(
+		gamefx.DefaultEnvDaoConfig,
+		state.EnvDao,
+		daoPathForAction(paths),
+		actor.ID,
+		actor.Rank,
+		isAlly,
+		actor.HasNonConflictingDao,
+	)
 }

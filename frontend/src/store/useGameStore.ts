@@ -2400,6 +2400,9 @@ export const useGameStore = create<GameState>((set, get) => {
         if (event?.entity_type === "ground_drop") {
           get().applyWorldDropsEvent(event as { region_id?: string; map_instance_id?: string; scope?: { region_id?: string; map_instance_id?: string } });
         }
+        if (event?.entity_type === "region_dao_dominion" && event?.data) {
+          get().applyEnvDaoEvent(event.data);
+        }
         void import("@/store/useWorldStore").then(({ useWorldStore }) => {
           useWorldStore.getState().applyWorldChangeEvent(event);
         });

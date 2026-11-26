@@ -56,3 +56,14 @@ Vào Tiên Khiếu với tư cách người ngoài; hành động này không ch
 
 **Trục xuất khách Tiên Khiếu**:
 Chủ Tiên Khiếu buộc một khách rời khỏi Tiên Khiếu và trở lại thế giới bên ngoài.
+
+## Đạo Ngân Môi Trường & Đạo Vực
+
+**Đạo Ngân Môi Trường**:
+Tổng thể đạo ngân đang hiện diện tại nơi diễn ra hành động hoặc giao chiến, ở thế giới bên ngoài hoặc bên trong Tiên Khiếu.
+
+**Đạo Ngân Tự Nhiên**:
+Đạo ngân vốn có của trời đất tại một khu vực hoặc ô bản đồ, chưa bị Tôn Giả nào luyện hóa.
+
+**Đạo Vực**:
+Khu vực môi trường có Đạo Ngân Tự Nhiên đã bị một Cửu Chuyển Cổ Tôn luyện hóa và kiểm soát.

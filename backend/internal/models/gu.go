@@ -1299,12 +1299,12 @@ func LoadGuRegistry(db *sql.DB) error {
 
 	for rows.Next() {
 		var item GuDictionaryItem
-		var pathRaw, foodTypesRaw, combatRolesRaw, combatTagsRaw, supportTagsRaw, compositionRaw []byte
+		var pathRaw, effectsRaw, foodTypesRaw, combatRolesRaw, combatTagsRaw, supportTagsRaw, compositionRaw []byte
 		var targetTypeRaw []byte
 		err = rows.Scan(
 			&item.ID, &item.Name, &item.Rank, &pathRaw,
 			&item.Type, &item.BaseManaCost, &item.PlayerATKCoefficient,
-			&item.Effects, &foodTypesRaw, &item.HungerRate,
+			&effectsRaw, &foodTypesRaw, &item.HungerRate,
 			&item.MaxHunger, &item.Description,
 			&targetTypeRaw, &item.Rarity,
 			&item.PrimaryRole,
@@ -1312,7 +1312,12 @@ func LoadGuRegistry(db *sql.DB) error {
 			&item.ImageURL, &compositionRaw,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to scan Gu spec row: %w", err)
+			logger.S.Warnf("failed to scan Gu spec row: %v", err)
+			continue
+		}
+		if err := item.Effects.Scan(effectsRaw); err != nil {
+			logger.S.Warnf("skipping Gu %s rank %d with invalid effects: %v", item.ID, item.Rank, err)
+			continue
 		}
 
 		if err := json.Unmarshal(pathRaw, &item.Path); err != nil {
@@ -1324,7 +1329,8 @@ func LoadGuRegistry(db *sql.DB) error {
 		_ = json.Unmarshal(supportTagsRaw, &item.SupportTags)
 		catalog, err := composition.ParseGrantCatalog(compositionRaw, item.Effects.GetBlocks())
 		if err != nil {
-			return fmt.Errorf("failed to scan Gu composition contributions for %s rank %d: %w", item.ID, item.Rank, err)
+			logger.S.Warnf("skipping Gu %s rank %d with invalid composition contributions: %v", item.ID, item.Rank, err)
+			continue
 		}
 		item.CompositionContributions = catalog
 
