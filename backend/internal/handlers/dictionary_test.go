@@ -86,8 +86,8 @@ func TestDictionaryEndpointsRejectEmptyRegistries(t *testing.T) {
 		t.Fatalf("GetDictionary status = %d, want 200", w.Code)
 	}
 	var resp struct {
-		Gu    []models.GuDictionaryItem    `json:"gu"`
-		Items map[string]models.ItemSpec   `json:"items"`
+		Gu    []models.GuDictionaryItem  `json:"gu"`
+		Items map[string]models.ItemSpec `json:"items"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal response: %v", err)

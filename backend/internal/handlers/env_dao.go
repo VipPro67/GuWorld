@@ -215,16 +215,16 @@ func GetRegionEnvDaoStatus(c *gin.Context) {
 	zoneReg.mu.RUnlock()
 
 	c.JSON(http.StatusOK, gin.H{
-		"region_id":           regionID,
-		"region_name":         regionName,
-		"zone_type":           zoneType,
-		"is_exempt":           zoneType == ZoneTypeHub || zoneType == ZoneTypeSafe || regionID == "aperture_interior",
-		"natural_dao_marks":   natural,
-		"dominion":            domPtr,
-		"my_domains":          myDomains,
-		"max_domains":         gamefx.DefaultEnvDaoConfig.MaxConcurrentDomains,
-		"player_rank":         rank,
-		"domain_activation":   gamefx.DefaultEnvDaoConfig.DomainActivationPct,
+		"region_id":         regionID,
+		"region_name":       regionName,
+		"zone_type":         zoneType,
+		"is_exempt":         zoneType == ZoneTypeHub || zoneType == ZoneTypeSafe || regionID == "aperture_interior",
+		"natural_dao_marks": natural,
+		"dominion":          domPtr,
+		"my_domains":        myDomains,
+		"max_domains":       gamefx.DefaultEnvDaoConfig.MaxConcurrentDomains,
+		"player_rank":       rank,
+		"domain_activation": gamefx.DefaultEnvDaoConfig.DomainActivationPct,
 	})
 }
 

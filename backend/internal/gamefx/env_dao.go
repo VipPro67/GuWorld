@@ -9,18 +9,18 @@ import (
 // Venerable Dao Domains. Keeping them in a single struct makes balancing easy.
 type EnvDaoConfig struct {
 	// Natural Dao Marks (unowned environment)
-	NaturalSaturationK   float64 // M / (M + K) saturation midpoint
-	NaturalMaxBoost      float64 // e.g. 0.35 -> 1.35x max for aligned path
-	NaturalMaxPenalty    float64 // e.g. 0.25 -> 0.75x floor for conflicting path
-	MortalPenaltyFactor  float64 // Rank 1-5 penalty scale (e.g. 0.5 -> half penalty)
-	MortalMinFloor       float64 // Rank 1-5 absolute floor (e.g. 0.85x)
+	NaturalSaturationK  float64 // M / (M + K) saturation midpoint
+	NaturalMaxBoost     float64 // e.g. 0.35 -> 1.35x max for aligned path
+	NaturalMaxPenalty   float64 // e.g. 0.25 -> 0.75x floor for conflicting path
+	MortalPenaltyFactor float64 // Rank 1-5 penalty scale (e.g. 0.5 -> half penalty)
+	MortalMinFloor      float64 // Rank 1-5 absolute floor (e.g. 0.85x)
 
 	// Dao Domain (Venerable-refined territory, scaled by control_pct 0..100)
-	DomainActivationPct     float64 // Minimum control_pct for domain effects (e.g. 25)
-	DomainOwnerMaxMult      float64 // Overlord ("bá chủ") multiplier at 100% (e.g. 2.20x)
-	DomainAllyMaxMult       float64 // Ally/sect multiplier at 100% (e.g. 1.25x)
-	DomainEnemyFloor        float64 // Enemy off-path floor at 100% (e.g. 0.45x)
-	DomainEnemySamePathMin  float64 // Enemy same-path will suppression floor (e.g. 0.85x)
+	DomainActivationPct    float64 // Minimum control_pct for domain effects (e.g. 25)
+	DomainOwnerMaxMult     float64 // Overlord ("bá chủ") multiplier at 100% (e.g. 2.20x)
+	DomainAllyMaxMult      float64 // Ally/sect multiplier at 100% (e.g. 1.25x)
+	DomainEnemyFloor       float64 // Enemy off-path floor at 100% (e.g. 0.45x)
+	DomainEnemySamePathMin float64 // Enemy same-path will suppression floor (e.g. 0.85x)
 
 	// Stability & Mana Tax penalties when envMult < StabilityPenaltyThreshold
 	StabilityPenaltyThreshold float64 // e.g. 0.90
@@ -64,14 +64,14 @@ var DefaultEnvDaoConfig = EnvDaoConfig{
 // EnvCombatContext describes the environmental Dao Marks & optional Dao Domain
 // governing a combat instance.
 type EnvCombatContext struct {
-	RegionID          string             `json:"region_id,omitempty"`
-	RegionName        string             `json:"region_name,omitempty"`
-	IsAperture        bool               `json:"is_aperture,omitempty"`
-	NaturalDaoMarks   map[string]float64 `json:"natural_dao_marks,omitempty"`
-	DomainOwnerID     string             `json:"domain_owner_id,omitempty"`
-	DomainOwnerName   string             `json:"domain_owner_name,omitempty"`
-	DomainPath        string             `json:"domain_path,omitempty"`
-	DomainControlPct  float64            `json:"domain_control_pct,omitempty"`
+	RegionID         string             `json:"region_id,omitempty"`
+	RegionName       string             `json:"region_name,omitempty"`
+	IsAperture       bool               `json:"is_aperture,omitempty"`
+	NaturalDaoMarks  map[string]float64 `json:"natural_dao_marks,omitempty"`
+	DomainOwnerID    string             `json:"domain_owner_id,omitempty"`
+	DomainOwnerName  string             `json:"domain_owner_name,omitempty"`
+	DomainPath       string             `json:"domain_path,omitempty"`
+	DomainControlPct float64            `json:"domain_control_pct,omitempty"`
 }
 
 // EnvSkillModifiers is the computed effect of the environment on one action.

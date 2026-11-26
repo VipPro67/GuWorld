@@ -33,17 +33,17 @@ type Region struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 
-	ParentID       string          `json:"parent_id,omitempty"`
-	ZoneType       string          `json:"zone_type"` // "HUB" | "SAFE_ZONE" | "BOSS_ZONE" | "SECRET_REALM" | "DUNGEON" | "PVP_ZONE" | "NGU_VUC" | "KHU_VUC"
-	MinX           int             `json:"min_x"`
-	MinY           int             `json:"min_y"`
-	MaxX           int             `json:"max_x"`
-	MaxY           int             `json:"max_y"`
-	EntryX         int             `json:"entry_x"`
-	EntryY         int             `json:"entry_y"`
-	AtlasX         int             `json:"atlas_x"`
-	AtlasY         int             `json:"atlas_y"`
-	PoolWeights    ZonePools       `json:"pool_weights"`
+	ParentID          string             `json:"parent_id,omitempty"`
+	ZoneType          string             `json:"zone_type"` // "HUB" | "SAFE_ZONE" | "BOSS_ZONE" | "SECRET_REALM" | "DUNGEON" | "PVP_ZONE" | "NGU_VUC" | "KHU_VUC"
+	MinX              int                `json:"min_x"`
+	MinY              int                `json:"min_y"`
+	MaxX              int                `json:"max_x"`
+	MaxY              int                `json:"max_y"`
+	EntryX            int                `json:"entry_x"`
+	EntryY            int                `json:"entry_y"`
+	AtlasX            int                `json:"atlas_x"`
+	AtlasY            int                `json:"atlas_y"`
+	PoolWeights       ZonePools          `json:"pool_weights"`
 	Paths             []string           `json:"paths"`
 	NaturalDaoMarks   map[string]float64 `json:"natural_dao_marks,omitempty"`
 	EffectiveDaoMarks map[string]float64 `json:"effective_dao_marks,omitempty"`
