@@ -2014,6 +2014,13 @@ func seedQuestsFromCSV() error {
 	reqDescIdx := colIndex(header, "req_desc")
 	msgIdx := colIndex(header, "message")
 	rewardsIdx := colIndex(header, "rewards")
+	chapterIdx := colIndex(header, "chapter")
+	stepOrderIdx := colIndex(header, "step_order")
+	prevQuestIdx := colIndex(header, "prev_quest_id")
+	guideTipIdx := colIndex(header, "guide_tip")
+	targetRouteIdx := colIndex(header, "target_route")
+	unlockFeaturesIdx := colIndex(header, "unlock_features")
+	conditionIdx := colIndex(header, "condition")
 
 	if idIdx < 0 || titleIdx < 0 || descIdx < 0 {
 		return fmt.Errorf("Quest.csv missing required columns (id, title, desc)")
@@ -2054,15 +2061,56 @@ func seedQuestsFromCSV() error {
 				rewards = rVal
 			}
 		}
+		chapter := 1
+		if chapterIdx >= 0 && chapterIdx < len(row) {
+			if v, convErr := strconv.Atoi(strings.TrimSpace(row[chapterIdx])); convErr == nil && v > 0 {
+				chapter = v
+			}
+		}
+		stepOrder := 0
+		if stepOrderIdx >= 0 && stepOrderIdx < len(row) {
+			if v, convErr := strconv.Atoi(strings.TrimSpace(row[stepOrderIdx])); convErr == nil {
+				stepOrder = v
+			}
+		}
+		prevQuestID := ""
+		if prevQuestIdx >= 0 && prevQuestIdx < len(row) {
+			prevQuestID = strings.TrimSpace(row[prevQuestIdx])
+		}
+		guideTip := ""
+		if guideTipIdx >= 0 && guideTipIdx < len(row) {
+			guideTip = strings.TrimSpace(row[guideTipIdx])
+		}
+		targetRoute := ""
+		if targetRouteIdx >= 0 && targetRouteIdx < len(row) {
+			targetRoute = strings.TrimSpace(row[targetRouteIdx])
+		}
+		unlockFeatures := "[]"
+		if unlockFeaturesIdx >= 0 && unlockFeaturesIdx < len(row) {
+			uVal := strings.TrimSpace(row[unlockFeaturesIdx])
+			if uVal != "" {
+				unlockFeatures = uVal
+			}
+		}
+		condition := "{}"
+		if conditionIdx >= 0 && conditionIdx < len(row) {
+			cVal := strings.TrimSpace(row[conditionIdx])
+			if cVal != "" {
+				condition = cVal
+			}
+		}
 
 		_, err = activeCSVImportDB().Exec(`
-			INSERT INTO quests (id, title, description, req_desc, message, rewards)
-			VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+			INSERT INTO quests (id, title, description, req_desc, message, rewards, chapter, step_order, prev_quest_id, guide_tip, target_route, unlock_features, condition)
+			VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb)
 			ON CONFLICT (id) DO UPDATE
 			SET title=EXCLUDED.title, description=EXCLUDED.description,
 			    req_desc=EXCLUDED.req_desc, message=EXCLUDED.message,
-			    rewards=EXCLUDED.rewards
-		`, id, title, desc, reqDesc, message, rewards)
+			    rewards=EXCLUDED.rewards, chapter=EXCLUDED.chapter,
+			    step_order=EXCLUDED.step_order, prev_quest_id=EXCLUDED.prev_quest_id,
+			    guide_tip=EXCLUDED.guide_tip, target_route=EXCLUDED.target_route,
+			    unlock_features=EXCLUDED.unlock_features, condition=EXCLUDED.condition
+		`, id, title, desc, reqDesc, message, rewards, chapter, stepOrder, prevQuestID, guideTip, targetRoute, unlockFeatures, condition)
 		if err != nil {
 			return fmt.Errorf("upsert quest %s: %w", id, err)
 		}
@@ -3735,8 +3783,8 @@ var individualExportDefs = map[string]exportDef{
 	},
 	"quest": {
 		filename: "Quest.csv",
-		columns:  []string{"id", "title", "desc", "req_desc", "message", "rewards"},
-		query:    `SELECT id, title, description, req_desc, message, COALESCE(rewards::text,'[]') FROM quests ORDER BY id`,
+		columns:  []string{"id", "title", "desc", "req_desc", "message", "rewards", "chapter", "step_order", "prev_quest_id", "guide_tip", "target_route", "unlock_features", "condition"},
+		query:    `SELECT id, title, description, req_desc, message, COALESCE(rewards::text,'[]'), chapter, step_order, prev_quest_id, guide_tip, target_route, COALESCE(unlock_features::text,'[]'), COALESCE(condition::text,'{}') FROM quests ORDER BY chapter, step_order, id`,
 	},
 	"dream_realm": {
 		filename: "DreamRealm.csv",

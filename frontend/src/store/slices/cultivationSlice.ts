@@ -82,6 +82,8 @@ export interface CultivationSlice {
   refreshRecipeProgress: () => Promise<void>;
   fetchRegions: () => Promise<void>;
   quests: ApiResponseData[];
+  currentQuestId: string;
+  unlockedFeatures: string[];
   fetchQuests: () => Promise<void>;
   refineGu: (recipeId: string, selectedInstanceIds: string[]) => Promise<{ status: "success" | "failed"; message: string; new_gu?: GuInstance; rate_breakdown?: RefineRateBreakdown } | null>;
   deduceRecipe: (recipeId: string) => Promise<{ success: boolean; message: string; completion_rate: number } | null>;
@@ -109,6 +111,8 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
   recipesError: null,
   recipesFetchedAt: null,
   quests: [],
+  currentQuestId: "",
+  unlockedFeatures: [],
   regions: [],
   regionsLoaded: false,
 
@@ -164,14 +168,18 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       const response = await authFetch(`${BACKEND_URL}/api/quest`);
       // authFetch owns logout; this branch only clears stale quest data.
       if (response.status === 401) {
-        set({ quests: [] });
+        set({ quests: [], currentQuestId: "", unlockedFeatures: [] });
         return;
       }
       if (!response.ok) {
         throw new Error("Failed to load quests");
       }
       const data = await response.json();
-      set({ quests: data.quests || [] });
+      set({
+        quests: data.quests || [],
+        currentQuestId: data.current_quest_id || "",
+        unlockedFeatures: data.unlocked_features || [],
+      });
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));
       console.error("Quests sync error:", err.message);
@@ -475,6 +483,7 @@ export const createCultivationSlice: StateCreator<ApiResponseData, ApiResponseDa
       if (!response.ok) { throw new Error(data.error || "Không thể nhận thưởng nhiệm vụ."); }
       get().applyInventoryFromResponse(data);
       get().addToast(data.message || "Hoàn thành nhiệm vụ.", "success");
+      void get().fetchQuests();
       return { success: true, message: data.message };
     } catch (caught: unknown) {
       const err = caught instanceof Error ? caught : new Error(String(caught));

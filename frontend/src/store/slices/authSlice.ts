@@ -36,7 +36,7 @@ export interface AuthSlice {
     starting_region: string;
     attack_gu_id: string;
     defense_gu_id: string;
-    vital_gu_choice: string;
+    vital_gu_choice?: string;
   }) => Promise<boolean>;
   completeTutorial: () => Promise<boolean>;
 }

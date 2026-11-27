@@ -347,6 +347,7 @@ func resolveRefineSession(ctx context.Context, sessionID, reason string) (*refin
 		if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, "refine:"+newGuInstance.InstanceID, "refine", "", 1); err != nil {
 			return nil, fmt.Errorf("track mission: %w", err)
 		}
+		_ = TrackStoryQuestProgress(tx, player.ID, "refine:"+newGuInstance.InstanceID, "refine_or_rank2_gu", newGuInstance.GuID, 1)
 	}
 
 	// Safety net: nothing selected stays locked after resolve.

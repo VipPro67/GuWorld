@@ -2063,6 +2063,7 @@ func CollectAperturePointStock(c *gin.Context) {
 				httperr.Respond(c, httperr.Internal("Lỗi cập nhật nhiệm vụ hằng ngày", err))
 				return
 			}
+			_ = TrackStoryQuestProgress(tx, playerID, "point-collect:"+pointID.String(), "aperture_collect", "", 1)
 		}
 	}
 	if err := tx.Commit(); err != nil {

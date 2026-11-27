@@ -412,7 +412,8 @@ func JoinSect(c *gin.Context) {
 			IPAddress:      c.ClientIP(), Success: true,
 		})
 
-		if err := tx.Commit(); err != nil {
+		_ = TrackStoryQuestProgress(tx, playerID, "sect:"+sectID+":"+playerID.String(), "sect_member", sectID, 1)
+	if err := tx.Commit(); err != nil {
 			httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 			return
 		}
@@ -439,6 +440,7 @@ func JoinSect(c *gin.Context) {
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 
+	_ = TrackStoryQuestProgress(tx, playerID, "sect:"+sectID+":"+playerID.String(), "sect_member", sectID, 1)
 	if err := tx.Commit(); err != nil {
 		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return
@@ -531,6 +533,7 @@ func LeaveSect(c *gin.Context) {
 		IPAddress:      c.ClientIP(), Success: true,
 	})
 
+	_ = TrackStoryQuestProgress(tx, playerID, "sect:"+sectID+":"+playerID.String(), "sect_member", sectID, 1)
 	if err := tx.Commit(); err != nil {
 		httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 		return

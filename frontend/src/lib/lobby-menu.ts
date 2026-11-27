@@ -97,3 +97,39 @@ export const LOBBY_ENTRY_LABELS: Record<string, string> = {
   "audit-logs": "Ký Sự Tu Hành",
   feedback: "Thỉnh Thiên Đạo",
 };
+
+export interface FeatureUnlockRule {
+  minRank: number;
+  chapter: number;
+  lockLabel: string;
+  desc: string;
+}
+
+export const FEATURE_UNLOCK_RULES: Record<string, FeatureUnlockRule> = {
+  refine: { minRank: 2, chapter: 2, lockLabel: "Mở ở Chặng 2 (Nhị Chuyển)", desc: "Hợp thành Cổ trùng mới từ công thức và nguyên liệu." },
+  pets: { minRank: 2, chapter: 2, lockLabel: "Mở ở Chặng 2 (Nhị Chuyển)", desc: "Thuần hóa và xuất chiến cùng dị thú trợ thủ." },
+  "infinite-tower": { minRank: 2, chapter: 2, lockLabel: "Mở ở Chặng 2 (Nhị Chuyển)", desc: "Thử thách tháp chiến thuật leo tầng nhận thưởng." },
+  utilities: { minRank: 2, chapter: 2, lockLabel: "Mở ở Chặng 2 (Nhị Chuyển)", desc: "Phong ấn và quản lý Cổ trùng đặc biệt." },
+  gacha: { minRank: 2, chapter: 2, lockLabel: "Mở ở Chặng 2 (Nhị Chuyển)", desc: "Vòng quay cơ duyên và giải trí." },
+  "premium-store": { minRank: 2, chapter: 2, lockLabel: "Mở ở Chặng 2 (Nhị Chuyển)", desc: "Cát Bảo Các — cửa hàng vật phẩm cao cấp." },
+  sect: { minRank: 3, chapter: 3, lockLabel: "Mở ở Chặng 3 (Tam Chuyển)", desc: "Gia nhập hoặc lập Tông Môn, làm nhiệm vụ tông và tranh đoạt lãnh địa." },
+  arena: { minRank: 3, chapter: 3, lockLabel: "Mở ở Chặng 3 (Tam Chuyển)", desc: "Giao đấu PvP xếp hạng cùng các Cổ Sư khác." },
+  "martial-arena": { minRank: 3, chapter: 3, lockLabel: "Mở ở Chặng 3 (Tam Chuyển)", desc: "Đại Hội Võ Thuật định kỳ toàn Cổ Giới." },
+  "dream-realm": { minRank: 3, chapter: 3, lockLabel: "Mở ở Chặng 3 (Tam Chuyển)", desc: "Thám hiểm Mộng Cảnh để tăng cảnh giới lưu phái." },
+  "spatial-realms": { minRank: 3, chapter: 3, lockLabel: "Mở ở Chặng 3 (Tam Chuyển)", desc: "Khám phá Bí Cảnh & Truyền Thừa cổ xưa." },
+  divination: { minRank: 3, chapter: 3, lockLabel: "Mở ở Chặng 3 (Tam Chuyển)", desc: "Thiên Cơ Các — bói toán và suy diễn cơ duyên." },
+  auction: { minRank: 3, chapter: 3, lockLabel: "Mở ở Chặng 3 (Tam Chuyển)", desc: "Bảo Hoàng Thiên — chợ và đấu giá toàn cõi." },
+  "death-arena": { minRank: 4, chapter: 4, lockLabel: "Mở ở Chặng 4 (Tứ Chuyển)", desc: "Đấu Trường Sinh Tử khốc liệt dành cho cao thủ." },
+  aperture: { minRank: 6, chapter: 5, lockLabel: "Mở ở Chặng 5 (Lục Chuyển)", desc: "Thế giới riêng của Cổ Tiên (Rank 6+): khai thác mỏ, Đạo Ngân và độ kiếp." },
+};
+
+export function getFeatureLockInfo(
+  featureId: string,
+  playerRank: number,
+  unlockedFeatures: string[] = []
+): { locked: boolean; rule?: FeatureUnlockRule } {
+  const rule = FEATURE_UNLOCK_RULES[featureId];
+  if (!rule) return { locked: false };
+  const unlocked = playerRank >= rule.minRank || unlockedFeatures.includes(featureId);
+  return { locked: !unlocked, rule };
+}

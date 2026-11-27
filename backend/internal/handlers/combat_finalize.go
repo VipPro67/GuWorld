@@ -71,6 +71,14 @@ func finalizeAutoCombatOutcome(tx *sql.Tx, player *models.Player, simState *simu
 		if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, "combat:"+eventID, "pve_victory", player.ActiveCombat.EnemyType, 1); err != nil {
 			return logs, fmt.Errorf("daily mission PvE progress: %w", err)
 		}
+		_ = TrackStoryQuestProgress(tx, player.ID, "combat:"+eventID, "pve_victory", player.ActiveCombat.EnemyType, 1)
+	}
+	if player.ActiveCombat != nil && isVirtual {
+		vID := player.ActiveCombat.CombatID
+		if vID == "" {
+			vID = uuid.NewString()
+		}
+		_ = TrackStoryQuestProgress(tx, player.ID, "virtual:"+vID, "tower_or_practice", player.ActiveCombat.EnemyType, 1)
 	}
 	// Fire ON_COMBAT_END on equipped ACTIVE Gus
 	var combatEndMsg string

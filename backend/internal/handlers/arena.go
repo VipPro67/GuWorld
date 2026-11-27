@@ -225,6 +225,7 @@ func ChallengeArena(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Failed to initialize arena combat", err))
 		return
 	}
+	_ = TrackStoryQuestProgress(tx, player.ID, fmt.Sprintf("arena:%s:%d", player.ID, time.Now().UnixNano()), "arena_match", "", 1)
 	if err := tx.Commit(); err != nil {
 		httperr.Respond(c, httperr.Internal("Database commit failed", err))
 		return

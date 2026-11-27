@@ -89,7 +89,7 @@ interface OnboardingModalProps {
     starting_region: string;
     attack_gu_id: string;
     defense_gu_id: string;
-    vital_gu_choice: string;
+    vital_gu_choice?: string;
   }) => Promise<boolean>;
 }
 
@@ -97,7 +97,6 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
   const [selectedRegion, setSelectedRegion] = useState("tan_thu_coc_nam_cuong");
   const [selectedAttackGu, setSelectedAttackGu] = useState("GU_MOONLIGHT");
   const [selectedDefenseGu, setSelectedDefenseGu] = useState("GU_STONE_SKIN");
-  const [selectedVital, setSelectedVital] = useState("ATTACK");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -144,7 +143,6 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
         starting_region: selectedRegion,
         attack_gu_id: selectedAttackGu,
         defense_gu_id: selectedDefenseGu,
-        vital_gu_choice: selectedVital,
       });
     } finally {
       setIsSubmitting(false);
@@ -292,24 +290,6 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
             <p className="text-[10px] text-zinc-500 font-serif mt-1.5 italic min-h-[28px]">
               {STARTING_DEFENSE_GUS.find((g) => g.id === selectedDefenseGu)?.description}
             </p>
-          </div>
-
-          {/* 4. Vital Gu */}
-          <div>
-            <label htmlFor="vital-gu-choice" className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-1.5">
-              Bản Mệnh Cổ
-            </label>
-            <select
-              id="vital-gu-choice"
-              name="vital_gu_choice"
-              value={selectedVital}
-              onChange={(e) => setSelectedVital(e.target.value)}
-              className="min-h-11 w-full bg-zinc-950/80 border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] cursor-pointer"
-            >
-              <option value="ATTACK">Đặt Cổ Tấn Công làm Bản Mệnh</option>
-              <option value="DEFENSE">Đặt Cổ Phòng Thủ làm Bản Mệnh</option>
-              <option value="NONE">Chưa thiết lập (Để chọn sau)</option>
-            </select>
           </div>
         </div>
 

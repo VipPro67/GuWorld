@@ -5,13 +5,42 @@ export interface QuestReward {
   label: string;
 }
 
+export interface QuestCondition {
+  mode: string;
+  metric: string;
+  target?: string;
+  count: number;
+}
+
 export interface QuestDef {
   id: string;
   title: string;
   desc: string;
   req_desc: string;
   rewards: QuestReward[];
+  chapter?: number;
+  step_order?: number;
+  prev_quest_id?: string;
+  guide_tip?: string;
+  target_route?: string;
+  unlock_features?: string[];
+  condition?: QuestCondition;
+  status?: "COMPLETED" | "ACTIVE" | "LOCKED";
+  current_count?: number;
+  target_count?: number;
+  can_claim?: boolean;
+  is_current?: boolean;
 }
+
+export const STORY_CHAPTER_NAMES: Record<number, string> = {
+  1: "Chặng 1: Nhập Môn Cổ Sư (Nhất Chuyển)",
+  2: "Chặng 2: Luyện Cổ & Hành Tẩu (Nhị Chuyển)",
+  3: "Chặng 3: Lập Thế & Lưu Phái (Tam–Tứ Chuyển)",
+  4: "Chặng 4: Phàm Nhân Đỉnh Phong & Thăng Tiên",
+  5: "Chặng 5: Khai Mở Tiên Khiếu (Lục Chuyển)",
+  6: "Chặng 6: Cổ Tiên Cường Giả (Thất–Bát Chuyển)",
+  7: "Chặng 7: Vấn Đỉnh Tôn Giả (Cửu Chuyển)",
+};
 
 export function formatRewards(rewards: QuestReward[]): string {
   if (!rewards || rewards.length === 0) return "";

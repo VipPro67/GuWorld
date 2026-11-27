@@ -30,7 +30,7 @@ Import có bước chuẩn bị và bước commit. Trước commit, xem lỗi k
 | `monster_spawn` | `MonsterSpawn.csv` | Spawn quái |
 | `map_cell` | `MapCell.csv` | Ô bản đồ và portal/object |
 | `sect_mission` | `SectMission.csv` | Nhiệm vụ môn phái |
-| `quest` | `Quest.csv` | Nhiệm vụ |
+| `quest` | `Quest.csv` | Nhiệm vụ (Lộ Trình Tu Hành 7 chặng: `chapter`, `step_order`, `prev_quest_id`, `guide_tip`, `target_route`, `unlock_features`, `condition`) |
 | `dream_realm` | `DreamRealm.csv` | Kịch bản Mộng Cảnh |
 
 `MonsterSpawn.csv` có các spawn pool của vùng `aperture_interior`, dùng làm quái sinh thái trong map Tiên Khiếu. Import bảng `monster_spawn` sau khi sửa CSV. Mỗi khiếu có bố cục sinh thái ổn định riêng theo `map_instance_id`; thời gian hồi sau khi hạ quái lấy từ `respawn_seconds` của spawn tương ứng. Trạng thái ô bị dọn ở map Tiên Khiếu được Redis scope theo `map_instance_id`; cùng tọa độ trong hai khiếu có chu kỳ hồi độc lập.

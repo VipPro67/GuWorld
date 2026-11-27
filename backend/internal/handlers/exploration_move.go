@@ -347,6 +347,7 @@ func resolveCellArrivalWithInstance(ctx context.Context, tx *sql.Tx, player *mod
 		if err := TrackDailyMissionProgress(tx, player.ID, player.Rank, "explore:"+player.CurrentRegion+":"+visitedSubZone, "explore", "", 1); err != nil {
 			return "", false, err
 		}
+		_ = TrackStoryQuestProgress(tx, player.ID, "explore:"+player.CurrentRegion+":"+visitedSubZone, "explore_cell", visitedSubZone, 1)
 	}
 
 	coordKey := fmt.Sprintf("%d,%d", player.X, player.Y)

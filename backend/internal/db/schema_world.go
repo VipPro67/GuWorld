@@ -234,8 +234,26 @@ func schemaWorld() error {
 		description TEXT NOT NULL DEFAULT '',
 		req_desc TEXT NOT NULL DEFAULT '',
 		message TEXT NOT NULL DEFAULT '',
-		rewards JSONB NOT NULL DEFAULT '[]'
+		rewards JSONB NOT NULL DEFAULT '[]',
+		chapter INTEGER NOT NULL DEFAULT 1,
+		step_order INTEGER NOT NULL DEFAULT 0,
+		prev_quest_id TEXT NOT NULL DEFAULT '',
+		guide_tip TEXT NOT NULL DEFAULT '',
+		target_route TEXT NOT NULL DEFAULT '',
+		unlock_features JSONB NOT NULL DEFAULT '[]',
+		condition JSONB NOT NULL DEFAULT '{}'
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("quests_progression_cols", `
+		ALTER TABLE quests ADD COLUMN IF NOT EXISTS chapter INTEGER NOT NULL DEFAULT 1;
+		ALTER TABLE quests ADD COLUMN IF NOT EXISTS step_order INTEGER NOT NULL DEFAULT 0;
+		ALTER TABLE quests ADD COLUMN IF NOT EXISTS prev_quest_id TEXT NOT NULL DEFAULT '';
+		ALTER TABLE quests ADD COLUMN IF NOT EXISTS guide_tip TEXT NOT NULL DEFAULT '';
+		ALTER TABLE quests ADD COLUMN IF NOT EXISTS target_route TEXT NOT NULL DEFAULT '';
+		ALTER TABLE quests ADD COLUMN IF NOT EXISTS unlock_features JSONB NOT NULL DEFAULT '[]';
+		ALTER TABLE quests ADD COLUMN IF NOT EXISTS condition JSONB NOT NULL DEFAULT '{}';
+	`); err != nil {
 		return err
 	}
 

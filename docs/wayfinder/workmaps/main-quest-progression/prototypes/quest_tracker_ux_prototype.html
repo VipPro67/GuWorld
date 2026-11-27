@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prototype UX — Lộ Trình Tu Hành &amp; Quest Tracker (GuWorld)</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --surface: #121826;
+      --surface-2: #1a2234;
+      --border: #2a354d;
+      --text: #e6ecf5;
+      --muted: #8b9bb4;
+      --gold: #eab308;
+      --gold-soft: rgba(234, 179, 8, 0.14);
+      --jade: #10b981;
+      --jade-soft: rgba(16, 185, 129, 0.14);
+      --danger: #ef4444;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding-bottom: 84px;
+    }
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 20px;
+      background: #080b12;
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--gold-soft);
+      color: var(--gold);
+      border: 1px solid rgba(234,179,8,0.35);
+    }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    button {
+      cursor: pointer;
+      font: inherit;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      padding: 6px 12px;
+      font-size: 13px;
+      transition: 0.15s ease;
+    }
+    button:hover { border-color: var(--gold); }
+    button.primary {
+      background: linear-gradient(135deg, #ca8a04, #eab308);
+      color: #0b0f17;
+      border-color: transparent;
+      font-weight: 700;
+    }
+    button.jade {
+      background: var(--jade-soft);
+      color: var(--jade);
+      border-color: rgba(16, 185, 129, 0.4);
+      font-weight: 600;
+    }
+
+    .viewport-wrap {
+      max-width: 1120px;
+      margin: 20px auto;
+      padding: 0 16px;
+      transition: max-width 0.2s ease;
+    }
+    .viewport-wrap.mobile {
+      max-width: 410px;
+      border: 2px solid var(--border);
+      border-radius: 24px;
+      padding: 14px;
+      background: #0d121d;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin: 0 0 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    /* Lobby grid */
+    .lobby-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+    }
+    .viewport-wrap.mobile .lobby-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .tile {
+      position: relative;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 82px;
+    }
+    .tile:hover { border-color: var(--gold); }
+    .tile.highlighted {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 1px rgba(234,179,8,0.4), 0 0 18px rgba(234,179,8,0.12);
+    }
+    .tile.locked {
+      opacity: 0.55;
+      border-style: dashed;
+    }
+    .tile-title { font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+    .tile-sub { font-size: 11px; color: var(--muted); }
+    .lock-pill {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+      margin-top: auto;
+    }
+    .group-pill {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(59,130,246,0.16);
+      color: #93c5fd;
+    }
+
+    /* Variant A Banner */
+    .tracker-banner {
+      background: linear-gradient(135deg, rgba(234,179,8,0.10), rgba(16,185,129,0.06));
+      border: 1px solid rgba(234,179,8,0.45);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .tracker-info { flex: 1 1 340px; }
+    .tracker-eyebrow { font-size: 11px; color: var(--gold); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+    .tracker-step { font-size: 16px; font-weight: 700; margin: 4px 0; }
+    .tracker-tip { font-size: 12.5px; color: #cbd5e1; line-height: 1.45; margin: 4px 0 8px; }
+    .progress-bar { height: 6px; background: #1e293b; border-radius: 999px; overflow: hidden; max-width: 280px; }
+    .progress-fill { height: 100%; background: var(--jade); transition: width 0.25s ease; }
+
+    /* Variant B HUD Pill */
+    .hud-pill {
+      position: sticky;
+      top: 10px;
+      z-index: 20;
+      margin-bottom: 14px;
+      background: #101726ee;
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(234,179,8,0.5);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Variant C Sidebar Layout */
+    .split-layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .viewport-wrap.mobile .split-layout {
+      grid-template-columns: 1fr;
+    }
+
+    /* Roadmap Timeline / Chapters */
+    .chapters-grid {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .viewport-wrap.mobile .chapters-grid {
+      grid-template-columns: 1fr;
+    }
+    .chapter-item {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .chapter-item.active { border-color: var(--gold); background: var(--gold-soft); }
+    .step-card {
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .step-card.current { border-color: var(--gold); }
+    .step-card.done { border-color: rgba(16,185,129,0.45); opacity: 0.82; }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.68);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 50;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      max-width: 480px;
+      width: 100%;
+      padding: 18px;
+    }
+
+    /* Floating Bottom Variant Switcher */
+    .variant-switcher {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #f8fafc;
+      color: #0f172a;
+      padding: 8px 14px;
+      border-radius: 999px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .variant-switcher button {
+      background: #e2e8f0;
+      color: #0f172a;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+    .variant-switcher button:hover { background: #cbd5e1; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="badge">PROTOTYPE — #471</span>
+      <strong>Lộ Trình Tu Hành &amp; Quest Tracker</strong>
+      <span id="player-state-pill" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="controls">
+      <button onclick="advanceStep()" class="jade">✓ Hoàn thành bước hiện tại (Demo)</button>
+      <button onclick="resetDemo()">↺ Reset Tân Thủ</button>
+      <button onclick="toggleMobile()" id="btn-mobile">📱 Xem Mobile</button>
+    </div>
+  </div>
+
+  <div class="viewport-wrap" id="viewport"></div>
+
+  <!-- Locked Feature Modal -->
+  <div class="modal-backdrop" id="modal-backdrop" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <strong id="modal-title" style="font-size:16px;color:var(--gold)"></strong>
+        <button onclick="closeModal()">✕</button>
+      </div>
+      <p id="modal-body" style="font-size:13.5px;color:#cbd5e1;line-height:1.5;margin:8px 0 14px;"></p>
+      <div id="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;"></div>
+    </div>
+  </div>
+
+  <!-- Variant Switcher -->
+  <div class="variant-switcher">
+    <button onclick="cycleVariant(-1)">←</button>
+    <span id="variant-label">A (Banner Lobby + Modal)</span>
+    <button onclick="cycleVariant(1)">→</button>
+  </div>
+
+  <script>
+    const STEPS = [
+      {
+        id: 'step_1_1', chapter: 1, chapterName: 'Chặng 1: Nhập Môn Cổ Sư (Nhất Chuyển)',
+        title: 'Cho Bản Mệnh Cổ Ăn',
+        tip: 'Trong thế giới Cổ Chân Nhân, Cổ trùng là sinh vật sống — để đói quá lâu chúng sẽ chết. Hãy vào Túi Đồ và cho Bản Mệnh Cổ ăn 1 lần.',
+        target: 'inventory', targetLabel: 'Túi Đồ',
+        progressText: '0/1 lần cho Cổ ăn',
+        unlocks: []
+      },
+      {
+        id: 'step_1_2', chapter: 1, chapterName: 'Chặng 1: Nhập Môn Cổ Sư (Nhất Chuyển)',
+        title: 'Khám Phá Dã Ngoại & Chiến Đấu',
+        tip: 'Không Khiếu cần thực chiến và tài nguyên để trưởng thành. Hãy ra Dã Ngoại di chuyển và thắng 1 trận trước Dã Thú.',
+        target: 'explore', targetLabel: 'Khám Phá Dã Ngoại',
+        progressText: '0/1 trận thắng dã ngoại',
+        unlocks: []
+      },
+      {
+        id: 'step_1_3', chapter: 1, chapterName: 'Chặng 1: Nhập Môn Cổ Sư (Nhất Chuyển)',
+        title: 'Phá Bích Đột Phá Nhị Chuyển',
+        tip: 'Dùng Chân Nguyên trong Không Khiếu để xung kích bích chướng (Phá Bích). Đạt Nhị Chuyển sẽ mở khóa Luyện Cổ và Nô Thú!',
+        target: 'character', targetLabel: 'Nhân Vật',
+        progressText: 'Cảnh giới hiện tại: Nhất Chuyển',
+        unlocks: ['refine', 'pets']
+      },
+      {
+        id: 'step_2_1', chapter: 2, chapterName: 'Chặng 2: Luyện Cổ & Hành Tẩu (Nhị Chuyển)',
+        title: 'Luyện Chế Cổ Trùng Rank 2',
+        tip: 'Luyện Cổ là hợp thành Cổ trùng mới từ công thức và nguyên liệu. Hãy thử luyện 1 con Cổ Nhị Chuyển trong Luyện Cổ.',
+        target: 'refine', targetLabel: 'Luyện Cổ',
+        progressText: '0/1 lần Luyện Cổ thành công',
+        unlocks: ['sect']
+      }
+    ];
+
+    const LOBBY_TILES = [
+      { id: 'character', label: 'Nhân Vật', sub: 'Tu luyện & Phá Bích', minChapter: 1 },
+      { id: 'inventory', label: 'Túi Đồ', sub: 'Trang bị & Cho Cổ ăn', minChapter: 1 },
+      { id: 'explore', label: 'Khám Phá Dã Ngoại', sub: 'Bản đồ, quái & tài nguyên', minChapter: 1 },
+      { id: 'refine', label: 'Luyện Cổ', sub: 'Hợp thành Cổ trùng', minChapter: 2, lockLabel: 'Mở ở Chặng 2 (Nhị Chuyển)', desc: 'Dùng công thức và nguyên liệu để luyện ra Cổ trùng cấp cao hơn.' },
+      { id: 'pets', label: 'Nô Thú', sub: 'Thuần hóa & xuất chiến', minChapter: 2, lockLabel: 'Mở ở Chặng 2 (Nhị Chuyển)', desc: 'Thu phục dị thú làm trợ thủ chiến đấu.' },
+      { id: 'sect', label: 'Tông Môn', sub: 'Gia nhập & nhiệm vụ tông', minChapter: 3, lockLabel: 'Mở ở Chặng 3 (Tam Chuyển)', desc: 'Gia nhập hoặc lập Tông Môn, nhận cống hiến và tranh đoạt lãnh địa.' },
+      { id: 'aperture', label: 'Tiên Khiếu', sub: 'Phúc địa Cổ Tiên', minChapter: 5, lockLabel: 'Mở ở Chặng 5 (Lục Chuyển)', desc: 'Thế giới riêng của Cổ Tiên (Rank 6+): khai thác mỏ, Đạo Ngân và độ kiếp.' },
+      { id: 'combat-hub', label: 'Đấu Trường & Thí Luyện', sub: '5 tính năng chiến đấu', group: true, children: ['Phòng Tập (Mở)', 'Tháp Chiến Thuật (Chặng 2)', 'Võ Đài (Chặng 3)', 'Đấu Trường Sinh Tử (Chặng 4)'] },
+      { id: 'commerce-hub', label: 'Thương Hội', sub: '3 tính năng giao thương', group: true, children: ['Cửa Hàng (Mở)', 'Cát Bảo Các (Chặng 2)', 'Chợ, Đấu Giá (Chặng 3)'] },
+      { id: 'adventure-hub', label: 'Bí Cảnh & Cơ Duyên', sub: '4 tính năng khám phá', group: true, children: ['Mộng Cảnh (Chặng 3)', 'Bí Cảnh (Chặng 3)', 'Thiên Cơ Các (Chặng 3)', 'Giải Trí (Chặng 2)'] },
+      { id: 'system-hub', label: 'Tiện Ích & Ký Sự', sub: '6 tính năng hệ thống', group: true, children: ['Lộ Trình & Thành Tựu (Mở)', 'Bảng Xếp Hạng (Mở)', 'Phong Ấn Cổ (Chặng 2)'] }
+    ];
+
+    const VARIANTS = [
+      { key: 'A', name: 'A (Banner trên Lobby + Modal 7 Chặng)' },
+      { key: 'B', name: 'B (HUD Pill nổi + Dòng thời gian)' },
+      { key: 'C', name: 'C (Sidebar Cẩm Nang + Tab Lộ Trình)' }
+    ];
+
+    let state = {
+      variant: new URLSearchParams(location.search).get('variant') || 'A',
+      stepIdx: 0,
+      mobile: false,
+      showRoadmap: false,
+      selectedChapter: 1
+    };
+    if (!['A','B','C'].includes(state.variant)) state.variant = 'A';
+
+    function currentStep() { return STEPS[Math.min(state.stepIdx, STEPS.length - 1)]; }
+    function currentRank() { return currentStep().chapter >= 2 ? 2 : 1; }
+
+    function advanceStep() {
+      if (state.stepIdx < STEPS.length - 1) state.stepIdx++;
+      else state.stepIdx = 0;
+      state.selectedChapter = currentStep().chapter;
+      render();
+    }
+    function resetDemo() {
+      state.stepIdx = 0;
+      state.selectedChapter = 1;
+      state.showRoadmap = false;
+      render();
+    }
+    function toggleMobile() {
+      state.mobile = !state.mobile;
+      document.getElementById('btn-mobile').textContent = state.mobile ? '🖥 Xem Desktop' : '📱 Xem Mobile';
+      render();
+    }
+    function cycleVariant(dir) {
+      const idx = VARIANTS.findIndex(v => v.key === state.variant);
+      const next = VARIANTS[(idx + dir + VARIANTS.length) % VARIANTS.length].key;
+      state.variant = next;
+      const url = new URL(location.href);
+      url.searchParams.set('variant', next);
+      history.replaceState(null, '', url);
+      render();
+    }
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft') cycleVariant(-1);
+      if (e.key === 'ArrowRight') cycleVariant(1);
+    });
+
+    function openTile(id) {
+      const t = LOBBY_TILES.find(x => x.id === id);
+      const cur = currentStep();
+      if (t.group) {
+        document.getElementById('modal-title').textContent = t.label;
+        document.getElementById('modal-body').innerHTML =
+          'Nhóm Menu luôn hiển thị ngoài Lobby. Trạng thái các mục con:<br><br>• ' + t.children.join('<br>• ');
+        document.getElementById('modal-actions').innerHTML = '<button onclick="closeModal()">Đóng</button>';
+        document.getElementById('modal-backdrop').classList.add('open');
+        return;
+      }
+      if (t.minChapter > cur.chapter) {
+        document.getElementById('modal-title').textContent = '🔒 ' + t.label + ' (Chưa mở khóa)';
+        document.getElementById('modal-body').innerHTML =
+          `<strong>Tác dụng:</strong> ${t.desc}<br><br><strong>Điều kiện mở:</strong> ${t.lockLabel} hoặc hoàn thành bước mở khóa trong Lộ Trình Tu Hành.`;
+        document.getElementById('modal-actions').innerHTML =
+          `<button onclick="closeModal()">Đóng</button><button class="primary" onclick="closeModal(); goTarget('${cur.target}')">Đi tới bước hiện tại →</button>`;
+        document.getElementById('modal-backdrop').classList.add('open');
+        return;
+      }
+      goTarget(t.id);
+    }
+
+    function goTarget(targetId) {
+      const t = LOBBY_TILES.find(x => x.id === targetId);
+      alert('Điều hướng tới màn hình: ' + (t ? t.label : targetId));
+    }
+
+    function closeModal() {
+      document.getElementById('modal-backdrop').classList.remove('open');
+    }
+
+    function renderGrid() {
+      const cur = currentStep();
+      return `<div class="lobby-grid">${LOBBY_TILES.map(t => {
+        const locked = !t.group && t.minChapter > cur.chapter;
+        const highlighted = cur.target === t.id;
+        return `
+          <button class="tile ${locked ? 'locked' : ''} ${highlighted ? 'highlighted' : ''}" onclick="openTile('${t.id}')">
+            <div class="tile-title">
+              <span>${locked ? '🔒 ' : ''}${t.label}</span>
+              ${t.group ? '<span class="group-pill">Nhóm</span>' : ''}
+            </div>
+            <div class="tile-sub">${t.sub}</div>
+            ${locked ? `<span class="lock-pill">${t.lockLabel}</span>` : ''}
+            ${highlighted ? `<span class="lock-pill" style="background:var(--gold-soft);color:var(--gold)">★ Mục tiêu hiện tại</span>` : ''}
+          </button>`;
+      }).join('')}</div>`;
+    }
+
+    function renderRoadmapSection() {
+      const cur = currentStep();
+      const chapters = [
+        { id: 1, name: 'Chặng 1: Nhập Môn Cổ Sư (Nhất Chuyển)' },
+        { id: 2, name: 'Chặng 2: Luyện Cổ & Hành Tẩu (Nhị Chuyển)' },
+        { id: 3, name: 'Chặng 3: Lập Thế & Lưu Phái (Tam–Tứ Chuyển)' },
+        { id: 4, name: 'Chặng 4: Ngũ Chuyển & Thăng Tiên' },
+        { id: 5, name: 'Chặng 5: Khai Mở Tiên Khiếu (Lục Chuyển)' },
+        { id: 6, name: 'Chặng 6: Cổ Tiên Cường Giả (Thất–Bát Chuyển)' },
+        { id: 7, name: 'Chặng 7: Vấn Đỉnh Tôn Giả (Cửu Chuyển)' }
+      ];
+      const stepsInCh = STEPS.filter(s => s.chapter === state.selectedChapter);
+      return `
+        <div class="panel" style="margin-top:16px;">
+          <div class="section-title">
+            <span>📜 Lộ Trình Tu Hành (Nhất Chuyển → Cửu Chuyển Cổ Tôn)</span>
+            <span style="font-size:12px;color:var(--muted)">Tiến độ tổng: ${state.stepIdx}/${STEPS.length} bước (demo)</span>
+          </div>
+          <div class="chapters-grid">
+            <div>
+              ${chapters.map(c => `
+                <div class="chapter-item ${c.id === state.selectedChapter ? 'active' : ''}" onclick="state.selectedChapter=${c.id}; render();">
+                  <div style="font-size:13px;font-weight:700;">${c.name}</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px;">
+                    ${c.id < cur.chapter ? '✓ Đã hoàn thành' : c.id === cur.chapter ? '● Đang thực hiện' : '🔒 Chưa tới chặng'}
+                  </div>
+                </div>`).join('')}
+            </div>
+            <div>
+              ${stepsInCh.length ? stepsInCh.map((s) => {
+                const idx = STEPS.findIndex(x => x.id === s.id);
+                const status = idx < state.stepIdx ? 'done' : idx === state.stepIdx ? 'current' : '';
+                return `
+                  <div class="step-card ${status}">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                      <strong>${idx < state.stepIdx ? '✓ ' : idx === state.stepIdx ? '★ ' : ''}${s.title}</strong>
+                      <span style="font-size:11px;color:var(--muted)">${s.progressText}</span>
+                    </div>
+                    <p style="font-size:12.5px;color:#cbd5e1;margin:6px 0 10px;line-height:1.45;">${s.tip}</p>
+                    ${idx === state.stepIdx ? `<button class="primary" onclick="goTarget('${s.target}')">Đi tới ${s.targetLabel} →</button>` : ''}
+                  </div>`;
+              }).join('') : `<div class="step-card"><div style="font-size:13px;color:var(--muted)">Các bước của chặng này sẽ mở khóa khi bạn hoàn thành chặng trước (4–6 bước/chặng).</div></div>`}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function render() {
+      const vp = document.getElementById('viewport');
+      vp.className = 'viewport-wrap' + (state.mobile ? ' mobile' : '');
+      const cur = currentStep();
+      const pct = Math.round((state.stepIdx / STEPS.length) * 100);
+      document.getElementById('player-state-pill').textContent = `Rank ${currentRank()} • ${cur.chapterName}`;
+      document.getElementById('variant-label').textContent = VARIANTS.find(v => v.key === state.variant).name;
+
+      if (state.variant === 'A') {
+        vp.innerHTML = `
+          <div class="tracker-banner">
+            <div class="tracker-info">
+              <div class="tracker-eyebrow">${cur.chapterName}</div>
+              <div class="tracker-step">Mục tiêu: ${cur.title}</div>
+              <div class="tracker-tip">${cur.tip}</div>
+              <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button onclick="state.showRoadmap=!state.showRoadmap; render();">📜 ${state.showRoadmap ? 'Ẩn Lộ Trình' : 'Xem 7 Chặng'}</button>
+              <button class="primary" onclick="goTarget('${cur.target}')">Thực hiện (${cur.targetLabel}) →</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="section-title"><span>Điểm Đến Cổ Giới</span><span style="font-size:12px;color:var(--muted)">Lưới Lobby (#455)</span></div>
+            ${renderGrid()}
+          </div>
+          ${state.showRoadmap ? renderRoadmapSection() : ''}
+        `;
+      } else if (state.variant === 'B') {
+        vp.innerHTML = `
+          <div class="hud-pill">
+            <div>
+              <div style="font-size:11px;color:var(--gold);font-weight:700;">★ ${cur.chapterName}</div>
+              <div style="font-size:14px;font-weight:700;">${cur.title} <span style="font-weight:400;color:var(--muted);font-size:12px;">(${cur.progressText})</span></div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button onclick="state.showRoadmap=!state.showRoadmap; render();">📜 Lộ Trình</button>
+              <button class="primary" onclick="goTarget('${cur.target}')">Đi tới ${cur.targetLabel} →</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="section-title"><span>Điểm Đến Cổ Giới</span><span style="font-size:12px;color:var(--muted)">Thanh HUD nổi bám theo mọi màn hình</span></div>
+            ${renderGrid()}
+          </div>
+          ${renderRoadmapSection()}
+        `;
+      } else {
+        vp.innerHTML = `
+          <div class="split-layout">
+            <div class="panel" style="border-color:rgba(234,179,8,0.45);">
+              <div class="tracker-eyebrow">Cẩm Nang Tu Hành</div>
+              <div style="font-size:15px;font-weight:700;margin:6px 0;">${cur.title}</div>
+              <div style="font-size:11.5px;color:var(--gold);margin-bottom:8px;">${cur.chapterName}</div>
+              <p style="font-size:12.5px;color:#cbd5e1;line-height:1.5;margin:0 0 12px;">${cur.tip}</p>
+              <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px;">Tiến độ: ${cur.progressText}</div>
+              <button class="primary" style="width:100%;margin-bottom:8px;" onclick="goTarget('${cur.target}')">Thực hiện tại ${cur.targetLabel} →</button>
+              <button style="width:100%;" onclick="state.showRoadmap=!state.showRoadmap; render();">📜 Mở Tab Lộ Trình (7 Chặng)</button>
+            </div>
+            <div class="panel">
+              <div class="section-title"><span>Điểm Đến Cổ Giới</span><span style="font-size:12px;color:var(--muted)">Cột dẫn đường + Lưới Lobby</span></div>
+              ${renderGrid()}
+            </div>
+          </div>
+          ${state.showRoadmap ? renderRoadmapSection() : ''}
+        `;
+      }
+    }
+
+    render();
+  </script>
+</body>
+</html>

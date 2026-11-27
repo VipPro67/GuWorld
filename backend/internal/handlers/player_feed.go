@@ -385,6 +385,7 @@ func FeedGu(c *gin.Context) {
 		if _, err := tx.Exec(`UPDATE player_gu SET last_fed_at = NOW() WHERE id = $1`, target.InstanceID); err != nil {
 			return fmt.Errorf("failed to save feeding progress: %w", err)
 		}
+		_ = TrackStoryQuestProgress(tx, player.ID, fmt.Sprintf("feed:%s:%d", target.InstanceID, target.Hunger), "feed_gu", target.GuID, 1)
 
 		targetGu = *target
 		return nil

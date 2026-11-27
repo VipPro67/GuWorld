@@ -13,12 +13,12 @@ Domain này gom các objective phụ giúp người chơi học hệ thống và
 
 ## Cách sử dụng
 
-### Quest
+### Quest (Lộ Trình Tu Hành Chính Tuyến)
 
-1. Gọi `GET /quest` để đọc quest hiện hành, yêu cầu và rewards.
-2. Thực hiện objective trong gameplay. Một số quest kiểm tra trạng thái player trực tiếp; một số kiểm tra inventory hoặc exploration progress.
-3. Gọi `POST /quest/complete` với quest ID khi đã đạt điều kiện.
-4. Đọc response/player snapshot; reward được áp dụng phía server.
+1. Gọi `GET /quest` để đọc 34 bước **Lộ Trình Tu Hành** qua 7 Chặng (từ Nhất Chuyển tới Cửu Chuyển Cổ Tôn), kèm `current_quest_id`, `unlocked_features`, `guide_tip`, `target_route` và tiến độ Hybrid (`state` / `event` / `hybrid`). Người chơi cũ ở Rank cao hơn được tự động đồng bộ qua các bước tân thủ ở chặng dưới.
+2. Thực hiện objective trong gameplay (một số bước kiểm tra trạng thái player trực tiếp; một số ghi nhận sự kiện server xác nhận qua `TrackStoryQuestProgress` với chống trùng `sourceEventID`).
+3. Gọi `POST /quest/complete` với quest ID khi đã đạt điều kiện tiên quyết và mục tiêu.
+4. Đọc response/player snapshot; reward được áp dụng phía server và mở bước tiếp theo.
 
 ### Daily missions
 

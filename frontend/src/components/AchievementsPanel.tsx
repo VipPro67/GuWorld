@@ -16,7 +16,7 @@ import {
   Gift,
 } from "lucide-react";
 import { useGameStore } from "@/store/useGameStore";
-import { checkQuest, formatRewards, isClaimableAchievement } from "@/data/quests";
+import { checkQuest, formatRewards, isClaimableAchievement, QuestDef, STORY_CHAPTER_NAMES } from "@/data/quests";
 
 interface AchievementItem {
   id: string;
@@ -655,23 +655,32 @@ function MainQuestsPanel() {
             Chưa có nhiệm vụ nào.
           </div>
         ) : (
-          quests
-            .map((q: QuestItem) => {
-              const isDone = completed.includes(q.id);
-              const canClaim = !isDone && checkQuest(q.id, player, store.guDictionary || {});
+          (quests as QuestDef[])
+            .map((q) => {
+              const isDone = q.status === "COMPLETED" || completed.includes(q.id);
+              const canClaim = !isDone && (typeof q.can_claim === "boolean" ? q.can_claim : checkQuest(q.id, player, store.guDictionary || {}));
+              const isLockedStep = !isDone && q.status === "LOCKED" && !q.is_current;
+              const chLabel = q.chapter ? STORY_CHAPTER_NAMES[q.chapter] || `Chặng ${q.chapter}` : "";
 
               return (
                 <div
                   key={q.id}
-                  className={`p-3.5 rounded-2xl border text-xs flex flex-col justify-between gap-3 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 hover:scale-[1.01] ${
+                  className={`p-3.5 rounded-2xl border text-xs flex flex-col justify-between gap-3 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-300 ${
                     isDone
                       ? "bg-emerald-950/10 border-emerald-950/20 opacity-70"
                       : canClaim
                       ? "bg-amber-950/20 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.1)] ring-1 ring-amber-400/30"
+                      : q.is_current
+                      ? "bg-amber-950/15 border-amber-500/30"
+                      : isLockedStep
+                      ? "bg-zinc-950/30 border-zinc-900/60 opacity-60"
                       : "bg-zinc-950/40 border-zinc-900"
                   }`}
                 >
                   <div className="text-left flex-1 min-w-0">
+                    {chLabel && (
+                      <div className="text-[10px] font-mono text-amber-400/80 mb-1 truncate">{chLabel}</div>
+                    )}
                     <div
                       className={`font-semibold flex items-center gap-2 ${
                         isDone ? "text-emerald-600 dark:text-emerald-400 line-through" : "text-zinc-100"
@@ -682,32 +691,48 @@ function MainQuestsPanel() {
                       </div>
                       <span className="truncate text-sm font-serif">{q.title}</span>
                     </div>
-                    <div className="text-[11px] text-zinc-400 mt-1.5 leading-snug">{q.desc}</div>
+                    <div className="text-[11px] text-zinc-400 mt-1.5 leading-snug">{q.guide_tip || q.desc}</div>
                     <div className="text-[10px] text-amber-400/80 mt-1 font-mono flex items-center gap-1">
                       <span>Mục tiêu:</span>
-                      <span className="text-zinc-300">{q.req_desc}</span>
+                      <span className="text-zinc-300">
+                        {q.req_desc}
+                        {typeof q.target_count === "number" && q.target_count > 1 && !isDone
+                          ? ` (${q.current_count ?? 0}/${q.target_count})`
+                          : ""}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-zinc-900 pt-2.5">
+                  <div className="flex items-center justify-between border-t border-zinc-900 pt-2.5 gap-2">
                     <div className="text-[10px] font-mono text-zinc-500 truncate mr-2">
                       {q.rewards && q.rewards.length > 0 && `Thưởng: ${formatRewards(q.rewards)}`}
                     </div>
-                    <button
-                      disabled={isDone || !canClaim || store.actionLoading}
-                      onClick={async () => {
-                        await store.completeQuest(q.id);
-                      }}
-                      className={`px-4 py-1.5 rounded-xl text-xs font-bold font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shrink-0 cursor-pointer whitespace-nowrap ${
-                        isDone
-                          ? "bg-zinc-900/60 text-zinc-650 border border-zinc-950 cursor-not-allowed"
-                          : canClaim
-                          ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-zinc-950 shadow-[0_0_10px_rgba(245,158,11,0.3)] active:scale-95"
-                          : "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
-                      }`}
-                    >
-                      {isDone ? "ĐÃ XONG" : canClaim ? "NHẬN THƯỞNG" : "CHƯA ĐẠT"}
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!isDone && !canClaim && !isLockedStep && q.target_route && (
+                        <button
+                          type="button"
+                          onClick={() => store.setView(q.target_route!)}
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-amber-500/40 bg-amber-950/30 text-amber-200 hover:bg-amber-900/40 cursor-pointer"
+                        >
+                          Đi tới
+                        </button>
+                      )}
+                      <button
+                        disabled={isDone || !canClaim || store.actionLoading}
+                        onClick={async () => {
+                          await store.completeQuest(q.id);
+                        }}
+                        className={`px-4 py-1.5 rounded-xl text-xs font-bold font-mono transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] shrink-0 cursor-pointer whitespace-nowrap ${
+                          isDone
+                            ? "bg-zinc-900/60 text-zinc-650 border border-zinc-950 cursor-not-allowed"
+                            : canClaim
+                            ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-zinc-950 shadow-[0_0_10px_rgba(245,158,11,0.3)] active:scale-95"
+                            : "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
+                        }`}
+                      >
+                        {isDone ? "ĐÃ XONG" : canClaim ? "NHẬN THƯỞNG" : isLockedStep ? "CHƯA MỞ" : "CHƯA ĐẠT"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

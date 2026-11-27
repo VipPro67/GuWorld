@@ -39,7 +39,8 @@ import { Num } from "./Num";
 import { SpatialRealmsModal } from "./SpatialRealmsModal";
 import { LobbySettingsPanel } from "./LobbySettingsPanel";
 import { LobbyGridSettingsEditor } from "./LobbyGridSettingsEditor";
-import { CORE_LOBBY_FEATURE_IDS, LOBBY_FEATURE_IDS, LOBBY_MENU_GROUPS } from "@/lib/lobby-menu";
+import { CORE_LOBBY_FEATURE_IDS, getFeatureLockInfo, LOBBY_ENTRY_LABELS, LOBBY_FEATURE_IDS, LOBBY_MENU_GROUPS } from "@/lib/lobby-menu";
+import { QuestDef, STORY_CHAPTER_NAMES, formatRewards } from "@/data/quests";
 import { updateUiPreferences, useUiPreferences } from "@/lib/ui-preferences";
 import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import Link from "next/link";
@@ -54,6 +55,8 @@ interface HubItem {
   iconColor: string;
   artwork?: string;
   locked?: boolean;
+  lockLabel?: string;
+  lockDesc?: string;
   desc?: string;
   isGroup?: boolean;
   childCount?: number;
@@ -95,6 +98,11 @@ export const LobbyView: React.FC = () => {
     regions,
     regionsLoaded,
     fetchRegions,
+    quests,
+    unlockedFeatures,
+    fetchQuests,
+    completeQuest,
+    actionLoading,
   } = useGameStore();
   const [manaNow, setManaNow] = useState(() => Date.now());
   const [combatSettingsOpen, setCombatSettingsOpen] = useState(false);
@@ -102,6 +110,9 @@ export const LobbyView: React.FC = () => {
   const [allFeaturesOpen, setAllFeaturesOpen] = useState(false);
   const [allFeaturesQuery, setAllFeaturesQuery] = useState("");
   const [gridSettingsOpen, setGridSettingsOpen] = useState(false);
+  const [roadmapOpen, setRoadmapOpen] = useState(false);
+  const [selectedChapter, setSelectedChapter] = useState(1);
+  const [lockedModalItem, setLockedModalItem] = useState<HubItem | null>(null);
   const combatSettingsDialogRef = useRef<HTMLElement>(null);
   const { lobbyGridItems, lobbyGridLimit } = useUiPreferences();
   const { dialogRef: groupDialogRef, onKeyDown: groupDialogKeyDown } = useAccessibleDialog<HTMLElement>(
@@ -158,6 +169,16 @@ export const LobbyView: React.FC = () => {
       void fetchAperture();
     }
   }, [player, aperture, fetchAperture]);
+
+  useEffect(() => {
+    if (player && quests.length === 0) {
+      void fetchQuests();
+    }
+  }, [player, quests.length, fetchQuests]);
+
+  const typedQuests = (quests as QuestDef[]) || [];
+  const currentQuest = typedQuests.find((q) => q.is_current) || typedQuests.find((q) => q.status !== "COMPLETED") || null;
+  const completedQuestCount = typedQuests.filter((q) => q.status === "COMPLETED").length;
 
   useEffect(() => {
     if (!regionsLoaded) void fetchRegions();
@@ -474,7 +495,10 @@ export const LobbyView: React.FC = () => {
   }));
 
   const handleItemClick = (item: HubItem) => {
-    if (item.locked) return;
+    if (item.locked) {
+      setLockedModalItem(item);
+      return;
+    }
     if (item.isGroup) {
       setActiveGroupId(item.id);
       return;
@@ -538,10 +562,22 @@ export const LobbyView: React.FC = () => {
   };
 
   const entryById = new Map<string, HubItem>(
-    [...managementItems, ...activityItems, ...groupItems].map((item) => [
-      item.id,
-      { ...item, artwork: lobbyArtwork[item.id] },
-    ])
+    [...managementItems, ...activityItems, ...groupItems].map((item) => {
+      const lockInfo = item.isGroup
+        ? { locked: false, rule: undefined }
+        : getFeatureLockInfo(item.id, player?.rank || 1, unlockedFeatures || []);
+      const isLocked = Boolean(item.locked || lockInfo.locked);
+      return [
+        item.id,
+        {
+          ...item,
+          locked: isLocked,
+          lockLabel: lockInfo.rule?.lockLabel || (item.locked ? "Đạt Lục Chuyển để mở" : undefined),
+          lockDesc: lockInfo.rule?.desc || item.desc,
+          artwork: lobbyArtwork[item.id],
+        },
+      ];
+    })
   );
   const effectiveGridLimit = lobbyGridLimit === 0 ? lobbyGridItems.length : lobbyGridLimit;
   const visibleLobbyItems = lobbyGridItems
@@ -737,6 +773,88 @@ export const LobbyView: React.FC = () => {
         <LogConsole logs={logs} />
       </div>
 
+      {currentQuest && (
+        <section
+          aria-label="Lộ trình tu hành hiện tại"
+          className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-950/35 via-zinc-950/80 to-emerald-950/20 p-3.5 sm:p-4 shadow-[0_0_24px_rgba(234,179,8,0.08)]"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-amber-400">
+                <span>{currentQuest.chapter ? (STORY_CHAPTER_NAMES[currentQuest.chapter] || `Chặng ${currentQuest.chapter}`) : "Lộ Trình Tu Hành"}</span>
+                <span className="text-zinc-500">•</span>
+                <span className="text-emerald-400">{completedQuestCount}/{typedQuests.length} bước</span>
+              </div>
+              <h3 className="mt-1 font-serif text-sm sm:text-base font-bold text-amber-100">
+                Mục tiêu: {currentQuest.title}
+              </h3>
+              {(currentQuest.guide_tip || currentQuest.desc) && (
+                <p className="mt-1 text-xs leading-relaxed text-zinc-300">
+                  {currentQuest.guide_tip || currentQuest.desc}
+                </p>
+              )}
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <span className="text-[11px] font-mono text-amber-300/90">
+                  {currentQuest.req_desc}
+                  {typeof currentQuest.target_count === "number" && currentQuest.target_count > 1
+                    ? ` (${currentQuest.current_count ?? 0}/${currentQuest.target_count})`
+                    : ""}
+                </span>
+                {currentQuest.rewards && currentQuest.rewards.length > 0 && (
+                  <span className="text-[11px] font-mono text-emerald-400">
+                    Thưởng: {formatRewards(currentQuest.rewards)}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedChapter(currentQuest.chapter || 1);
+                  setRoadmapOpen(true);
+                }}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-900/90 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:border-amber-400/60 cursor-pointer"
+              >
+                <Layers className="h-3.5 w-3.5 text-amber-400" />
+                <span>Xem 7 Chặng</span>
+              </button>
+              {currentQuest.can_claim ? (
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={() => {
+                    void completeQuest(currentQuest.id);
+                  }}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-3.5 py-1.5 text-xs font-bold text-zinc-950 shadow-[0_0_12px_rgba(234,179,8,0.3)] hover:from-amber-400 hover:to-yellow-400 cursor-pointer disabled:opacity-50"
+                >
+                  <Gift className="h-3.5 w-3.5" />
+                  <span>Nhận thưởng</span>
+                </button>
+              ) : (
+                currentQuest.target_route && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetItem = entryById.get(currentQuest.target_route!);
+                      if (targetItem) {
+                        handleItemClick(targetItem);
+                      } else {
+                        setView(currentQuest.target_route!);
+                      }
+                    }}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-3.5 py-1.5 text-xs font-bold text-zinc-950 shadow-[0_0_12px_rgba(234,179,8,0.25)] hover:from-amber-400 hover:to-yellow-400 cursor-pointer"
+                  >
+                    <span>Thực hiện ({LOBBY_ENTRY_LABELS[currentQuest.target_route] || currentQuest.target_route})</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       <div className="flex flex-col gap-3 sm:gap-4">
         <div className="flex flex-wrap items-end justify-between gap-2 border-b border-[var(--border-default)]/60 pb-2">
           <div>
@@ -773,18 +891,20 @@ export const LobbyView: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6 gap-2 sm:gap-3">
           {visibleLobbyItems.map((item) => {
             const Icon = item.icon;
+            const isTarget = !item.locked && currentQuest?.target_route === item.id;
             return (
               <button
                 type="button"
                 key={item.id}
-                disabled={item.locked}
                 onClick={() => handleItemClick(item)}
-                aria-label={item.locked ? `${item.label} (đã khóa)` : item.label}
-                title={item.locked ? `${item.label} — chưa mở khóa` : item.label}
-                className={`mmo-game-tile group relative flex min-h-[92px] items-center gap-3 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 sm:min-h-[108px] sm:px-3.5 ${
+                aria-label={item.locked ? `${item.label} (chưa mở khóa)` : item.label}
+                title={item.locked ? `${item.label} — ${item.lockLabel || "chưa mở khóa"}` : item.label}
+                className={`mmo-game-tile group relative flex min-h-[92px] items-center gap-3 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition-[color,background-color,border-color,box-shadow,opacity,transform,filter] duration-200 sm:min-h-[108px] sm:px-3.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 ${
                   item.locked
-                    ? "cursor-not-allowed opacity-55"
-                    : "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
+                    ? "opacity-60 border-dashed"
+                    : isTarget
+                    ? "border-amber-400/80 ring-1 ring-amber-400/40 shadow-[0_0_16px_rgba(234,179,8,0.18)]"
+                    : ""
                 }`}
                 data-locked={item.locked || undefined}
               >
@@ -914,18 +1034,22 @@ export const LobbyView: React.FC = () => {
                   >
                     <button
                       type="button"
-                      disabled={child.locked}
                       onClick={() => handleItemClick(child)}
-                      className={`flex min-w-0 flex-1 items-center gap-2.5 text-left ${
-                        child.locked ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:text-amber-200"
+                      className={`flex min-w-0 flex-1 items-center gap-2.5 text-left cursor-pointer ${
+                        child.locked ? "opacity-55 hover:opacity-80" : "hover:text-amber-200"
                       }`}
                     >
                       <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-zinc-700/70 bg-zinc-950">
-                        <ChildIcon className="h-4 w-4 text-amber-300" />
+                        {child.locked ? <Lock className="h-4 w-4 text-zinc-500" /> : <ChildIcon className="h-4 w-4 text-amber-300" />}
                       </div>
-                      <span className="truncate font-serif text-xs font-semibold text-zinc-100">
-                        {child.label}
-                      </span>
+                      <div className="min-w-0">
+                        <span className="block truncate font-serif text-xs font-semibold text-zinc-100">
+                          {child.label}
+                        </span>
+                        {child.locked && child.lockLabel && (
+                          <span className="block truncate text-[10px] text-zinc-500">{child.lockLabel}</span>
+                        )}
+                      </div>
                     </button>
                     <button
                       type="button"
@@ -1069,6 +1193,186 @@ export const LobbyView: React.FC = () => {
             </header>
             <div className="overflow-y-auto p-4 sm:p-5">
               <LobbyGridSettingsEditor />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {roadmapOpen && (
+        <div
+          className="fixed inset-0 z-[105] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setRoadmapOpen(false);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="roadmap-modal-title"
+            className="flex max-h-[88dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-amber-900/60 bg-zinc-950 shadow-2xl sm:rounded-2xl"
+          >
+            <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3 sm:px-5">
+              <div>
+                <h2 id="roadmap-modal-title" className="font-serif text-base font-bold text-amber-100">
+                  Lộ Trình Tu Hành (Nhất Chuyển → Cửu Chuyển Cổ Tôn)
+                </h2>
+                <p className="text-[11px] text-zinc-400">
+                  Tiến độ: {completedQuestCount}/{typedQuests.length} bước
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Đóng lộ trình"
+                onClick={() => setRoadmapOpen(false)}
+                className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-zinc-800 p-2 text-zinc-400 hover:bg-zinc-900 hover:text-white cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="grid grid-cols-1 gap-4 overflow-y-auto p-4 sm:grid-cols-[240px_1fr] sm:p-5">
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5, 6, 7].map((ch) => {
+                  const chQuests = typedQuests.filter((q) => (q.chapter || 1) === ch);
+                  const chDone = chQuests.length > 0 && chQuests.every((q) => q.status === "COMPLETED");
+                  const isCurrentCh = currentQuest?.chapter === ch;
+                  return (
+                    <button
+                      key={ch}
+                      type="button"
+                      onClick={() => setSelectedChapter(ch)}
+                      className={`w-full rounded-xl border px-3 py-2.5 text-left transition cursor-pointer ${
+                        selectedChapter === ch
+                          ? "border-amber-500/70 bg-amber-950/35 text-amber-100"
+                          : "border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:border-zinc-700"
+                      }`}
+                    >
+                      <div className="text-xs font-serif font-bold">{STORY_CHAPTER_NAMES[ch]}</div>
+                      <div className="mt-0.5 text-[10px] font-mono text-zinc-400">
+                        {chDone ? "✓ Đã hoàn thành" : isCurrentCh ? "★ Đang thực hiện" : `${chQuests.filter((q) => q.status === "COMPLETED").length}/${chQuests.length} bước`}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="space-y-2.5">
+                {typedQuests
+                  .filter((q) => (q.chapter || 1) === selectedChapter)
+                  .map((q) => {
+                    const isDone = q.status === "COMPLETED";
+                    const isCurrent = currentQuest?.id === q.id;
+                    return (
+                      <div
+                        key={q.id}
+                        className={`rounded-xl border p-3 ${
+                          isDone
+                            ? "border-emerald-900/50 bg-emerald-950/15 opacity-75"
+                            : isCurrent
+                            ? "border-amber-500/60 bg-amber-950/20"
+                            : "border-zinc-800 bg-zinc-900/50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`font-serif text-sm font-bold ${isDone ? "text-emerald-400 line-through" : "text-zinc-100"}`}>
+                            {isDone ? "✓ " : isCurrent ? "★ " : ""}{q.title}
+                          </span>
+                          <span className="text-[10px] font-mono text-zinc-400">{q.req_desc}</span>
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-zinc-300">{q.guide_tip || q.desc}</p>
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-[10px] font-mono text-emerald-400">
+                            {q.rewards?.length ? `Thưởng: ${formatRewards(q.rewards)}` : ""}
+                          </span>
+                          {!isDone && q.can_claim && (
+                            <button
+                              type="button"
+                              disabled={actionLoading}
+                              onClick={() => void completeQuest(q.id)}
+                              className="rounded-lg bg-amber-500 px-3 py-1 text-[11px] font-bold text-zinc-950 hover:bg-amber-400 cursor-pointer"
+                            >
+                              Nhận thưởng
+                            </button>
+                          )}
+                          {!isDone && !q.can_claim && isCurrent && q.target_route && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRoadmapOpen(false);
+                                const targetItem = entryById.get(q.target_route!);
+                                if (targetItem) handleItemClick(targetItem);
+                                else setView(q.target_route!);
+                              }}
+                              className="rounded-lg border border-amber-500/50 bg-amber-950/40 px-3 py-1 text-[11px] font-semibold text-amber-200 hover:bg-amber-900/40 cursor-pointer"
+                            >
+                              Đi tới →
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {lockedModalItem && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setLockedModalItem(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="locked-feature-title"
+            className="w-full max-w-md rounded-2xl border border-amber-900/60 bg-zinc-950 p-5 shadow-2xl"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h2 id="locked-feature-title" className="flex items-center gap-2 font-serif text-base font-bold text-amber-200">
+                <Lock className="h-4 w-4 text-amber-400" />
+                <span>{lockedModalItem.label} (Chưa mở khóa)</span>
+              </h2>
+              <button
+                type="button"
+                aria-label="Đóng"
+                onClick={() => setLockedModalItem(null)}
+                className="rounded-lg border border-zinc-800 p-1.5 text-zinc-400 hover:text-white cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-zinc-300">
+              {lockedModalItem.lockDesc || lockedModalItem.desc || "Tính năng này sẽ mở khóa khi bạn tiến xa hơn trên Lộ Trình Tu Hành."}
+            </p>
+            <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-amber-300 font-mono">
+              Điều kiện mở: {lockedModalItem.lockLabel || "Hoàn thành Lộ Trình Tu Hành tương ứng"}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setLockedModalItem(null)}
+                className="rounded-xl border border-zinc-700 px-3.5 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900 cursor-pointer"
+              >
+                Đóng
+              </button>
+              {currentQuest?.target_route && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const route = currentQuest.target_route!;
+                    setLockedModalItem(null);
+                    setActiveGroupId(null);
+                    const targetItem = entryById.get(route);
+                    if (targetItem && !targetItem.locked) handleItemClick(targetItem);
+                    else setView(route);
+                  }}
+                  className="rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-3.5 py-1.5 text-xs font-bold text-zinc-950 hover:from-amber-400 hover:to-yellow-400 cursor-pointer"
+                >
+                  Đi tới bước hiện tại →
+                </button>
+              )}
             </div>
           </section>
         </div>

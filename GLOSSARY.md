@@ -67,3 +67,14 @@ Tổng thể đạo ngân đang hiện diện tại nơi diễn ra hành động
 
 **Đạo Vực**:
 Khu vực môi trường có Đạo Ngân Tự Nhiên đã bị một Cửu Chuyển Cổ Tôn luyện hóa và kiểm soát.
+
+## Lộ Trình Tu Hành
+
+**Lộ Trình Tu Hành**:
+Chuỗi nhiệm vụ chính tuyến tuần tự dẫn dắt người chơi từ Nhất Chuyển (Tân thủ) tới Cửu Chuyển Cổ Tôn, tách bạch với Nhiệm Vụ Hàng Ngày, Thành Tựu và Nhiệm Vụ Tông Môn.
+
+**Chặng Tu Hành**:
+Một giai đoạn lớn trong Lộ Trình Tu Hành gắn với một mốc cảnh giới và nhóm cơ chế trọng tâm.
+
+**Bước Tu Hành**:
+Một nhiệm vụ đơn lẻ có thứ tự tiên quyết trong Chặng Tu Hành, gồm bối cảnh giải thích cơ chế, mục tiêu cụ thể và phần thưởng.

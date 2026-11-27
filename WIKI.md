@@ -35,7 +35,7 @@ Thăng Tiên là một nghi thức nhiều bước chứ không phải một nú
 
 ### Nhiệm vụ, nhiệm vụ ngày và thành tựu
 
-- **Nhiệm vụ:** xem điều kiện và thưởng, hoàn thành khi yêu cầu server đã đạt, rồi nhận thưởng.
+- **Lộ Trình Tu Hành (Nhiệm vụ chính tuyến):** chuỗi 34 bước tuần tự qua 7 Chặng từ Nhất Chuyển (Tân thủ) tới Cửu Chuyển Cổ Tôn. Mỗi bước có giải thích cơ chế, mục tiêu cụ thể (kiểm tra trạng thái hoặc hành động), nút điều hướng nhanh và mở khóa dần các tính năng Lobby (`Quest OR Rank`).
 - **Nhiệm vụ ngày:** bộ nhiệm vụ được chọn theo rank được chốt trong ngày; tiến độ đến từ hoạt động server xác nhận. Claim mỗi nhiệm vụ sau khi hoàn thành.
 - **Thành tựu:** theo dõi mốc dài hạn, nhận thưởng khi đủ điều kiện và chọn danh hiệu/khung nếu đã mở khóa.
 

@@ -460,6 +460,7 @@ func RefineGu(c *gin.Context) {
 			httperr.Respond(c, httperr.Internal("Không thể cập nhật nhiệm vụ hằng ngày", err))
 			return
 		}
+		_ = TrackStoryQuestProgress(tx, player.ID, "refine:"+newGuInstance.InstanceID, "refine_or_rank2_gu", newGuInstance.GuID, 1)
 	}
 
 	if err = tx.Commit(); err != nil {

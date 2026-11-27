@@ -145,6 +145,7 @@ func BreakWall(c *gin.Context) {
 				)
 				player.HumanQi = math.Min(player.HumanQi+1, MaxHumanQi)
 				_ = TrackDailyMissionProgress(tx, player.ID, player.Rank, fmt.Sprintf("cultivate:%s:%d", player.ID, time.Now().UnixNano()), "cultivate", "", 1)
+				_ = TrackStoryQuestProgress(tx, player.ID, fmt.Sprintf("break_wall:%s:%d", player.ID, time.Now().UnixNano()), "break_wall", "", 1)
 				success = false
 				return nil
 			}
@@ -174,6 +175,7 @@ func BreakWall(c *gin.Context) {
 		msg += fmt.Sprintf(" Nhân Khí +%.0f.", qiGained)
 
 		_ = TrackDailyMissionProgress(tx, player.ID, player.Rank, fmt.Sprintf("cultivate:%s:%d", player.ID, time.Now().UnixNano()), "cultivate", "", 1)
+		_ = TrackStoryQuestProgress(tx, player.ID, fmt.Sprintf("break_wall:%s:%d", player.ID, time.Now().UnixNano()), "break_wall", "", 1)
 		return nil
 	})
 	if err != nil {
