@@ -82,20 +82,20 @@ type storyProgressPayload struct {
 }
 
 var legacyAbsorbedQuests = map[string]bool{
-	"quest_1_awaken":           true,
-	"quest_2_vital_gu":         true,
-	"quest_3_rank_2":           true,
-	"quest_4_refine_gu":        true,
-	"quest_5_fame":             true,
-	"quest_6_rank_3":           true,
-	"quest_8_rank_4":           true,
-	"quest_11_gu_collector":    true,
-	"quest_12_rank_5":          true,
+	"quest_1_awaken":             true,
+	"quest_2_vital_gu":           true,
+	"quest_3_rank_2":             true,
+	"quest_4_refine_gu":          true,
+	"quest_5_fame":               true,
+	"quest_6_rank_3":             true,
+	"quest_8_rank_4":             true,
+	"quest_11_gu_collector":      true,
+	"quest_12_rank_5":            true,
 	"quest_15_immortal_gu_owner": true,
-	"quest_17_rank_6":          true,
-	"quest_18_human_qi":        true,
-	"quest_19_soul_growth":     true,
-	"quest_20_exploration":     true,
+	"quest_17_rank_6":            true,
+	"quest_18_human_qi":          true,
+	"quest_19_soul_growth":       true,
+	"quest_20_exploration":       true,
 }
 
 var questRegistry []QuestDefinition

@@ -413,7 +413,7 @@ func JoinSect(c *gin.Context) {
 		})
 
 		_ = TrackStoryQuestProgress(tx, playerID, "sect:"+sectID+":"+playerID.String(), "sect_member", sectID, 1)
-	if err := tx.Commit(); err != nil {
+		if err := tx.Commit(); err != nil {
 			httperr.Respond(c, httperr.Internal("Transaction commit failure", err))
 			return
 		}
