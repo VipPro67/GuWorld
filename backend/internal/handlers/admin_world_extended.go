@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"math"
 	"net/http"
@@ -779,7 +778,7 @@ func AdminUpdateApertureVariantHuman(c *gin.Context) {
 		return
 	}
 	var assignedPopulation int
-	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(SUM(assigned_population),0) FROM aperture_node_workers WHERE variant_human_id=$1`, c.Param("vh_id")).Scan(&assignedPopulation); err != nil {
+	if err := db.DB.QueryRowContext(c.Request.Context(), `SELECT COALESCE(SUM(assigned_population),0) FROM aperture_point_workers WHERE variant_human_id=$1`, c.Param("vh_id")).Scan(&assignedPopulation); err != nil {
 		httperr.Respond(c, httperr.Internal("Không thể kiểm tra lao động đã phân công", err))
 		return
 	}
@@ -819,107 +818,140 @@ func AdminDeleteApertureVariantHuman(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa nhóm dị nhân"})
 }
 
-type AdminApertureWorker struct {
-	ID                 string    `json:"id"`
-	NodeID             string    `json:"node_id"`
-	VariantHumanID     string    `json:"variant_human_id"`
-	Race               string    `json:"race"`
-	Population         int       `json:"population"`
-	AssignedPopulation int       `json:"assigned_population"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
-}
-
-func AdminListApertureNodeWorkers(c *gin.Context) {
-	if _, ok := requireAdmin(c); !ok {
-		return
-	}
-	rows, err := db.DB.QueryContext(c.Request.Context(), `SELECT w.id,w.node_id,w.variant_human_id,v.race,v.population,w.assigned_population,w.created_at,w.updated_at FROM aperture_node_workers w JOIN aperture_resource_nodes n ON n.id=w.node_id JOIN aperture_variant_humans v ON v.id=w.variant_human_id WHERE n.id=$1 AND n.aperture_id=$2 ORDER BY v.race`, c.Param("node_id"), c.Param("id"))
-	if err != nil {
-		httperr.Respond(c, httperr.Internal("Không thể tải phân công lao động", err))
-		return
-	}
-	defer rows.Close()
-	list := make([]AdminApertureWorker, 0)
-	for rows.Next() {
-		var w AdminApertureWorker
-		if err := rows.Scan(&w.ID, &w.NodeID, &w.VariantHumanID, &w.Race, &w.Population, &w.AssignedPopulation, &w.CreatedAt, &w.UpdatedAt); err != nil {
-			httperr.Respond(c, httperr.Internal("Không thể đọc phân công lao động", err))
-			return
-		}
-		list = append(list, w)
-	}
-	if err := rows.Err(); err != nil {
-		httperr.Respond(c, httperr.Internal("Không thể đọc phân công lao động", err))
-		return
-	}
-	c.JSON(http.StatusOK, list)
-}
-
-func AdminUpsertApertureNodeWorker(c *gin.Context) {
+// AdminSeedApertureLaborTest seeds test data for all 9 variant races, settlements,
+// active rebellion events, and mortal/immortal VARIANT_NPCs on a target aperture.
+func AdminSeedApertureLaborTest(c *gin.Context) {
 	adminID, ok := requireAdmin(c)
 	if !ok {
 		return
 	}
-	var req struct {
-		VariantHumanID     string `json:"variant_human_id"`
-		AssignedPopulation int    `json:"assigned_population"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.VariantHumanID) == "" || req.AssignedPopulation < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nhóm dân cư và số lao động hợp lệ là bắt buộc"})
-		return
-	}
-	tx, err := db.DB.BeginTx(c.Request.Context(), nil)
+	apertureID := c.Param("id")
+	ctx := c.Request.Context()
+
+	tx, err := db.DB.BeginTx(ctx, nil)
 	if err != nil {
-		httperr.Respond(c, httperr.Internal("Không thể bắt đầu cập nhật phân công", err))
+		httperr.Respond(c, httperr.Internal("Không thể bắt đầu seed data test", err))
 		return
 	}
 	defer tx.Rollback()
-	var population int
-	if err := tx.QueryRowContext(c.Request.Context(), `SELECT v.population FROM aperture_variant_humans v JOIN aperture_resource_nodes n ON n.aperture_id=v.aperture_id WHERE v.id=$1 AND n.id=$2 AND n.aperture_id=$3 FOR UPDATE OF v`, req.VariantHumanID, c.Param("node_id"), c.Param("id")).Scan(&population); err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy nhóm dân cư phù hợp với tiên khiếu và node"})
-		} else {
-			httperr.Respond(c, httperr.Internal("Không thể xác thực dân số", err))
-		}
-		return
-	}
-	var elsewhere int
-	if err := tx.QueryRowContext(c.Request.Context(), `SELECT COALESCE(SUM(assigned_population),0) FROM aperture_node_workers WHERE variant_human_id=$1 AND node_id<>$2`, req.VariantHumanID, c.Param("node_id")).Scan(&elsewhere); err != nil {
-		httperr.Respond(c, httperr.Internal("Không thể tính lao động đã phân công", err))
-		return
-	}
-	if elsewhere+req.AssignedPopulation > population {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Số lượng lao động vượt quá dân số chưa được phân công"})
-		return
-	}
-	_, err = tx.ExecContext(c.Request.Context(), `INSERT INTO aperture_node_workers(node_id,variant_human_id,assigned_population) VALUES($1,$2,$3) ON CONFLICT(node_id,variant_human_id) DO UPDATE SET assigned_population=EXCLUDED.assigned_population,updated_at=NOW()`, c.Param("node_id"), req.VariantHumanID, req.AssignedPopulation)
-	if err != nil {
-		httperr.Respond(c, httperr.Internal("Không thể lưu phân công lao động: "+err.Error(), err))
-		return
-	}
-	if err := tx.Commit(); err != nil {
-		httperr.Respond(c, httperr.Internal("Không thể xác nhận phân công đã lưu", err))
-		return
-	}
-	auditlog.Logf(db.DB, &adminID, "admin.upsert_aperture_node_worker", "node=%s variant_human=%s population=%d", c.Param("node_id"), req.VariantHumanID, req.AssignedPopulation)
-	c.JSON(http.StatusOK, gin.H{"message": "Đã lưu phân công lao động"})
-}
 
-func AdminDeleteApertureNodeWorker(c *gin.Context) {
-	adminID, ok := requireAdmin(c)
-	if !ok {
+	var playerID string
+	if err := tx.QueryRowContext(ctx, `SELECT player_id FROM immortal_apertures WHERE id = $1`, apertureID).Scan(&playerID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Tiên Khiếu"})
 		return
 	}
-	result, err := db.DB.ExecContext(c.Request.Context(), `DELETE FROM aperture_node_workers w USING aperture_resource_nodes n WHERE w.id=$1 AND w.node_id=n.id AND w.node_id=$2 AND n.aperture_id=$3`, c.Param("worker_id"), c.Param("node_id"), c.Param("id"))
-	if err != nil {
-		httperr.Respond(c, httperr.Internal("Không thể xóa phân công lao động", err))
+
+	type seedRace struct {
+		race, name, sType            string
+		cap, pop, masters, immortals int
+		happy, oppress, rebel, food  float64
+		intensity                    string
+		starving, relief             bool
+		x, y                         int
+	}
+	races := []seedRace{
+		{"HAIRY_MAN", "Bản Làng Mao Dân", "TOWN", 50000, 12000, 8, 1, 75, 18, 8, 14000, "NORMAL", false, false, 1, 1},
+		{"ROCKMAN", "Thạch Sấm Động", "TOWN", 50000, 9500, 5, 0, 34, 66, 52, 9000, "EXPLOIT", false, false, 3, 2},
+		{"FEATHERMAN", "Lông Vũ Trại", "VILLAGE", 10000, 4200, 4, 0, 68, 10, 5, 4200, "NORMAL", false, false, 0, 3},
+		{"SNOWMAN", "Tuyết Nhân Thôn", "VILLAGE", 10000, 1600, 2, 0, 62, 12, 6, 3000, "LOW", false, false, 4, 0},
+		{"INKMAN", "Mặc Thư Viện", "VILLAGE", 10000, 2100, 3, 0, 80, 5, 2, 3500, "NORMAL", false, false, 2, 4},
+		{"MINIMAN", "Tiểu Nhân Điền", "VILLAGE", 10000, 7800, 3, 0, 88, 4, 1, 5000, "NORMAL", false, false, 2, 0},
+		{"MERMAN", "Giao Nhân Thủy Trái", "VILLAGE", 10000, 4800, 4, 0, 26, 48, 70, 0, "HIGH", true, true, 4, 4},
+		{"MUSHROOMMAN", "Nấm Nhân Động", "VILLAGE", 10000, 3100, 2, 0, 65, 15, 10, 2500, "NORMAL", false, false, 0, 1},
+		{"DRAGONMAN", "Long Nhân Thành", "VILLAGE", 10000, 2900, 6, 1, 79, 14, 7, 4500, "NORMAL", false, false, 2, 3},
+	}
+
+	for _, r := range races {
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO aperture_variant_settlements (aperture_id, race, name, settlement_type, population_capacity, housing, food_storage, security, pos_x, pos_y)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, 70.0, $8, $9)
+			ON CONFLICT (aperture_id, race) DO UPDATE SET
+				settlement_type = EXCLUDED.settlement_type,
+				population_capacity = EXCLUDED.population_capacity,
+				pos_x = EXCLUDED.pos_x,
+				pos_y = EXCLUDED.pos_y,
+				updated_at = NOW()
+		`, apertureID, r.race, r.name, r.sType, r.cap, r.cap/5, r.cap/2, r.x, r.y)
+		if err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi seed thành trì", err))
+			return
+		}
+
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO aperture_variant_humans (aperture_id, race, population, happiness, oppression, rebellion_rate, labor_intensity, prosperity, gu_master_count, gu_immortal_count, food_stored, starving, auto_essence_relief)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, 65.0, $8, $9, $10, $11, $12)
+			ON CONFLICT (aperture_id, race) DO UPDATE SET
+				population = EXCLUDED.population,
+				happiness = EXCLUDED.happiness,
+				oppression = EXCLUDED.oppression,
+				rebellion_rate = EXCLUDED.rebellion_rate,
+				labor_intensity = EXCLUDED.labor_intensity,
+				gu_master_count = EXCLUDED.gu_master_count,
+				gu_immortal_count = EXCLUDED.gu_immortal_count,
+				food_stored = EXCLUDED.food_stored,
+				starving = EXCLUDED.starving,
+				auto_essence_relief = EXCLUDED.auto_essence_relief,
+				updated_at = NOW()
+		`, apertureID, r.race, r.pop, r.happy, r.oppress, r.rebel, r.intensity, r.masters, r.immortals, r.food, r.starving, r.relief)
+		if err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi seed dị nhân", err))
+			return
+		}
+	}
+
+	// Seed 2 unresolved test events (STRIKE + SABOTAGE) if none active for those races.
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO aperture_variant_events (aperture_id, event_type, race, severity, description, resolved)
+		SELECT $1::uuid, 'STRIKE', 'ROCKMAN', 'MEDIUM', '[TEST] Thạch Nhân đình công phản đối cường độ Bóc Lột!', false
+		WHERE NOT EXISTS (SELECT 1 FROM aperture_variant_events WHERE aperture_id = $1::uuid AND race = 'ROCKMAN' AND resolved = false)
+	`, apertureID); err != nil {
+		httperr.Respond(c, httperr.Internal("Lỗi seed sự kiện STRIKE", err))
 		return
 	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phân công lao động"})
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO aperture_variant_events (aperture_id, event_type, race, severity, description, resolved)
+		SELECT $1::uuid, 'SABOTAGE', 'MERMAN', 'HIGH', '[TEST] Giao Nhân thiếu lương thực gây phá hoại điểm tài nguyên!', false
+		WHERE NOT EXISTS (SELECT 1 FROM aperture_variant_events WHERE aperture_id = $1::uuid AND race = 'MERMAN' AND resolved = false)
+	`, apertureID); err != nil {
+		httperr.Respond(c, httperr.Internal("Lỗi seed sự kiện SABOTAGE", err))
 		return
 	}
-	auditlog.Logf(db.DB, &adminID, "admin.delete_aperture_node_worker", "worker=%s node=%s", c.Param("worker_id"), c.Param("node_id"))
-	c.JSON(http.StatusOK, gin.H{"message": "Đã gỡ phân công lao động"})
+
+	// Seed mortal Peak R5.4 + Rank 6/7 Variant Gu Immortals.
+	type seedNPC struct {
+		race, name, path, role string
+		rank, subRank          int
+		daoMarks               int64
+		defense                bool
+	}
+	npcs := []seedNPC{
+		{"HAIRY_MAN", "Mao Lục Trưởng Lão (Test)", "Refinement Path", "REFINER", 6, 1, 2400, true},
+		{"DRAGONMAN", "Long Chiến Tiên Tôn (Test)", "Transformation Path", "NONE", 7, 2, 8600, true},
+		{"ROCKMAN", "Thạch Khôi Đỉnh Phong (Test)", "Earth Path", "NONE", 5, 4, 0, false},
+		{"MINIMAN", "Tiểu Mộc Canh Tác (Test)", "Wood Path", "FARMER", 4, 2, 0, false},
+		{"INKMAN", "Mặc Văn Quản Đốc (Test)", "Wisdom Path", "STEWARD", 4, 1, 0, false},
+	}
+	for _, n := range npcs {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO non_player_actors (
+				actor_kind, owner_player_id, aperture_id, template_source, template_id, species, race, name,
+				rank, sub_rank, path, role, loyalty, talent, hp, max_hp, base_attack, base_defense, speed,
+				dao_marks, defense_stationed, lifecycle_state, execution_state, behavior_profile, capabilities)
+			SELECT 'VARIANT_NPC', $1::uuid, $2::uuid, 'VARIANT_RACE', $3::varchar, $3::varchar, $3::varchar, $4::varchar,
+				$5::int, $6::int, $7::varchar, $8::varchar, 90.0, 85.0, 2500, 2500, 180, 120, 25,
+				$9::bigint, $10::boolean, 'ACTIVE', 'STORED', 'WORKER',
+				'{"MOVE":true,"FOLLOW":true,"GUARD":true,"COMBAT":true,"PRODUCE":true,"REFINE":true,"TRAIN":true,"EQUIP_GU":true}'::jsonb
+			WHERE NOT EXISTS (SELECT 1 FROM non_player_actors WHERE aperture_id = $2::uuid AND name = $4::varchar)
+		`, playerID, apertureID, n.race, n.name, n.rank, n.subRank, n.path, n.role, n.daoMarks, n.defense); err != nil {
+			httperr.Respond(c, httperr.Internal("Lỗi seed NPC dị nhân", err))
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		httperr.Respond(c, httperr.Internal("Lỗi lưu data test", err))
+		return
+	}
+	auditlog.Logf(db.DB, &adminID, "admin.seed_aperture_labor_test", "aperture=%s", apertureID)
+	c.JSON(http.StatusOK, gin.H{"message": "Đã nạp đầy đủ data test (9 tộc, Thành Trì, Biến Cố, Cổ Sư 5.4 & Cổ Tiên R6-R7)!"})
 }

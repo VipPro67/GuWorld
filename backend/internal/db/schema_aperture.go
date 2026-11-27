@@ -358,10 +358,18 @@ func schemaAperture() error {
 		food_per_capita DOUBLE PRECISION NOT NULL DEFAULT 1.0,
 		population_growth_rate DOUBLE PRECISION NOT NULL DEFAULT 0.001,
 		mortality_rate DOUBLE PRECISION NOT NULL DEFAULT 0.0005,
+		starving BOOLEAN NOT NULL DEFAULT false,
+		auto_essence_relief BOOLEAN NOT NULL DEFAULT false,
 		created_at TIMESTAMP DEFAULT now(),
 		updated_at TIMESTAMP DEFAULT now(),
 		UNIQUE (aperture_id, race)
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_variant_humans_labor_compat", `
+	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS starving BOOLEAN NOT NULL DEFAULT false;
+	ALTER TABLE aperture_variant_humans ADD COLUMN IF NOT EXISTS auto_essence_relief BOOLEAN NOT NULL DEFAULT false;
+	`); err != nil {
 		return err
 	}
 
@@ -441,26 +449,9 @@ func schemaAperture() error {
 		return err
 	}
 
-	// --- Phase 1: Node Worker Assignment ---
-	if err := execSchema("aperture_node_workers", `
-	CREATE TABLE IF NOT EXISTS aperture_node_workers (
-		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-		node_id UUID NOT NULL REFERENCES aperture_resource_nodes(id) ON DELETE CASCADE,
-		variant_human_id UUID NOT NULL REFERENCES aperture_variant_humans(id) ON DELETE CASCADE,
-		assigned_population INTEGER NOT NULL DEFAULT 0,
-		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-		UNIQUE (node_id, variant_human_id)
-	);`); err != nil {
-		return err
-	}
-	if err := execSchema("aperture_node_workers_node_idx", `
-	CREATE INDEX IF NOT EXISTS idx_aperture_node_workers_node ON aperture_node_workers (node_id);
-	`); err != nil {
-		return err
-	}
-	if err := execSchema("aperture_node_workers_variant_idx", `
-	CREATE INDEX IF NOT EXISTS idx_aperture_node_workers_variant ON aperture_node_workers (variant_human_id);
+	// Legacy node-worker assignments are replaced by aperture_point_workers.
+	if err := execSchema("aperture_node_workers_legacy_drop", `
+	DROP TABLE IF EXISTS aperture_node_workers CASCADE;
 	`); err != nil {
 		return err
 	}
@@ -500,10 +491,18 @@ func schemaAperture() error {
 		housing INTEGER NOT NULL DEFAULT 0,
 		food_storage INTEGER NOT NULL DEFAULT 5000,
 		security DOUBLE PRECISION NOT NULL DEFAULT 50.0,
+		pos_x INTEGER NOT NULL DEFAULT 0,
+		pos_y INTEGER NOT NULL DEFAULT 0,
 		created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
 		updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
 		UNIQUE (aperture_id, race)
 	);`); err != nil {
+		return err
+	}
+	if err := execSchema("aperture_variant_settlements_pos_compat", `
+	ALTER TABLE aperture_variant_settlements ADD COLUMN IF NOT EXISTS pos_x INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE aperture_variant_settlements ADD COLUMN IF NOT EXISTS pos_y INTEGER NOT NULL DEFAULT 0;
+	`); err != nil {
 		return err
 	}
 	if err := execSchema("aperture_variant_settlements_aperture_idx", `

@@ -199,10 +199,7 @@ func ManageApertureNodesBatch(c *gin.Context) {
 				return
 			}
 		case "delete":
-			if err := updateVariantHumanOnNodeChange(tx, n.ApertureID, n.Type, -50); err != nil {
-				httperr.Respond(c, httperr.Internal("Lỗi cập nhật dân số dị nhân", err))
-				return
-			}
+			// Legacy node-worker/settlement population hook removed in Phase 0.
 		}
 	}
 	if req.Action == "delete" {
@@ -546,12 +543,6 @@ func PlaceApertureNode(c *gin.Context) {
 		}
 	}
 
-	err = updateVariantHumanOnNodeChange(tx, ap.ID, template.NodeType, 50)
-	if err != nil {
-		httperr.Respond(c, httperr.Internal("Lỗi cập nhật số lượng dị nhân: "+err.Error(), err))
-		return
-	}
-
 	if err := tx.Commit(); err != nil {
 		httperr.Respond(c, httperr.Internal("Failed to commit", err))
 		return
@@ -680,12 +671,6 @@ func UninstallApertureNode(c *gin.Context) {
 		return
 	}
 
-	err = updateVariantHumanOnNodeChange(tx, n.ApertureID, n.NodeType, -50)
-	if err != nil {
-		httperr.Respond(c, httperr.Internal("Lỗi cập nhật số lượng dị nhân: "+err.Error(), err))
-		return
-	}
-
 	if err := tx.Commit(); err != nil {
 		httperr.Respond(c, httperr.Internal("Failed to uninstall node", err))
 		return
@@ -740,12 +725,6 @@ func DeleteApertureNode(c *gin.Context) {
 	_, err = tx.Exec(`DELETE FROM aperture_resource_nodes WHERE id = $1`, nodeID)
 	if err != nil {
 		httperr.Respond(c, httperr.Internal("Lỗi xóa điểm tài nguyên trong cơ sở dữ liệu", err))
-		return
-	}
-
-	err = updateVariantHumanOnNodeChange(tx, n.ApertureID, n.NodeType, -50)
-	if err != nil {
-		httperr.Respond(c, httperr.Internal("Lỗi cập nhật số lượng dị nhân: "+err.Error(), err))
 		return
 	}
 

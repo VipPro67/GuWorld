@@ -1,31 +1,31 @@
 point_type,name,path,produce_key,secondary_produce_key,category,min_rank,max_rank,produce_interval_hours,base_yield,vitality_drain,vitality_regen_hours,is_food,worker_race,rare_rate,gu_rate,allowed_gu_ids,point_class
-HERB_VALLEY,Thung Lũng Linh Thảo,Wood Path,wood_crystal,wood_crystal,HERB_GARDEN,1,5,12,10,8,20,false,fur_people,0.15,0.03,,NORMAL
-BEAST_PASTURE,Đồng Cỏ Dạ Thú,Food Path,food_essence,food_essence,BEAST_PASTURE,1,5,12,10,8,20,true,fur_people,0.15,0.03,,NORMAL
+HERB_VALLEY,Thung Lũng Linh Thảo,Wood Path,wood_crystal,wood_crystal,HERB_GARDEN,1,5,12,10,8,20,false,miniman,0.15,0.03,,NORMAL
+BEAST_PASTURE,Đồng Cỏ Dạ Thú,Food Path,food_essence,food_essence,BEAST_PASTURE,1,5,12,10,8,20,true,miniman,0.15,0.03,,NORMAL
 ORE_VEIN,Mạch Quặng Địa Mạch,Earth Path,earth_soil,earth_soil,MINERAL_VEIN,1,5,12,10,8,20,false,rockman,0.12,0.03,,NORMAL
-SPIRIT_SPRING,Ao Linh Tuyền,Water Path,water_pearl,water_pearl,MINERAL_VEIN,1,5,12,10,8,20,false,feathered,0.12,0.03,,NORMAL
+SPIRIT_SPRING,Ao Linh Tuyền,Water Path,water_pearl,water_pearl,MINERAL_VEIN,1,5,12,10,8,20,false,merman,0.12,0.03,,NORMAL
 GOLD_SAND_SHOAL,Bãi Cát Kim Sa,Metal Path,metal_ore,metal_ore,MINERAL_VEIN,1,5,12,10,8,20,false,rockman,0.10,0.03,,NORMAL
-MOON_BOWL,Bát Nguyệt Cốc,Water Path,water_pearl,water_pearl,MINERAL_VEIN,1,5,12,10,8,20,false,feathered,0.15,0.03,,NORMAL
-YEAR_ESSENCE_POOL,Dòng Năm Thú,Food Path,food_essence,food_essence,BEAST_PASTURE,1,5,12,10,8,20,true,fur_people,0.15,0.03,,NORMAL
+MOON_BOWL,Bát Nguyệt Cốc,Water Path,water_pearl,water_pearl,MINERAL_VEIN,1,5,12,10,8,20,false,merman,0.15,0.03,,NORMAL
+YEAR_ESSENCE_POOL,Dòng Năm Thú,Food Path,food_essence,food_essence,BEAST_PASTURE,1,5,12,10,8,20,true,merman,0.15,0.03,,NORMAL
 DANG_HON_PEAK,Núi Đãng Hồn,Soul Path,soul_sand,soul_sand,MINERAL_VEIN,6,8,24,10,10,40,false,fur_people,0.18,0.12,,FAMOUS
-JADE_SNAKE_CAVE,Hẻm Ngọc Huyền Xà,Poison Path,poison_sand,poison_sand,MINERAL_VEIN,6,8,24,10,10,40,false,rockman,0.18,0.12,,FAMOUS
-PHOENIX_PEAK,Núi Phượng Vũ,Fire Path,fire_crystal,fire_crystal,MINERAL_VEIN,6,8,24,10,10,40,false,feathered,0.16,0.12,,FAMOUS
-FROSTY_PEAK,Núi Băng Thủy,Ice Path,ice_crystal,ice_crystal,MINERAL_VEIN,6,8,24,10,10,40,false,rockman,0.15,0.12,,FAMOUS
-CORPSE_RIDGE,Thi Cương,Enslavement Path,enslavement_stone,enslavement_stone,MINERAL_VEIN,6,8,24,10,10,40,false,rockman,0.15,0.12,,FAMOUS
+JADE_SNAKE_CAVE,Hẻm Ngọc Huyền Xà,Poison Path,poison_sand,poison_sand,MINERAL_VEIN,6,8,24,10,10,40,false,mushroomman,0.18,0.12,,FAMOUS
+PHOENIX_PEAK,Núi Phượng Vũ,Fire Path,fire_crystal,fire_crystal,MINERAL_VEIN,6,8,24,10,10,40,false,dragonman,0.16,0.12,,FAMOUS
+FROSTY_PEAK,Núi Băng Thủy,Ice Path,ice_crystal,ice_crystal,MINERAL_VEIN,6,8,24,10,10,40,false,snowman,0.15,0.12,,FAMOUS
+CORPSE_RIDGE,Thi Cương,Enslavement Path,enslavement_stone,enslavement_stone,MINERAL_VEIN,6,8,24,10,10,40,false,dragonman,0.15,0.12,,FAMOUS
 QI_STONE_VEIN,Khí Thạch Mạch,Qi Path,qi_stone,qi_stone,MINERAL_VEIN,1,5,12,10,8,20,false,rockman,0.15,0.03,,NORMAL
-REFINEMENT_IRON_MINE,Luyện Thiết Lò,Refinement Path,refinement_iron,refinement_iron,MINERAL_VEIN,1,5,12,10,8,20,false,rockman,0.15,0.03,,NORMAL
-FORMATION_STONE_VALLEY,Trận Thạch Cốc,Formation Path,formation_stone,formation_stone,MINERAL_VEIN,1,5,12,10,8,20,false,rockman,0.12,0.03,,NORMAL
-RULE_STONE_FOREST,Quy Tắc Thạch Lâm,Rule Path,rule_stone,rule_stone,MINERAL_VEIN,1,5,12,10,8,20,false,rockman,0.12,0.03,,NORMAL
-KILLING_IRON_MINE,Sát Thiết Quặng,Killing Path,killing_iron,killing_iron,MINERAL_VEIN,1,5,12,10,8,20,false,rockman,0.12,0.03,,NORMAL
+REFINEMENT_IRON_MINE,Luyện Thiết Lò,Refinement Path,refinement_iron,refinement_iron,MINERAL_VEIN,1,5,12,10,8,20,false,fur_people,0.15,0.03,,NORMAL
+FORMATION_STONE_VALLEY,Trận Thạch Cốc,Formation Path,formation_stone,formation_stone,MINERAL_VEIN,1,5,12,10,8,20,false,inkman,0.12,0.03,,NORMAL
+RULE_STONE_FOREST,Quy Tắc Thạch Lâm,Rule Path,rule_stone,rule_stone,MINERAL_VEIN,1,5,12,10,8,20,false,inkman,0.12,0.03,,NORMAL
+KILLING_IRON_MINE,Sát Thiết Quặng,Killing Path,killing_iron,killing_iron,MINERAL_VEIN,1,5,12,10,8,20,false,dragonman,0.12,0.03,,NORMAL
 WIND_STONE_CANYON,Phong Thạch Cốc,Wind Path,wind_stone,wind_stone,MINERAL_VEIN,1,5,12,10,8,20,false,feathered,0.10,0.03,,NORMAL
 SPACE_CRYSTAL_RIFT,Hư Không Tinh Mạch,Space Path,space_crystal,space_crystal,MINERAL_VEIN,1,5,12,10,8,20,false,feathered,0.18,0.03,,NORMAL
 BLADE_STONE_QUARRY,Đao Thạch Sơn,Blade Path,blade_stone,blade_stone,MINERAL_VEIN,1,5,12,10,8,20,false,rockman,0.12,0.03,,NORMAL
 SWORD_STONE_CLIFF,Kiếm Thạch Nhai,Sword Path,sword_stone,sword_stone,MINERAL_VEIN,1,5,12,10,8,20,false,rockman,0.12,0.03,,NORMAL
-CREATION_STONE_FIELD,Sinh Cơ Thạch Điền,Creation Path,creation_stone,creation_stone,MINERAL_VEIN,1,5,12,10,8,20,false,rockman,0.12,0.03,,NORMAL
+CREATION_STONE_FIELD,Sinh Cơ Thạch Điền,Creation Path,creation_stone,creation_stone,MINERAL_VEIN,1,5,12,10,8,20,false,miniman,0.12,0.03,,NORMAL
 DESTRUCTION_IRON_MINE,Toái Thiết Sơn,Destruction Path,destruction_iron,destruction_iron,MINERAL_VEIN,1,5,12,10,8,20,false,rockman,0.12,0.03,,NORMAL
 BLOOD_CRYSTAL_POOL,Huyết Tinh Đầm,Blood Path,blood_crystal,blood_crystal,BEAST_PASTURE,1,5,12,10,8,20,false,merman,0.15,0.03,,NORMAL
 LIGHTNING_CRYSTAL_CLIFF,Lôi Tinh Nhai,Lightning Path,lightning_crystal,lightning_crystal,MINERAL_VEIN,1,5,12,10,8,20,false,feathered,0.15,0.03,,NORMAL
 THEFT_CRYSTAL_CAVE,Diệu Thủ Tinh Động,Theft Path,theft_crystal,theft_crystal,MINERAL_VEIN,1,5,12,10,8,20,false,fur_people,0.15,0.03,,NORMAL
-DARK_CRYSTAL_ABYSS,Hắc Tinh Uyên,Dark Path,dark_crystal,dark_crystal,MINERAL_VEIN,1,5,12,10,8,20,false,ghostman,0.14,0.03,,NORMAL
+DARK_CRYSTAL_ABYSS,Hắc Tinh Uyên,Dark Path,dark_crystal,dark_crystal,MINERAL_VEIN,1,5,12,10,8,20,false,mushroomman,0.14,0.03,,NORMAL
 CLOUD_CRYSTAL_TERRACE,Vân Tinh Đài,Cloud Path,cloud_crystal,cloud_crystal,MINERAL_VEIN,1,5,12,10,8,20,false,feathered,0.12,0.03,,NORMAL
 LIGHT_CRYSTAL_CAVE,Quang Tinh Động,Light Path,light_crystal,light_crystal,MINERAL_VEIN,1,5,12,10,8,20,false,feathered,0.12,0.03,,NORMAL
 PHANTOM_CRYSTAL_VALLEY,Huyễn Tinh Cốc,Phantom Path,phantom_crystal,phantom_crystal,MINERAL_VEIN,1,5,12,10,8,20,false,ghostman,0.12,0.03,,NORMAL

@@ -440,7 +440,7 @@ func loadSingleFormationNPC(tx *sql.Tx, npcID, ownerID string, virtual bool) (*m
 }
 
 func loadFormationNPCCombatants(tx *sql.Tx, playerID string, virtual bool) ([]models.Combatant, error) {
-	rows, err := tx.Query(`SELECT id,name,race,rank,sub_rank,hp,max_hp,base_attack,base_defense,speed,formation_slot,path
+	rows, err := tx.Query(`SELECT id,name,race,rank,sub_rank,hp,max_hp,base_attack,base_defense,speed,formation_slot,path,COALESCE(dao_marks,0)
 		FROM non_player_actors WHERE owner_player_id=$1 AND actor_kind='VARIANT_NPC'
 		AND lifecycle_state='ACTIVE' AND execution_state='STORED' AND role='NONE' AND formation_slot>0
 		ORDER BY formation_slot FOR UPDATE`, playerID)
@@ -452,14 +452,15 @@ func loadFormationNPCCombatants(tx *sql.Tx, playerID string, virtual bool) ([]mo
 	// open corrupts the protocol (pq: unexpected Parse response) and poisons
 	// the whole transaction (every later Exec fails with bad connection).
 	type npcRow struct {
-		c    models.Combatant
-		slot int
-		path string
+		c        models.Combatant
+		slot     int
+		path     string
+		daoMarks int64
 	}
 	var buffered []npcRow
 	for rows.Next() {
 		var n npcRow
-		if err := rows.Scan(&n.c.ID, &n.c.Name, &n.c.Race, &n.c.Rank, &n.c.SubRank, &n.c.HP, &n.c.MaxHP, &n.c.BaseAttack, &n.c.BaseDefense, &n.c.Speed, &n.slot, &n.path); err != nil {
+		if err := rows.Scan(&n.c.ID, &n.c.Name, &n.c.Race, &n.c.Rank, &n.c.SubRank, &n.c.HP, &n.c.MaxHP, &n.c.BaseAttack, &n.c.BaseDefense, &n.c.Speed, &n.slot, &n.path, &n.daoMarks); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -474,13 +475,21 @@ func loadFormationNPCCombatants(tx *sql.Tx, playerID string, virtual bool) ([]mo
 	for _, n := range buffered {
 		c := n.c
 		c.Kind = "VariantNPC"
-		c.MaxMana = float64(c.Rank * 100)
+		if c.Rank >= 6 {
+			c.MaxMana = float64(c.Rank * 500)
+		} else {
+			c.MaxMana = float64(c.Rank * 100)
+		}
 		c.CurrentMana = c.MaxMana
 		if virtual {
 			c.HP = c.MaxHP
 		}
 		c.PathMasteries = map[string]int{n.path: c.Rank * 100}
-		c.DaoMarks = models.DaoMarksMap{}
+		if n.daoMarks > 0 {
+			c.DaoMarks = models.DaoMarksMap{n.path: n.daoMarks}
+		} else {
+			c.DaoMarks = models.DaoMarksMap{}
+		}
 		c.GuInventory, err = loadActorGu(tx, c.ID)
 		if err != nil {
 			return nil, err

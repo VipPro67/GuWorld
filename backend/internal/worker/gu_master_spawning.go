@@ -111,6 +111,7 @@ func processGuMasterSpawning(ctx context.Context, db *sql.DB) {
 		npcTalent := 20.0 + rand.Float64()*60.0  // 20-80
 		npcLoyalty := 50.0 + rand.Float64()*50.0 // 50-100
 
+		npcPath := raceDefaultPath(c.race)
 		result, err := tx.ExecContext(ctx, `
 			INSERT INTO non_player_actors (
 				actor_kind, owner_player_id, aperture_id, template_source, template_id, species, race, name,
@@ -123,7 +124,7 @@ func processGuMasterSpawning(ctx context.Context, db *sql.DB) {
 			       'ACTIVE', 'STORED', 'WORKER',
 			       '{"MOVE":true,"FOLLOW":true,"GUARD":true,"COMBAT":true,"PRODUCE":true,"REFINE":true,"TRAIN":true,"EQUIP_GU":true}'::jsonb
 			FROM immortal_apertures a WHERE a.id = $1 AND a.state != 'DESTROYED'
-		`, c.apertureID, c.race, npcName, npcRank, 1, "REFINEMENT", "NONE", npcLoyalty, npcTalent)
+		`, c.apertureID, c.race, npcName, npcRank, 1, npcPath, "NONE", npcLoyalty, npcTalent)
 		if err != nil {
 			logger.S.Errorf("GuMasterSpawn: insert NPC for %s: %v", c.apertureID, err)
 			continue
@@ -171,14 +172,38 @@ func rollGuMasterRank() int {
 }
 
 var (
+	racePaths = map[string]string{
+		"HAIRY_MAN":   "Refinement Path",
+		"ROCKMAN":     "Earth Path",
+		"FEATHERMAN":  "Wind Path",
+		"SNOWMAN":     "Ice Path",
+		"INKMAN":      "Wisdom Path",
+		"MINIMAN":     "Wood Path",
+		"MERMAN":      "Water Path",
+		"MUSHROOMMAN": "Poison Path",
+		"DRAGONMAN":   "Transformation Path",
+	}
 	npcPrefixes = map[string][]string{
-		"HAIRY_MAN":  {"Mao", "Hou", "Yuan", "Teng", "Guan", "Dai", "Shen", "Wu"},
-		"ROCKMAN":    {"Shi", "Yan", "Kuang", "Tu", "Feng", "Lei", "Qiao", "Chui"},
-		"FEATHERMAN": {"Yu", "Ling", "Feng", "Yun", "Kong", "Ying", "Chi", "Xiang"},
+		"HAIRY_MAN":   {"Mao", "Hou", "Yuan", "Teng", "Guan", "Dai", "Shen", "Wu"},
+		"ROCKMAN":     {"Shi", "Yan", "Kuang", "Tu", "Feng", "Lei", "Qiao", "Chui"},
+		"FEATHERMAN":  {"Yu", "Ling", "Feng", "Yun", "Kong", "Ying", "Chi", "Xiang"},
+		"SNOWMAN":     {"Xue", "Bing", "Shuang", "Han", "Lin", "Dong", "Qing", "Su"},
+		"INKMAN":      {"Mo", "Wen", "Shu", "Zhi", "Yan", "Yi", "Xuan", "Jian"},
+		"MINIMAN":     {"Xiao", "Mu", "Cao", "Hua", "Ye", "Sen", "Lan", "Qing"},
+		"MERMAN":      {"Jiao", "Hai", "Bo", "Lang", "Shui", "Zhu", "Cang", "Yuan"},
+		"MUSHROOMMAN": {"Gu", "Du", "Jun", "You", "Ming", "Zhi", "Xun", "An"},
+		"DRAGONMAN":   {"Long", "Ao", "Yan", "Zhan", "Lin", "Ba", "Huang", "Chi"},
 	}
 	npcSuffixes = []string{"Shi", "Er", "San", "Si", "Wu", "Liu", "Qi", "Ba",
 		"Tian", "Di", "Ren", "He", "Ming", "Guang", "Da", "Chang"}
 )
+
+func raceDefaultPath(race string) string {
+	if p, ok := racePaths[race]; ok {
+		return p
+	}
+	return "Refinement Path"
+}
 
 // generateNPCName creates a culturally appropriate name for a variant human NPC.
 func generateNPCName(race string) string {

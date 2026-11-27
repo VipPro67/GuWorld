@@ -664,7 +664,7 @@ export interface ApertureResourceNode {
 export interface ApertureVariantHuman {
   id: string;
   aperture_id: string;
-  race: 'HAIRY_MAN' | 'ROCKMAN' | 'FEATHERMAN';
+  race: string;
   population: number;
   happiness: number;
   oppression: number;
@@ -677,19 +677,23 @@ export interface ApertureVariantHuman {
   food_per_capita: number;
   population_growth_rate: number;
   mortality_rate: number;
+  starving?: boolean;
+  auto_essence_relief?: boolean;
   created_at: string;
   updated_at: string;
 }
 
-export interface ApertureNodeWorker {
+export interface ApertureVariantEvent {
   id: string;
-  node_id: string;
-  variant_human_id: string;
+  aperture_id: string;
+  event_type: string;
   race: string;
-  population: number;
-  assigned_population: number;
+  severity: string;
+  description: string;
+  effects: string;
+  resolved: boolean;
   created_at: string;
-  updated_at: string;
+  resolved_at?: string;
 }
 
 // Aperture resource point (canon blessed-land mine). The backend computes the
@@ -780,6 +784,8 @@ export interface ApertureSettlement {
   housing: number;
   food_storage: number;
   security: number;
+  pos_x?: number;
+  pos_y?: number;
   created_at: string;
   updated_at: string;
 }
@@ -799,6 +805,8 @@ export interface ApertureVariantNPC {
   hp: number;
   max_hp: number;
   formation_slot: number;
+  dao_marks?: number;
+  defense_stationed?: boolean;
   version: number;
   equipped_gu: GuInstance[];
   status: string;

@@ -274,9 +274,6 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodPost, "/apertures/:id/nodes", "apertures.update", handlers.AdminCreateApertureNode, "admin.create_aperture_node", "aperture", false, "", false, false, false},
 		{http.MethodPut, "/apertures/:id/nodes/:node_id", "apertures.update", handlers.AdminUpdateApertureNode, "admin.update_aperture_node", "aperture", false, "", false, false, false},
 		{http.MethodDelete, "/apertures/:id/nodes/:node_id", "apertures.delete", handlers.AdminDeleteApertureNode, "admin.delete_aperture_node", "aperture", true, "path", false, false, true},
-		{http.MethodGet, "/apertures/:id/nodes/:node_id/workers", "apertures.read", handlers.AdminListApertureNodeWorkers, "", "", false, "", false, false, false},
-		{http.MethodPost, "/apertures/:id/nodes/:node_id/workers", "apertures.update", handlers.AdminUpsertApertureNodeWorker, "admin.upsert_aperture_node_worker", "aperture", false, "", false, false, false},
-		{http.MethodDelete, "/apertures/:id/nodes/:node_id/workers/:worker_id", "apertures.delete", handlers.AdminDeleteApertureNodeWorker, "admin.delete_aperture_node_worker", "aperture", true, "path", false, false, true},
 		{http.MethodGet, "/apertures/:id/refinement-queue", "apertures.read", handlers.AdminListApertureRefinementJobs, "", "", false, "", false, false, false},
 		{http.MethodPost, "/apertures/:id/refinement-queue", "apertures.update", handlers.AdminCreateApertureRefinementJob, "admin.create_aperture_refinement_job", "aperture", false, "", false, false, false},
 		{http.MethodPut, "/apertures/:id/refinement-queue/:job_id", "apertures.update", handlers.AdminUpdateApertureRefinementJob, "admin.update_aperture_refinement_job", "aperture", false, "", false, false, false},
@@ -291,6 +288,7 @@ func adminRouteSpecs() []adminRouteSpec {
 		{http.MethodDelete, "/apertures/:id/events/:event_id", "apertures.delete", handlers.AdminDeleteApertureEvent, "admin.delete_aperture_event", "aperture", true, "path", false, false, true},
 		{http.MethodGet, "/apertures/:id/variant-npcs", "apertures.read", handlers.AdminListVariantNPCs, "", "", false, "", false, false, false},
 		{http.MethodPost, "/apertures/:id/variant-npcs", "apertures.update", handlers.AdminCreateVariantNPC, "admin.create_variant_npc", "aperture", false, "", false, false, false},
+		{http.MethodPost, "/apertures/:id/seed-labor-test", "apertures.update", handlers.AdminSeedApertureLaborTest, "admin.seed_aperture_labor_test", "aperture", false, "", false, false, false},
 		{http.MethodPut, "/apertures/:id/variant-npcs/:npc_id", "apertures.update", handlers.AdminUpdateVariantNPC, "admin.update_variant_npc", "aperture", false, "", false, false, false},
 		{http.MethodDelete, "/apertures/:id/variant-npcs/:npc_id", "apertures.delete", handlers.AdminDismissVariantNPC, "admin.dismiss_variant_npc", "aperture", true, "path", false, false, true},
 		{http.MethodGet, "/apertures/:id/variant-humans", "apertures.read", handlers.AdminListApertureVariantHumans, "", "", false, "", false, false, false},
@@ -1045,11 +1043,6 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 			aperture.POST("/swarms/dematerialize", handlers.DematerializeGuToSwarm)
 			aperture.POST("/swarms/deposit-all", handlers.DepositAllHealthyGus)
 
-			// Phase 1: Variant Economy — node workers
-			aperture.GET("/nodes/:id/workers", handlers.GetApertureNodeWorkers)
-			aperture.POST("/nodes/:id/workers", handlers.AssignWorkerToNode)
-			aperture.DELETE("/nodes/:id/workers/:worker_id", handlers.RemoveWorkerFromNode)
-
 			// Phase 1: Variant Economy — refinement queue
 			aperture.GET("/refinement-queue", handlers.ListRefinementQueue)
 			aperture.POST("/refinement-queue", handlers.CreateRefinementJob)
@@ -1060,14 +1053,21 @@ func SetupRouter(shub *uihub.ShardedHub, _ ...any) *gin.Engine {
 			aperture.POST("/settlements", handlers.BuildSettlement)
 			aperture.POST("/settlements/:settlement_id/upgrade", handlers.UpgradeSettlement)
 
-			// Phase 3: Variant NPCs
+			// Phase 3: Variant NPCs & Immortals
 			aperture.GET("/npcs", handlers.GetApertureNPCs)
 			aperture.POST("/npcs/:npc_id/role", handlers.AssignNPCRole)
 			aperture.POST("/npcs/:npc_id/formation", handlers.SetNPCFormation)
 			aperture.POST("/npcs/:npc_id/cultivate", handlers.CultivateNPC)
+			aperture.POST("/npcs/:npc_id/ascend", handlers.AscendVariantNPC)
+			aperture.POST("/npcs/:npc_id/defense", handlers.ToggleNPCDefense)
 			aperture.POST("/npcs/:npc_id/gu/equip", handlers.EquipNPCGu)
 			aperture.DELETE("/npcs/:npc_id/gu/:gu_id", handlers.UnequipNPCGu)
 			aperture.DELETE("/npcs/:npc_id", handlers.DismissNPC)
+			aperture.POST("/variant-humans/recruit", handlers.RecruitVariantHumans)
+			aperture.POST("/variant-humans/feed", handlers.FeedVariantHumans)
+			aperture.POST("/variant-humans/relief", handlers.ToggleEssenceRelief)
+			aperture.GET("/events", handlers.ListVariantEvents)
+			aperture.POST("/events/:event_id/resolve", handlers.ResolveVariantEvent)
 			aperture.POST("/soil/cleanse", handlers.CleanseSoilContamination)
 			aperture.POST("/soil/pivot", handlers.PivotSoilContamination)
 		}

@@ -305,29 +305,22 @@ type TribulationEnemy struct {
 }
 
 type ApertureVariantHuman struct {
-	ID              string    `json:"id"`
-	ApertureID      string    `json:"aperture_id"`
-	Race            string    `json:"race"` // 'HAIRY_MAN', 'ROCKMAN', 'FEATHERMAN'
-	Population      int       `json:"population"`
-	Happiness       float64   `json:"happiness"`
-	Oppression      float64   `json:"oppression"`
-	RebellionRate   float64   `json:"rebellion_rate"`
-	LaborIntensity  string    `json:"labor_intensity"` // 'LOW', 'NORMAL', 'HIGH', 'EXPLOIT'
-	Prosperity      float64   `json:"prosperity"`
-	GuMasterCount   int       `json:"gu_master_count"`
-	GuImmortalCount int       `json:"gu_immortal_count"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-}
-
-// ApertureNodeWorker represents variant human workers assigned to a resource node.
-type ApertureNodeWorker struct {
-	ID                 string    `json:"id"`
-	NodeID             string    `json:"node_id"`
-	VariantHumanID     string    `json:"variant_human_id"`
-	AssignedPopulation int       `json:"assigned_population"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                string    `json:"id"`
+	ApertureID        string    `json:"aperture_id"`
+	Race              string    `json:"race"` // 'HAIRY_MAN', 'ROCKMAN', ...
+	Population        int       `json:"population"`
+	Happiness         float64   `json:"happiness"`
+	Oppression        float64   `json:"oppression"`
+	RebellionRate     float64   `json:"rebellion_rate"`
+	LaborIntensity    string    `json:"labor_intensity"` // 'LOW', 'NORMAL', 'HIGH', 'EXPLOIT'
+	Prosperity        float64   `json:"prosperity"`
+	GuMasterCount     int       `json:"gu_master_count"`
+	GuImmortalCount   int       `json:"gu_immortal_count"`
+	FoodStored        float64   `json:"food_stored"`
+	Starving          bool      `json:"starving"`
+	AutoEssenceRelief bool      `json:"auto_essence_relief"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // RefinementMode constants for aperture_refinement_queue.
@@ -365,6 +358,8 @@ type ApertureVariantSettlement struct {
 	Housing            int       `json:"housing"`
 	FoodStorage        int       `json:"food_storage"`
 	Security           float64   `json:"security"`
+	PosX               int       `json:"pos_x"`
+	PosY               int       `json:"pos_y"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
@@ -386,6 +381,8 @@ type ApertureVariantEvent struct {
 // Society event type constants.
 const (
 	EventTypeRebellion      = "REBELLION"
+	EventTypeStrike         = "STRIKE"
+	EventTypeSabotage       = "SABOTAGE"
 	EventTypeGeniusBirth    = "GENIUS_BIRTH"
 	EventTypeImmortalAscend = "IMMORTAL_ASCENSION"
 	EventTypeMigration      = "MIGRATION"
@@ -399,6 +396,7 @@ const (
 	NPCRoleRefiner  = "REFINER"
 	NPCRoleMiner    = "MINER"
 	NPCRoleFarmer   = "FARMER"
+	NPCRoleSteward  = "STEWARD"
 	NPCRoleScholar  = "SCHOLAR"
 	NPCRoleGeneral  = "GENERAL"
 	NPCRoleGovernor = "GOVERNOR"
@@ -406,25 +404,27 @@ const (
 
 // ApertureVariantNPC represents a named Gu Master / Gu Immortal NPC within an aperture.
 type ApertureVariantNPC struct {
-	ID            string       `json:"id"`
-	ApertureID    string       `json:"aperture_id"`
-	Race          string       `json:"race"`
-	Name          string       `json:"name"`
-	Rank          int          `json:"rank"`
-	SubRank       int          `json:"sub_rank"`
-	Path          string       `json:"path"`
-	Role          string       `json:"role"`
-	Loyalty       float64      `json:"loyalty"`
-	Talent        float64      `json:"talent"`
-	Experience    int64        `json:"experience"`
-	HP            float64      `json:"hp"`
-	MaxHP         float64      `json:"max_hp"`
-	FormationSlot int          `json:"formation_slot"`
-	Version       int64        `json:"version"`
-	EquippedGu    []GuInstance `json:"equipped_gu"`
-	Status        string       `json:"status"` // IDLE, REFINING, MINING, TRAINING, DEAD
-	CreatedAt     time.Time    `json:"created_at"`
-	UpdatedAt     time.Time    `json:"updated_at"`
+	ID               string       `json:"id"`
+	ApertureID       string       `json:"aperture_id"`
+	Race             string       `json:"race"`
+	Name             string       `json:"name"`
+	Rank             int          `json:"rank"`
+	SubRank          int          `json:"sub_rank"`
+	Path             string       `json:"path"`
+	Role             string       `json:"role"`
+	Loyalty          float64      `json:"loyalty"`
+	Talent           float64      `json:"talent"`
+	Experience       int64        `json:"experience"`
+	HP               float64      `json:"hp"`
+	MaxHP            float64      `json:"max_hp"`
+	FormationSlot    int          `json:"formation_slot"`
+	DaoMarks         int64        `json:"dao_marks"`
+	DefenseStationed bool         `json:"defense_stationed"`
+	Version          int64        `json:"version"`
+	EquippedGu       []GuInstance `json:"equipped_gu"`
+	Status           string       `json:"status"` // IDLE, REFINING, MINING, TRAINING, DEAD
+	CreatedAt        time.Time    `json:"created_at"`
+	UpdatedAt        time.Time    `json:"updated_at"`
 }
 
 type TribTypeConfig struct {

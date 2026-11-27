@@ -13,12 +13,29 @@ func TestLaborIntensityModifier(t *testing.T) {
 
 func TestSimulateRaceGrowsWithinSettlementCapacity(t *testing.T) {
 	v := societyVariant{population: 500, happiness: 70, prosperity: 50, foodStored: 5000, foodPerCapita: 1, populationGrowth: .001, mortalityRate: .0005, laborIntensity: "NORMAL"}
-	got := simulateRace(v, 0, 500)
+	got, spent := simulateRace(v, 0, 500, true, 0)
+	if spent != 0 {
+		t.Fatalf("spent = %d, want 0", spent)
+	}
 	if got.population != 500 {
 		t.Fatalf("population = %d, want capacity-limited 500", got.population)
 	}
 	if got.foodStored != 4500 {
 		t.Fatalf("foodStored = %v, want 4500", got.foodStored)
+	}
+}
+
+func TestSimulateRaceStarvesWithoutReliefAndSpendsWhenEnabled(t *testing.T) {
+	v := societyVariant{race: "MERMAN", population: 500, happiness: 70, prosperity: 50, foodStored: 0, foodPerCapita: 1, populationGrowth: .001, mortalityRate: .0005, laborIntensity: "NORMAL", autoEssenceRelief: false}
+	gotStarve, spentStarve := simulateRace(v, 100, 10000, true, 0)
+	if !gotStarve.starving || spentStarve != 0 {
+		t.Fatalf("expected starving=true and spent=0, got starving=%v spent=%d", gotStarve.starving, spentStarve)
+	}
+
+	v.autoEssenceRelief = true
+	gotRelief, spentRelief := simulateRace(v, 100, 10000, true, 0)
+	if gotRelief.starving || spentRelief <= 0 {
+		t.Fatalf("expected starving=false and spent>0, got starving=%v spent=%d", gotRelief.starving, spentRelief)
 	}
 }
 

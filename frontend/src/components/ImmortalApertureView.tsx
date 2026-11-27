@@ -258,6 +258,7 @@ export const ImmortalApertureView: React.FC = () => {
     apertureNodes,
     aperturePoints,
     variantHumans,
+    variantEvents,
     settlements,
     variantNPCs,
     refinementQueue,
@@ -275,6 +276,13 @@ export const ImmortalApertureView: React.FC = () => {
     fetchApertureNodes,
     fetchAperturePoints,
     fetchVariantHumans,
+    fetchVariantEvents,
+    resolveVariantEvent,
+    recruitVariantHumans,
+    feedVariantHumans,
+    toggleEssenceRelief,
+    ascendVariantNPC,
+    toggleNPCDefense,
     fetchSettlements,
     buildSettlement,
     upgradeSettlement,
@@ -532,6 +540,7 @@ export const ImmortalApertureView: React.FC = () => {
       fetchActiveTribulation();
     } else if (activeTab === "variant_humans") {
       fetchVariantHumans();
+      fetchVariantEvents();
       fetchApertureNodes();
       fetchSettlements();
       fetchNPCs();
@@ -2923,84 +2932,81 @@ return (
                     </p>
                   </div>
 
-                  {/* Variant Humans List */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Active Variant Events Alert */}
+                  {variantEvents.filter((ev) => !ev.resolved).length > 0 && (
+                    <div className="space-y-2 mb-4">
+                      {variantEvents.filter((ev) => !ev.resolved).map((ev) => (
+                        <div key={ev.id} className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+                          <div>
+                            <span className="font-bold text-rose-300">[{ev.event_type}] {ev.race}: </span>
+                            <span className="text-slate-200">{ev.description}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => resolveVariantEvent(ev.id, "PACIFY")} disabled={actionLoading}
+                              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-[11px]">
+                              An dân (300 Thạch)
+                            </button>
+                            <button onClick={() => resolveVariantEvent(ev.id, "SUPPRESS")} disabled={actionLoading}
+                              className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px]">
+                              Trấn áp (20 Tiên Nguyên)
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Variant Humans List (All 9 Races) */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                     {(() => {
                       const racesList: {
-                        race: 'HAIRY_MAN' | 'ROCKMAN' | 'FEATHERMAN';
+                        race: string;
                         name: string;
                         desc: string;
                         icon: string;
-                        settlementType: string;
                         buffLabel: string;
                       }[] = [
-                        {
-                          race: "HAIRY_MAN",
-                          name: "Tộc Người Lông",
-                          desc: "Kẻ lập dị giỏi luyện Cổ trùng. Dân số sinh ra nô lệ giúp giảm thời gian và chi phí luyện Cổ.",
-                          icon: "🧔",
-                          settlementType: "HAIRY_MAN_SETTLEMENT",
-                          buffLabel: "Tạo nguyên liệu: Nô Lệ Người Lông"
-                        },
-                        {
-                          race: "ROCKMAN",
-                          name: "Tộc Người Đá",
-                          desc: "Tộc nhân sống sâu dưới lòng đất. Dân số gia tăng sản lượng khai khoáng của mỏ Ngọc Thạch & Nguyên Thạch.",
-                          icon: "🗿",
-                          settlementType: "ROCKMAN_TRIBE",
-                          buffLabel: "Sản lượng Quặng Mỏ"
-                        },
-                        {
-                          race: "FEATHERMAN",
-                          name: "Tộc Người Lông Vũ",
-                          desc: "Bộ tộc tự do có cánh trên lưng. Giúp giảm thiểu sát thương của thiên địa tai kiếp lên Tiên Khiếu.",
-                          icon: "🦅",
-                          settlementType: "FEATHERMAN_CANYON",
-                          buffLabel: "Giảm sát thương Kiếp nạn"
-                        }
+                        { race: "HAIRY_MAN", name: "Mao Dân", desc: "Tinh thông Luyện Đạo, sở trường Luyện Cổ Tự Động và mỏ Luyện Đạo.", icon: "🧔", buffLabel: "Luyện Cổ & Mỏ Luyện" },
+                        { race: "ROCKMAN", name: "Thạch Nhân", desc: "Chuyên khai khoáng Thổ/Kim, sức chịu đựng cao khi lao động nặng.", icon: "🗿", buffLabel: "Khoáng Thạch & Chịu Đựng" },
+                        { race: "FEATHERMAN", name: "Vũ Dân", desc: "Sở trường Phong/Không Gian, giúp giảm 20% tiêu hao Thiên Địa Khí.", icon: "🦅", buffLabel: "Tiết Kiệm Thiên Địa Khí" },
+                        { race: "SNOWMAN", name: "Tuyết Nhân", desc: "Sống ở vùng Băng/Tuyết, tăng tỉ lệ thu hoạch vật phẩm hiếm.", icon: "❄️", buffLabel: "Băng Tuyết & Tài Nguyên Hiếm" },
+                        { race: "INKMAN", name: "Mặc Nhân", desc: "Sở trường Trí/Luật/Trận Đạo, giỏi quản trị và ổn định áp bức.", icon: "📜", buffLabel: "Quản Trị & Trận Pháp" },
+                        { race: "MINIMAN", name: "Tiểu Nhân", desc: "Sinh sản rất nhanh, chuyên canh tác Mộc/Thực Đạo tạo lương thực.", icon: "🌱", buffLabel: "Canh Tác & Lương Thực" },
+                        { race: "MERMAN", name: "Giao Nhân", desc: "Thủy/Huyết Đạo, sở trường nuôi trồng thủy sản và Long Ngư.", icon: "🧜", buffLabel: "Thủy Sản & Long Ngư" },
+                        { race: "MUSHROOMMAN", name: "Nấm Nhân", desc: "Độc/Hắc Ám, thích nghi hoàn hảo với các điểm tài nguyên độc hại.", icon: "🍄", buffLabel: "Độc Địa & Hắc Ám" },
+                        { race: "DRAGONMAN", name: "Long Nhân", desc: "Biến Hóa/Nô Đạo, tỉ lệ xuất hiện Cổ Sư & Cổ Tiên chiến đấu rất cao.", icon: "🐉", buffLabel: "Chiến Đấu & Cổ Tiên" },
                       ];
 
                       return racesList.map((raceInfo) => {
                         const record = variantHumans.find((v) => v.race === raceInfo.race);
+                        const settlement = settlements.find((s) => s.race === raceInfo.race);
                         const population = record ? record.population : 0;
                         const happiness = record ? record.happiness : 70;
                         const oppression = record ? record.oppression : 0;
                         const laborIntensity = record ? record.labor_intensity : "NORMAL";
                         const prosperity = record ? record.prosperity : 50;
                         const guMasters = record ? record.gu_master_count : 0;
-
-                        const settlementCount = apertureNodes.filter(
-                          (n) => !n.is_destroyed && n.node_type === raceInfo.settlementType
-                        ).length;
-                        const maxPop = 200 * settlementCount;
-
-                        const rebellionRate = (100.0 - happiness + oppression) / 4.0;
-                        const showRebellionAlert = happiness < 30.0 || oppression > 70.0;
-
-                        let buffValue = "";
-                        if (raceInfo.race === "HAIRY_MAN") {
-                          buffValue = `Sản sinh nô lệ luyện Cổ`;
-                        } else if (raceInfo.race === "ROCKMAN") {
-                          const rockmanBonus = Math.min(50, population * 0.1);
-                          buffValue = `+${rockmanBonus.toFixed(1)}% sản lượng`;
-                        } else if (raceInfo.race === "FEATHERMAN") {
-                          const featherReduction = Math.min(50, population * 0.1);
-                          buffValue = `-${featherReduction.toFixed(1)}% HP hao tổn`;
-                        }
+                        const guImmortals = record ? record.gu_immortal_count : 0;
+                        const foodStored = record ? record.food_stored : 0;
+                        const starving = Boolean(record?.starving);
+                        const autoRelief = Boolean(record?.auto_essence_relief);
+                        const maxPop = settlement ? settlement.population_capacity : 0;
+                        const rebellionRate = record ? record.rebellion_rate : 0;
+                        const showRebellionAlert = rebellionRate >= 40 || happiness < 30 || oppression > 70;
 
                         const laborLabels: Record<string, string> = {
-                          LOW: "Nhàn Hạ (x0.7)",
-                          NORMAL: "Bình Thường (x1.0)",
-                          HIGH: "Lao Dịch (x1.5)",
-                          EXPLOIT: "Bóc Lột (x2.0)"
+                          LOW: "Nhàn Hạ (0.7x)",
+                          NORMAL: "Bình Thường (1.0x)",
+                          HIGH: "Lao Dịch (1.4x)",
+                          EXPLOIT: "Bóc Lột (1.8x)"
                         };
 
                         const handleLaborChange = async (intensity: string) => {
                           let confirmText = `Đạo hữu muốn đổi cường độ lao động của tộc ${raceInfo.name} thành ${laborLabels[intensity]}?`;
                           if (intensity === "HIGH") {
-                            confirmText = `⚠️ CẢNH BÁO: Thiết lập cường độ 'Lao Dịch' (x1.5 sản lượng) sẽ giảm 10 Hạnh phúc và tăng 10 Áp bức của tộc này mỗi năm.`;
+                            confirmText = `⚠️ CẢNH BÁO: 'Lao Dịch' (1.4x sản lượng) sẽ tăng 25% hao sinh khí điểm tài nguyên, tăng 15% tiêu hao lương thực và giảm 2.0 Hạnh phúc mỗi chu kỳ 5 phút.`;
                           } else if (intensity === "EXPLOIT") {
-                            confirmText = `💥 CẢNH BÁO CỰC KỲ NGUY HIỂM: Thiết lập cường độ 'Bóc Lột' (x2.0 sản lượng) sẽ khiến tộc nhân bị kiệt quệ, giảm 25 Hạnh phúc và tăng 25 Áp bức mỗi năm!`;
+                            confirmText = `💥 CẢNH BÁO NGUY HIỂM: 'Bóc Lột' (1.8x sản lượng) sẽ tăng 60% hao sinh khí mỏ, giảm 5.0 Hạnh phúc và tăng Áp bức/Nổi loạn mỗi chu kỳ 5 phút!`;
                           }
 
                           if (await showConfirm(confirmText)) {
@@ -3009,95 +3015,80 @@ return (
                         };
 
                         return (
-                          <div key={raceInfo.race} className="bg-slate-950/60 border border-slate-850 hover:border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-5 transition-[color,background-color,border-color,box-shadow,opacity,transform,filter]">
-                            <div className="space-y-3">
-                              <div className="flex items-center gap-3">
-                                <span className="text-3xl select-none">{raceInfo.icon}</span>
-                                <div>
-                                  <h3 className="font-extrabold text-sm text-slate-100">{raceInfo.name}</h3>
-                                  <span className="text-[10px] text-slate-500">Định cư: {settlementCount} bộ lạc</span>
+                          <div key={raceInfo.race} className="bg-slate-950/60 border border-slate-850 hover:border-slate-800 rounded-2xl p-4 flex flex-col justify-between space-y-4">
+                            <div className="space-y-2.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-2xl select-none">{raceInfo.icon}</span>
+                                  <div>
+                                    <h3 className="font-extrabold text-sm text-slate-100">{raceInfo.name}</h3>
+                                    <span className="text-[10px] text-slate-500">
+                                      {settlement ? `${settlement.settlement_type} (${settlement.pos_x ?? 0},${settlement.pos_y ?? 0})` : "Chưa có Thành Trì"}
+                                    </span>
+                                  </div>
                                 </div>
+                                {starving && <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[9px] font-bold">ĐÓI KÉM</span>}
                               </div>
-                              <p className="text-[10px] text-slate-400 leading-relaxed min-h-[40px]">{raceInfo.desc}</p>
+                              <p className="text-[10px] text-slate-400 leading-relaxed min-h-[32px]">{raceInfo.desc}</p>
 
-                              <div className="space-y-1.5">
+                              <div className="space-y-1">
                                 <div className="flex justify-between text-xs">
                                   <span className="text-slate-400">Dân số:</span>
-                                  <span className="font-bold text-slate-200">{population} / {maxPop}</span>
+                                  <span className="font-bold text-slate-200">{population.toLocaleString()} / {maxPop.toLocaleString()}</span>
                                 </div>
-                                <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
-                                  <div className="h-full bg-cyan-500 transition-[width] duration-500"
-                                    style={{ width: `${maxPop > 0 ? Math.min(100, (population / maxPop) * 100) : 0}%` }} />
-                                </div>
-                              </div>
-
-                              <div className="space-y-2 pt-1">
-                                <div className="space-y-1">
-                                  <div className="flex justify-between text-[10px]">
-                                    <span className="text-slate-400">Hạnh Phúc:</span>
-                                    <span className={`font-bold ${happiness < 30 ? "text-rose-400" : happiness > 60 ? "text-emerald-400" : "text-amber-400"}`}>
-                                      {happiness.toFixed(1)}
-                                    </span>
-                                  </div>
-                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                                    <div className={`h-full transition-[width] duration-500 ${happiness < 30 ? "bg-rose-500" : happiness > 60 ? "bg-emerald-500" : "bg-amber-500"}`}
-                                      style={{ width: `${happiness}%` }} />
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <div className="flex justify-between text-[10px]">
-                                    <span className="text-slate-400">Áp Bức:</span>
-                                    <span className={`font-bold ${oppression > 70 ? "text-rose-400" : "text-slate-400"}`}>
-                                      {oppression.toFixed(1)}
-                                    </span>
-                                  </div>
-                                  <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                                    <div className={`h-full transition-[width] duration-500 ${oppression > 70 ? "bg-rose-500" : "bg-slate-500"}`}
-                                      style={{ width: `${oppression}%` }} />
-                                  </div>
+                                <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-800">
+                                  <div className="h-full bg-cyan-500" style={{ width: `${maxPop > 0 ? Math.min(100, (population / maxPop) * 100) : 0}%` }} />
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-3 gap-2 text-center text-[9px]">
-                                <div className="p-1.5 bg-slate-900/60 rounded-lg">
-                                  <div className="text-slate-500">Thịnh Vượng</div>
-                                  <div className="font-bold text-amber-400">{prosperity.toFixed(0)}</div>
+                              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                <div className="p-1.5 bg-slate-900/60 rounded-lg flex justify-between">
+                                  <span className="text-slate-400">Hạnh phúc</span>
+                                  <span className={`font-bold ${happiness < 30 ? "text-rose-400" : "text-emerald-400"}`}>{happiness.toFixed(0)}%</span>
                                 </div>
-                                <div className="p-1.5 bg-slate-900/60 rounded-lg">
-                                  <div className="text-slate-500">Cổ Sư</div>
-                                  <div className="font-bold text-purple-400">{guMasters}</div>
+                                <div className="p-1.5 bg-slate-900/60 rounded-lg flex justify-between">
+                                  <span className="text-slate-400">Nổi loạn</span>
+                                  <span className={`font-bold ${showRebellionAlert ? "text-rose-400" : "text-emerald-400"}`}>{rebellionRate.toFixed(0)}%</span>
                                 </div>
-                                <div className="p-1.5 bg-slate-900/60 rounded-lg">
-                                  <div className="text-slate-500">Nổi Loạn</div>
-                                  <div className={`font-bold ${showRebellionAlert ? "text-rose-400" : "text-emerald-400"}`}>{rebellionRate.toFixed(0)}%</div>
+                                <div className="p-1.5 bg-slate-900/60 rounded-lg flex justify-between">
+                                  <span className="text-slate-400">Lương thực</span>
+                                  <span className="font-bold text-amber-300">{Math.floor(foodStored).toLocaleString()}</span>
                                 </div>
-                              </div>
-
-                              <div className="p-2.5 bg-slate-900/60 border border-slate-800/80 rounded-lg flex items-center justify-between text-[10px]">
-                                <span className="text-slate-400">Nguy cơ:</span>
-                                <span className={`font-black ${showRebellionAlert ? "text-rose-400 animate-pulse" : "text-amber-400"}`}>
-                                  {showRebellionAlert ? "Nguy hiểm" : "Ổn định"}
-                                </span>
+                                <div className="p-1.5 bg-slate-900/60 rounded-lg flex justify-between">
+                                  <span className="text-slate-400">Sư / Tiên</span>
+                                  <span className="font-bold text-purple-300">{guMasters} / {guImmortals}</span>
+                                </div>
                               </div>
                             </div>
 
-                            <div className="space-y-4 pt-3 border-t border-slate-850">
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] text-slate-400 font-semibold block">Cường Độ Lao Động</label>
-                                <div className="grid grid-cols-2 gap-1 text-[9px] font-bold">
-                                  {["LOW", "NORMAL", "HIGH", "EXPLOIT"].map((mode) => (
-                                    <button key={mode} onClick={() => handleLaborChange(mode)} disabled={actionLoading}
-                                      className={`py-1.5 px-1 rounded transition border ${laborIntensity === mode ? "bg-amber-500/20 border-amber-500/40 text-amber-300" : "bg-slate-900 border-transparent text-slate-400 hover:text-slate-200"}`}>
-                                      {mode === "LOW" ? "Nhàn Nhã" : mode === "NORMAL" ? "Bình Thường" : mode === "HIGH" ? "Lao Dịch" : "Bóc Lột"}
-                                    </button>
-                                  ))}
-                                </div>
+                            <div className="space-y-2.5 pt-2 border-t border-slate-850">
+                              <div className="grid grid-cols-2 gap-1 text-[9px] font-bold">
+                                {["LOW", "NORMAL", "HIGH", "EXPLOIT"].map((mode) => (
+                                  <button key={mode} onClick={() => handleLaborChange(mode)} disabled={actionLoading || !settlement}
+                                    className={`py-1 px-1 rounded transition border disabled:opacity-40 ${laborIntensity === mode ? "bg-amber-500/20 border-amber-500/40 text-amber-300" : "bg-slate-900 border-transparent text-slate-400 hover:text-slate-200"}`}>
+                                    {mode === "LOW" ? "Nhàn Nhã" : mode === "NORMAL" ? "Thường" : mode === "HIGH" ? "Lao Dịch" : "Bóc Lột"}
+                                  </button>
+                                ))}
                               </div>
-                              <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-xl text-[10px] flex items-center justify-between gap-2">
-                                <div>
-                                  <div className="text-slate-400 font-medium">{raceInfo.buffLabel}</div>
+                              {settlement && (
+                                <div className="flex flex-wrap gap-1.5 text-[9px]">
+                                  <button onClick={() => recruitVariantHumans(raceInfo.race, 500)} disabled={actionLoading}
+                                    className="flex-1 py-1 px-2 rounded bg-cyan-600/20 border border-cyan-500/40 text-cyan-200 hover:bg-cyan-600/30 font-semibold">
+                                    +500 Dân
+                                  </button>
+                                  <button onClick={() => feedVariantHumans(raceInfo.race, 1)} disabled={actionLoading}
+                                    className="flex-1 py-1 px-2 rounded bg-emerald-600/20 border border-emerald-500/40 text-emerald-200 hover:bg-emerald-600/30 font-semibold">
+                                    Nạp Lương
+                                  </button>
+                                  <button onClick={() => toggleEssenceRelief(raceInfo.race, !autoRelief)} disabled={actionLoading}
+                                    className={`w-full py-1 px-2 rounded border font-semibold ${autoRelief ? "bg-amber-500/20 border-amber-500/40 text-amber-200" : "bg-slate-900 border-slate-800 text-slate-400"}`}>
+                                    Cứu trợ Tiên Nguyên: {autoRelief ? "BẬT" : "TẮT"}
+                                  </button>
                                 </div>
-                                <div className="text-emerald-400 font-extrabold text-right shrink-0">{buffValue}</div>
+                              )}
+                              <div className="text-[9px] text-emerald-400/90 font-semibold flex justify-between">
+                                <span className="text-slate-400">{raceInfo.buffLabel}</span>
+                                <span>Thịnh vượng: {prosperity.toFixed(0)}</span>
                               </div>
                             </div>
                           </div>
@@ -3366,7 +3357,7 @@ return (
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {variantNPCs.map((npc) => {
-                      const raceIcons: Record<string, string> = { HAIRY_MAN: "🧔", ROCKMAN: "🗿", FEATHERMAN: "🦅" };
+                      const raceIcons: Record<string, string> = { HAIRY_MAN: "🧔", ROCKMAN: "🗿", FEATHERMAN: "🦅", SNOWMAN: "❄️", INKMAN: "📜", MINIMAN: "🌱", MERMAN: "🧜", MUSHROOMMAN: "🍄", DRAGONMAN: "🐉" };
                       const rankLabels: Record<number, string> = { 1: "Sơ Giai", 2: "Trung Giai", 3: "Hậu Giai", 4: "Đỉnh Phong", 5: "Siêu Việt" };
                       return (
                         <div key={npc.id} className="bg-slate-950/60 border border-slate-850 rounded-xl p-3 space-y-3">
@@ -3384,12 +3375,20 @@ return (
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <select value={npc.role} onChange={(e) => assignNPCRole(npc.id, e.target.value)} className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200">
-                              {['NONE','REFINER','MINER','FARMER'].map(role => <option key={role}>{role}</option>)}
+                              {['NONE','REFINER','MINER','FARMER','STEWARD'].map(role => <option key={role}>{role}</option>)}
                             </select>
                             <select value={npc.formation_slot} onChange={(e) => setNPCFormation(npc.id, Number(e.target.value))} disabled={npc.role !== 'NONE'} className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-200 disabled:opacity-40">
                               <option value={0}>Không chiến đấu</option>{[1,2,3,4,5,6,7,8].map(slot => <option key={slot} value={slot}>Đội hình {slot}</option>)}
                             </select>
-                            <button onClick={() => cultivateNPC(npc.id)} disabled={npc.role !== 'NONE'} className="rounded bg-purple-600/30 border border-purple-500/40 px-2 py-1 text-[10px] text-purple-200 disabled:opacity-40">Tu luyện</button>
+                            {npc.rank >= 5 && npc.sub_rank >= 4 && npc.rank < 6 ? (
+                              <button onClick={() => ascendVariantNPC(npc.id)} className="rounded bg-purple-600 hover:bg-purple-500 px-2 py-1 text-[10px] font-bold text-white">Hộ pháp Thăng Tiên</button>
+                            ) : npc.rank >= 6 ? (
+                              <button onClick={() => toggleNPCDefense(npc.id, !npc.defense_stationed)} className={`rounded border px-2 py-1 text-[10px] ${npc.defense_stationed ? "bg-emerald-600/30 border-emerald-500/40 text-emerald-200" : "bg-slate-900 border-slate-700 text-slate-300"}`}>
+                                {npc.defense_stationed ? "Đang thủ khiếu" : "Thủ khiếu"}
+                              </button>
+                            ) : (
+                              <button onClick={() => cultivateNPC(npc.id)} disabled={npc.role !== 'NONE'} className="rounded bg-purple-600/30 border border-purple-500/40 px-2 py-1 text-[10px] text-purple-200 disabled:opacity-40">Tu luyện</button>
+                            )}
                             <button onClick={() => {
                               const available = player?.gu_inventory?.find((gu) => !gu.equipped && !gu.is_vital && gu.status === 'ACTIVE' && gu.rank <= npc.rank);
                               if (available) equipNPCGu(npc.id, available.instance_id, 0);

@@ -188,7 +188,6 @@ func CheckAndTriggerTribulations(ctx context.Context) error {
 
 		// ── Batch-read: resource points for affected apertures (1 query) ──────
 		pointsByAperture := make(map[string][]models.ApertureResourcePoint)
-		settlementsByAperture := map[string]int{}
 		{
 			aids := make([]string, len(apertures))
 			for i, ap := range apertures {
@@ -210,53 +209,6 @@ func CheckAndTriggerTribulations(ctx context.Context) error {
 					}
 				}
 				nRows.Close()
-			}
-
-			// Settlements gate population growth (variant-economy tables).
-			if sRows, qErr := db.DB.Query(`
-				SELECT aperture_id, COUNT(1)
-				FROM aperture_variant_settlements
-				WHERE aperture_id = ANY($1::uuid[])
-				GROUP BY aperture_id
-			`, pq.Array(aids)); qErr == nil {
-				for sRows.Next() {
-					var aid string
-					var n int
-					if sRows.Scan(&aid, &n) == nil {
-						settlementsByAperture[aid] = n
-					}
-				}
-				sRows.Close()
-			}
-		}
-
-		// ── Batch-read: all variant humans (1 query) ──────────────────────────
-		type vhRow struct {
-			id, race, laborIntensity string
-			population               int
-			happiness, oppression    float64
-		}
-		vhByAperture := make(map[string][]vhRow)
-		{
-			aids := make([]string, len(apertures))
-			for i, ap := range apertures {
-				aids[i] = ap.ID
-			}
-			if vRows, qErr := db.DB.Query(`
-				SELECT aperture_id, id, race, population, happiness, oppression, labor_intensity
-				FROM aperture_variant_humans
-				WHERE aperture_id = ANY($1::uuid[])
-			`, pq.Array(aids)); qErr != nil {
-				logger.S.Errorf("CheckAndTriggerTribulations: batch-read variant humans error: %v", qErr)
-			} else {
-				defer vRows.Close()
-				for vRows.Next() {
-					var v vhRow
-					var aid string
-					if err := vRows.Scan(&aid, &v.id, &v.race, &v.population, &v.happiness, &v.oppression, &v.laborIntensity); err == nil {
-						vhByAperture[aid] = append(vhByAperture[aid], v)
-					}
-				}
 			}
 		}
 
@@ -316,18 +268,12 @@ func CheckAndTriggerTribulations(ctx context.Context) error {
 			vitality  int
 			exhausted bool
 		}
-		type vhUp struct {
-			id             string
-			pop            int
-			happy, oppress float64
-		}
 		type msgIns struct{ receiver, content string }
 
 		var lifeUps []lifespanUp
 		var expiryCandidates []apertureExpiryCandidate
 		var manaUps []manaUp
 		var pointUps []pointUp
-		var vhUps []vhUp
 		var msgs []msgIns
 
 		// ── Process each aperture ─────────────────────────────────────────────
@@ -450,84 +396,7 @@ func CheckAndTriggerTribulations(ctx context.Context) error {
 						}
 					}
 
-					// Variant Human Tick — read from pre-loaded data
-					vhs := vhByAperture[ap.ID]
-					if len(vhs) > 0 {
-						totalFoodProd := int64(0)
-						for i := range points {
-							tpl, ok := GetResourcePointTemplate(points[i].PointType)
-							if ok && tpl.IsFood && points[i].Vitality > 0 && points[i].State == "ACTIVE" {
-								totalFoodProd += int64(tpl.BaseYield)
-							}
-						}
-
-						for _, v := range vhs {
-							happinessChange := 0.0
-							oppressionChange := 0.0
-
-							foodNeeded := float64(v.population) / 100.0
-							if float64(totalFoodProd) < foodNeeded {
-								happinessChange -= 10.0 * float64(yearsDiff)
-							} else {
-								happinessChange += 2.0 * float64(yearsDiff)
-							}
-
-							switch v.laborIntensity {
-							case "LOW":
-								happinessChange += 5.0 * float64(yearsDiff)
-								oppressionChange -= 5.0 * float64(yearsDiff)
-							case "NORMAL":
-							case "HIGH":
-								happinessChange -= 10.0 * float64(yearsDiff)
-								oppressionChange += 10.0 * float64(yearsDiff)
-							case "EXPLOIT":
-								happinessChange -= 25.0 * float64(yearsDiff)
-								oppressionChange += 25.0 * float64(yearsDiff)
-							}
-
-							newHappiness := math.Max(0.0, math.Min(100.0, v.happiness+happinessChange))
-							newOppression := math.Max(0.0, math.Min(100.0, v.oppression+oppressionChange))
-
-							rebellionRisk := (100.0 - newHappiness + newOppression) / 4.0
-							newPop := v.population
-							if newHappiness < 30.0 || newOppression > 70.0 {
-								if rand.Float64() < (rebellionRisk / 100.0) {
-									newPop = int(float64(v.population) * 0.8)
-									// Rebellion ravages the tribal resource points instead
-									// of deleting rows: vitality halves (a dead point
-									// needs revitalize).
-									_, _ = db.DB.Exec(`
-						UPDATE aperture_resource_points
-						SET vitality = vitality / 2,
-						    state = CASE WHEN vitality <= 0 THEN 'EXHAUSTED' ELSE state END,
-						    updated_at = NOW()
-						WHERE id IN (
-							SELECT id FROM aperture_resource_points
-							WHERE aperture_id = $1 AND vitality > 0
-							ORDER BY random() LIMIT 2
-						)
-					`, ap.ID)
-									ap.ApertureHP = math.Max(0.0, ap.ApertureHP-ap.MaxApertureHP*0.05)
-									_, _ = db.DB.Exec(`UPDATE immortal_apertures SET aperture_hp = $1 WHERE id = $2`, ap.ApertureHP, ap.ID)
-									msgs = append(msgs, msgIns{receiver: ap.PlayerID, content: "Bộ tộc " + v.race + " trong Tiên Khiếu đã nổi loạn do bị áp bức dữ dội! Một số điểm tài nguyên và Tiên Khiếu đã bị hư hại."})
-								}
-							}
-
-							maxPop := 200 * settlementsByAperture[ap.ID]
-							if settlementsByAperture[ap.ID] > 0 {
-								if newHappiness > 60.0 {
-									newPop = int(float64(v.population) * math.Pow(1.05, float64(yearsDiff)))
-								}
-								if newPop > maxPop {
-									newPop = maxPop
-								}
-							} else {
-								newPop = int(float64(v.population) * math.Pow(0.90, float64(yearsDiff)))
-							}
-
-							vhUps = append(vhUps, vhUp{id: v.id, pop: newPop, happy: newHappiness, oppress: newOppression})
-						}
-					}
+					// Variant human simulation is owned by worker.StartSocietySimulationWorker.
 				}
 			}
 
@@ -628,7 +497,7 @@ func CheckAndTriggerTribulations(ctx context.Context) error {
 		}
 
 		// ── Batch-write: all accumulated changes (single transaction) ─────────
-		if len(lifeUps)+len(manaUps)+len(pointUps)+len(vhUps)+len(msgs) > 0 {
+		if len(lifeUps)+len(manaUps)+len(pointUps)+len(msgs) > 0 {
 			if tx, txErr := db.DB.Begin(); txErr == nil {
 				defer tx.Rollback()
 
@@ -684,23 +553,6 @@ func CheckAndTriggerTribulations(ctx context.Context) error {
 						WHERE p.id = v.id
 					`, pq.Array(ids), pq.Array(vits)); err != nil {
 						logger.S.Errorf("CheckAndTriggerTribulations: batch update points failed: %v", err)
-					}
-				}
-
-				// Batch UPDATE variant humans
-				if len(vhUps) > 0 {
-					ids := make([]string, len(vhUps))
-					pops := make([]int, len(vhUps))
-					happys := make([]float64, len(vhUps))
-					oppresses := make([]float64, len(vhUps))
-					for i, u := range vhUps {
-						ids[i] = u.id
-						pops[i] = u.pop
-						happys[i] = u.happy
-						oppresses[i] = u.oppress
-					}
-					if _, err := tx.Exec(`UPDATE aperture_variant_humans AS v SET population = d.pop, happiness = d.happy, oppression = d.oppress, updated_at = NOW() FROM (SELECT unnest($1::uuid[]) AS id, unnest($2::int[]) AS pop, unnest($3::float8[]) AS happy, unnest($4::float8[]) AS oppress) AS d WHERE v.id = d.id`, pq.Array(ids), pq.Array(pops), pq.Array(happys), pq.Array(oppresses)); err != nil {
-						logger.S.Errorf("CheckAndTriggerTribulations: batch update variant humans failed: %v", err)
 					}
 				}
 

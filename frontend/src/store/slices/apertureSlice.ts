@@ -11,7 +11,7 @@ import type {
   ApertureResourcePoint,
   AperturePointWorker,
   ApertureVariantHuman,
-  ApertureNodeWorker,
+  ApertureVariantEvent,
   ApertureRefinementJob,
   ApertureSettlement,
   ApertureVariantNPC,
@@ -115,18 +115,22 @@ export interface ApertureSlice {
   cleanseSoil: (x: number, y: number) => Promise<boolean>;
   pivotSoil: (x: number, y: number) => Promise<boolean>;
   finalizeTribulationAftermath: (eventId: string) => Promise<boolean>;
-  nodeWorkers: ApertureNodeWorker[];
+  variantEvents: ApertureVariantEvent[];
   refinementQueue: ApertureRefinementJob[];
   settlements: ApertureSettlement[];
   variantNPCs: ApertureVariantNPC[];
-  fetchNodeWorkers: (nodeId: string) => Promise<void>;
-  assignWorkerToNode: (nodeId: string, variantHumanId: string, population: number) => Promise<boolean>;
-  removeWorkerFromNode: (nodeId: string, workerId: string) => Promise<boolean>;
+  fetchVariantEvents: () => Promise<void>;
+  resolveVariantEvent: (eventId: string, mode: "PACIFY" | "SUPPRESS") => Promise<boolean>;
+  recruitVariantHumans: (race: string, count: number) => Promise<boolean>;
+  feedVariantHumans: (race: string, quantity: number, itemId?: string) => Promise<boolean>;
+  toggleEssenceRelief: (race: string, enabled: boolean) => Promise<boolean>;
+  ascendVariantNPC: (npcId: string) => Promise<boolean>;
+  toggleNPCDefense: (npcId: string, stationed: boolean) => Promise<boolean>;
   fetchRefinementQueue: () => Promise<void>;
   createRefinementJob: (recipeId: string, mode: string, targetQuantity: number) => Promise<boolean>;
   deleteRefinementJob: (jobId: string) => Promise<boolean>;
   fetchSettlements: () => Promise<void>;
-  buildSettlement: (race: string, name?: string, settlementType?: string) => Promise<boolean>;
+  buildSettlement: (race: string, name?: string, settlementType?: string, posX?: number, posY?: number) => Promise<boolean>;
   upgradeSettlement: (settlementId: string, data: { name?: string; settlement_type?: string; population_capacity?: number; housing?: number; food_storage?: number }) => Promise<boolean>;
   fetchNPCs: () => Promise<void>;
   assignNPCRole: (npcId: string, role: string) => Promise<boolean>;
@@ -168,7 +172,7 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
   aperturePoints: [],
   pointWorkers: {},
   variantHumans: [],
-  nodeWorkers: [],
+  variantEvents: [],
   refinementQueue: [],
   settlements: [],
   variantNPCs: [],
@@ -705,38 +709,37 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     return fetchVariantHumansPromise;
   },
 
-  // --- Node Workers ---
-  fetchNodeWorkers: async (nodeId: string) => {
+  // --- Variant Events, Recruitment, Food & Immortals ---
+  fetchVariantEvents: async () => {
     const { token } = get();
     if (!token) return;
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers`);
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/events`);
       if (response.ok) {
         const data = await response.json();
-        set({ nodeWorkers: data.workers || [] });
+        set({ variantEvents: data.events || [] });
       }
     } catch (err) {
-      console.error("Failed to fetch node workers:", err);
+      console.error("Failed to fetch variant events:", err);
     }
   },
 
-  assignWorkerToNode: async (nodeId: string, variantHumanId: string, population: number) => {
+  resolveVariantEvent: async (eventId: string, mode: "PACIFY" | "SUPPRESS") => {
     const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
-    set({ error: null });
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers`, {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/events/${eventId}/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ variant_human_id: variantHumanId, assigned_population: population }),
+        body: JSON.stringify({ mode }),
       });
+      const data = await response.json();
       if (response.ok) {
-        get().addToast("Phân công lao động thành công", "success");
-        get().fetchNodeWorkers(nodeId);
+        get().addToast(data.message || "Đã xử lý sự kiện", "success");
+        await Promise.all([get().fetchVariantEvents(), get().fetchVariantHumans(true), get().fetchAperture(true)]);
         return true;
       }
-      const data = await response.json();
-      get().addToast(data.error || "Lỗi phân công", "error");
+      get().addToast(data.error || "Không thể xử lý sự kiện", "error");
       return false;
     } catch {
       get().addToast("Lỗi hệ thống", "error");
@@ -746,19 +749,120 @@ export const createApertureSlice: StateCreator<ApiResponseData, ApiResponseData,
     }
   },
 
-  removeWorkerFromNode: async (nodeId: string, workerId: string) => {
+  recruitVariantHumans: async (race: string, count: number) => {
     const { token } = get();
     if (!token || !get().beginAction("aperture")) return false;
-    set({ error: null });
     try {
-      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/nodes/${nodeId}/workers/${workerId}`, {
-        method: "DELETE",
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/variant-humans/recruit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ race, count }),
       });
+      const data = await response.json();
       if (response.ok) {
-        get().addToast("Đã xóa phân công", "success");
-        get().fetchNodeWorkers(nodeId);
+        get().addToast(data.message || "Chiêu mộ thành công", "success");
+        await Promise.all([get().fetchVariantHumans(true), get().fetchPlayer(true)]);
         return true;
       }
+      get().addToast(data.error || "Không thể chiêu mộ", "error");
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  feedVariantHumans: async (race: string, quantity: number, itemId = "food_essence_rank1") => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/variant-humans/feed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ race, quantity, item_id: itemId }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        get().addToast(data.message || "Nạp lương thực thành công", "success");
+        await Promise.all([get().fetchVariantHumans(true), get().fetchPlayer(true)]);
+        return true;
+      }
+      get().addToast(data.error || "Không thể nạp lương thực", "error");
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  toggleEssenceRelief: async (race: string, enabled: boolean) => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/variant-humans/relief`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ race, enabled }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        get().addToast(`Đã ${enabled ? "bật" : "tắt"} cứu trợ Tiên Nguyên cho ${race}`, "success");
+        await get().fetchVariantHumans(true);
+        return true;
+      }
+      get().addToast(data.error || "Không thể cập nhật cứu trợ", "error");
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  ascendVariantNPC: async (npcId: string) => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs/${npcId}/ascend`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (response.ok) {
+        get().addToast(data.message || "Hộ pháp Thăng Tiên thành công!", "success");
+        await Promise.all([get().fetchNPCs(), get().fetchVariantHumans(true), get().fetchAperture(true)]);
+        return true;
+      }
+      get().addToast(data.error || "Không thể thăng tiên", "error");
+      return false;
+    } catch {
+      get().addToast("Lỗi hệ thống", "error");
+      return false;
+    } finally {
+      get().endAction("aperture");
+    }
+  },
+
+  toggleNPCDefense: async (npcId: string, stationed: boolean) => {
+    const { token } = get();
+    if (!token || !get().beginAction("aperture")) return false;
+    try {
+      const response = await authFetch(`${BACKEND_URL}/api/immortal-aperture/npcs/${npcId}/defense`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stationed }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        get().addToast(stationed ? "Đã điều động bảo vệ Tiên Khiếu" : "Đã rút khỏi vị trí phòng thủ", "success");
+        await get().fetchNPCs();
+        return true;
+      }
+      get().addToast(data.error || "Không thể cập nhật phòng thủ", "error");
       return false;
     } catch {
       get().addToast("Lỗi hệ thống", "error");

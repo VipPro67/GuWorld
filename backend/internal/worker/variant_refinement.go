@@ -68,7 +68,7 @@ func processApertureRefinement(ctx context.Context, database *sql.DB, apertureID
 	if err := conn.QueryRowContext(ctx, `
 		SELECT GREATEST(v.population-COALESCE(SUM(w.assigned_population),0),0)
 		FROM aperture_variant_humans v
-		LEFT JOIN aperture_node_workers w ON w.variant_human_id=v.id
+		LEFT JOIN aperture_point_workers w ON w.variant_human_id=v.id
 		WHERE v.aperture_id=$1 AND v.race='HAIRY_MAN'
 		GROUP BY v.population`, apertureID).Scan(&availableHairy); err != nil || availableHairy <= 0 {
 		return
@@ -178,7 +178,7 @@ func processRefinementJob(ctx context.Context, database *sql.DB, jobID string, r
 		}
 		return err
 	}
-	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(assigned_population),0) FROM aperture_node_workers WHERE variant_human_id=$1`, hairyManID).Scan(&assignedHairy); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(assigned_population),0) FROM aperture_point_workers WHERE variant_human_id=$1`, hairyManID).Scan(&assignedHairy); err != nil {
 		return err
 	}
 	availableHairy := hairyPopulation - assignedHairy

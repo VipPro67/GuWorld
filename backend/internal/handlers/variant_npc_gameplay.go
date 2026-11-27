@@ -316,3 +316,135 @@ func CultivateNPC(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"rank": rank, "sub_rank": subRank, "experience": experience, "next_experience": threshold, "gained": gain, "cost": cost})
 }
+
+// AscendVariantNPC assists a Rank 5 peak (sub_rank 4) Variant NPC to ascend into a Rank 6 Variant Gu Immortal.
+func AscendVariantNPC(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	npcID := c.Param("npc_id")
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		httperr.Respond(c, httperr.Internal("Database error", err))
+		return
+	}
+	defer tx.Rollback()
+
+	var apertureID, race, name string
+	var rank, subRank int
+	var loyalty, talent float64
+	err = tx.QueryRow(`
+		SELECT n.aperture_id, COALESCE(n.race, ''), n.name, n.rank, n.sub_rank, n.loyalty, n.talent
+		FROM non_player_actors n
+		JOIN immortal_apertures a ON a.id = n.aperture_id
+		WHERE n.id = $1 AND a.player_id = $2 AND n.actor_kind = 'VARIANT_NPC' AND n.lifecycle_state = 'ACTIVE'
+		FOR UPDATE OF n
+	`, npcID, playerID).Scan(&apertureID, &race, &name, &rank, &subRank, &loyalty, &talent)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy Cổ Sư dị nhân"})
+		return
+	}
+	if err != nil {
+		httperr.Respond(c, httperr.Internal("Database error", err))
+		return
+	}
+	if rank >= 6 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dị nhân này đã là Cổ Tiên"})
+		return
+	}
+	if rank < 5 || subRank < 4 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cổ Sư cần đạt Ngũ Chuyển Đỉnh Phong (Rank 5.4) mới có thể hộ pháp Thăng Tiên"})
+		return
+	}
+	if loyalty < 70 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Độ trung thành cần tối thiểu 70% để hộ pháp Thăng Tiên"})
+		return
+	}
+
+	const essenceCost = 50.0
+	const stoneCost = 1000.0
+	var essence, stones float64
+	if err := tx.QueryRow(`
+		SELECT COALESCE(a.immortal_essence, 0), p.immortal_stones
+		FROM immortal_apertures a JOIN players p ON p.id = a.player_id
+		WHERE a.id = $1 FOR UPDATE OF p
+	`, apertureID).Scan(&essence, &stones); err != nil {
+		httperr.Respond(c, httperr.Internal("Database error", err))
+		return
+	}
+	if essence < essenceCost || stones < stoneCost {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Hộ pháp Thăng Tiên cần %.0f Tiên Nguyên và %.0f Tiên Nguyên Thạch", essenceCost, stoneCost)})
+		return
+	}
+
+	_, _ = tx.Exec(`UPDATE immortal_apertures SET immortal_essence = immortal_essence - $1, updated_at = NOW() WHERE id = $2`, essenceCost, apertureID)
+	_, _ = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones - $1 WHERE id = $2`, stoneCost, playerID)
+
+	const immortalDaoMarks = 1500
+	_, err = tx.Exec(`
+		UPDATE non_player_actors
+		SET rank = 6, sub_rank = 1, dao_marks = dao_marks + $2,
+		    max_hp = max_hp * 2.5, hp = max_hp * 2.5,
+		    base_attack = base_attack * 2.0, base_defense = base_defense * 2.0,
+		    updated_at = NOW()
+		WHERE id = $1
+	`, npcID, immortalDaoMarks)
+	if err != nil {
+		httperr.Respond(c, httperr.Internal("Lỗi thăng tiên NPC", err))
+		return
+	}
+
+	_, _ = tx.Exec(`
+		UPDATE aperture_variant_humans
+		SET gu_immortal_count = gu_immortal_count + 1, updated_at = NOW()
+		WHERE aperture_id = $1 AND race = $2
+	`, apertureID, race)
+
+	if err := tx.Commit(); err != nil {
+		httperr.Respond(c, httperr.Internal("Database error", err))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":   fmt.Sprintf("%s đã độ kiếp thành công, thăng lên Lục Chuyển Cổ Tiên!", name),
+		"rank":      6,
+		"dao_marks": immortalDaoMarks,
+	})
+}
+
+// ToggleNPCDefense toggles whether a Variant NPC / Immortal is stationed to defend the aperture.
+func ToggleNPCDefense(c *gin.Context) {
+	playerID, exists := middleware.GetPlayerID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	npcID := c.Param("npc_id")
+	var req struct {
+		Stationed bool `json:"stationed"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+
+	res, err := db.DB.Exec(`
+		UPDATE non_player_actors n
+		SET defense_stationed = $3, updated_at = NOW()
+		FROM immortal_apertures a
+		WHERE n.id = $1 AND n.aperture_id = a.id AND a.player_id = $2
+		  AND n.actor_kind = 'VARIANT_NPC' AND n.lifecycle_state = 'ACTIVE'
+	`, npcID, playerID, req.Stationed)
+	if err != nil {
+		httperr.Respond(c, httperr.Internal("Database error", err))
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy NPC"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"defense_stationed": req.Stationed})
+}

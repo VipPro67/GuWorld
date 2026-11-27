@@ -177,7 +177,7 @@ function PointWorkerEditor({ point }: WorkerAssignmentProps) {
           </div>
           <div className="text-[9px] text-zinc-500">
             Điểm này đang nhận {formatNumber(assignedHere, 0)} / {formatNumber(selectedHuman?.population ?? 0, 0)} dân ·
-            mỗi 500 lao động +25% sản lượng (tối đa +25%).
+            sở trường: <span className="text-amber-300">{point.worker_race || "tự do"}</span> (đúng tộc tối đa +50% ở 500 dân, sai tộc 0.8x).
           </div>
           {pointWorkers.length > 0 && (
             <div className="space-y-1">

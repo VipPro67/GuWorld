@@ -87,13 +87,34 @@ func loadResourcePointTemplates() map[string]ResourcePointTemplate {
 	return parseResourcePointTemplates(f)
 }
 
-// legacyWorkerRaces maps pre-registry template spellings onto the current
+// legacyWorkerRaces maps pre-registry template/enum spellings onto the current
 // Race.csv keys. The labor/population multiplier matches races exactly, so a
 // stale spelling silently costs the player every worker bonus.
 var legacyWorkerRaces = map[string]string{
-	"hairy_man":  "fur_people",
-	"featherman": "feathered",
-	"rock_man":   "rockman",
+	"hairy_man":   "fur_people",
+	"featherman":  "feathered",
+	"rock_man":    "rockman",
+	"snowman":     "snowman",
+	"inkman":      "inkman",
+	"miniman":     "miniman",
+	"merman":      "merman",
+	"mushroomman": "mushroomman",
+	"dragonman":   "dragonman",
+}
+
+var registryToVariantEnum = map[string]string{
+	"fur_people":  "HAIRY_MAN",
+	"hairy_man":   "HAIRY_MAN",
+	"rockman":     "ROCKMAN",
+	"rock_man":    "ROCKMAN",
+	"feathered":   "FEATHERMAN",
+	"featherman":  "FEATHERMAN",
+	"snowman":     "SNOWMAN",
+	"inkman":      "INKMAN",
+	"miniman":     "MINIMAN",
+	"merman":      "MERMAN",
+	"mushroomman": "MUSHROOMMAN",
+	"dragonman":   "DRAGONMAN",
 }
 
 // normalizeWorkerRace lower-cases a template/DB race key and resolves legacy
@@ -104,6 +125,16 @@ func normalizeWorkerRace(race string) string {
 		return mapped
 	}
 	return key
+}
+
+// normalizeVariantEnum maps any Race.csv key or enum alias to the canonical
+// uppercase key stored in aperture_variant_humans.race (e.g. HAIRY_MAN).
+func normalizeVariantEnum(race string) string {
+	key := strings.ToLower(strings.TrimSpace(race))
+	if mapped, ok := registryToVariantEnum[key]; ok {
+		return mapped
+	}
+	return strings.ToUpper(strings.TrimSpace(race))
 }
 
 func parseResourcePointTemplates(r io.Reader) map[string]ResourcePointTemplate {
@@ -589,6 +620,14 @@ func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template 
 		if template.PointClass == "FAMOUS" {
 			qiDrainPerInterval = 500.0
 		}
+		if ctx != nil {
+			for _, w := range ctx.pointWorkers[pt.ID] {
+				if w.raceKey == "feathered" && w.assignedPop > 0 {
+					qiDrainPerInterval *= 0.8
+					break
+				}
+			}
+		}
 		producingIntervals := intervals
 		if pt.ApertureID != nil && *pt.ApertureID != "" {
 			payableIntervals := math.Min(math.Floor(heavenQi/qiDrainPerInterval), math.Floor(earthQi/qiDrainPerInterval))
@@ -630,6 +669,20 @@ func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template 
 						rareUnits := mainRareBump * mult * producingIntervals
 						pt.Stock[rareItemNext] += int64(math.Floor(math.Min(rareUnits, nextFree)))
 					}
+				}
+				if template.IsFood && pt.ApertureID != nil && *pt.ApertureID != "" {
+					// Auto-feed food_stored across aperture settlements (capped at settlement food_storage).
+					foodGain := added * 25.0
+					_, _ = tx.Exec(`
+						UPDATE aperture_variant_humans v
+						SET food_stored = LEAST(
+							COALESCE((SELECT s.food_storage FROM aperture_variant_settlements s WHERE s.aperture_id = v.aperture_id AND s.race = v.race), 5000)::double precision,
+							v.food_stored + $2
+						),
+						starving = false,
+						updated_at = NOW()
+						WHERE v.aperture_id = $1 AND v.population > 0
+					`, *pt.ApertureID, foodGain)
 				}
 				changed = true
 			}
@@ -710,14 +763,27 @@ func accrueAperturePoint(tx *sql.Tx, pt *models.ApertureResourcePoint, template 
 
 // aperturePointRewardContext is the point-shape cousin of the resource-node
 // context: dao marks/conflict profile plus variant-human labour data.
+type pointWorkerAssignment struct {
+	raceKey        string
+	assignedPop    int
+	laborIntensity string
+	starving       bool
+}
+
 type aperturePointRewardContext struct {
 	daoMarks      map[string]int64
 	daoProfile    *gamefx.DaoCombatProfile
 	variantHumans map[string]struct {
 		population     int
 		laborIntensity string
+		starving       bool
 	}
-	assignedWorkers map[string]int // pointID -> assigned population
+	assignedWorkers map[string]int                     // pointID -> assigned population
+	pointWorkers    map[string][]pointWorkerAssignment // pointID -> per-race worker rows
+	strikingRaces   map[string]bool                    // normalized race key -> active STRIKE/REBELLION
+	minerNPCCount   int
+	farmerNPCCount  int
+	immortalSteward int
 }
 
 func loadAperturePointRewardContext(q interface {
@@ -729,8 +795,11 @@ func loadAperturePointRewardContext(q interface {
 		variantHumans: map[string]struct {
 			population     int
 			laborIntensity string
+			starving       bool
 		}{},
 		assignedWorkers: map[string]int{},
+		pointWorkers:    map[string][]pointWorkerAssignment{},
+		strikingRaces:   map[string]bool{},
 	}
 	var daoJSON []byte
 	if err := q.QueryRow(`SELECT COALESCE(dao_marks, '{}'::jsonb) FROM immortal_apertures WHERE player_id = $1`, playerID).Scan(&daoJSON); err == nil && len(daoJSON) > 0 {
@@ -738,35 +807,84 @@ func loadAperturePointRewardContext(q interface {
 	}
 	ctx.daoProfile, _ = loadApertureDaoCombatProfile(q, playerID.String(), ctx.daoMarks)
 
-	vhRows, err := q.Query(`SELECT race, population, labor_intensity FROM aperture_variant_humans WHERE aperture_id = $1`, apertureID)
+	vhRows, err := q.Query(`SELECT race, population, labor_intensity, COALESCE(starving, false) FROM aperture_variant_humans WHERE aperture_id = $1`, apertureID)
 	if err == nil {
 		defer vhRows.Close()
 		for vhRows.Next() {
 			var race, intensity string
 			var pop int
-			if vhRows.Scan(&race, &pop, &intensity) == nil {
+			var starving bool
+			if vhRows.Scan(&race, &pop, &intensity, &starving) == nil {
 				ctx.variantHumans[normalizeWorkerRace(race)] = struct {
 					population     int
 					laborIntensity string
-				}{population: pop, laborIntensity: intensity}
+					starving       bool
+				}{population: pop, laborIntensity: intensity, starving: starving}
 			}
 		}
 	}
 
 	wRows, err := q.Query(`
-		SELECT w.point_id, SUM(w.assigned_population)
+		SELECT w.point_id, v.race, w.assigned_population, v.labor_intensity, COALESCE(v.starving, false)
 		FROM aperture_point_workers w
 		JOIN aperture_resource_points p ON p.id = w.point_id
-		WHERE p.aperture_id = $1
-		GROUP BY w.point_id
+		JOIN aperture_variant_humans v ON v.id = w.variant_human_id
+		WHERE p.aperture_id = $1 AND w.assigned_population > 0
 	`, apertureID)
 	if err == nil {
 		defer wRows.Close()
 		for wRows.Next() {
-			var pointID string
+			var pointID, race, intensity string
 			var pop int
-			if wRows.Scan(&pointID, &pop) == nil {
-				ctx.assignedWorkers[pointID] = pop
+			var starving bool
+			if wRows.Scan(&pointID, &race, &pop, &intensity, &starving) == nil {
+				ctx.assignedWorkers[pointID] += pop
+				ctx.pointWorkers[pointID] = append(ctx.pointWorkers[pointID], pointWorkerAssignment{
+					raceKey:        normalizeWorkerRace(race),
+					assignedPop:    pop,
+					laborIntensity: intensity,
+					starving:       starving,
+				})
+			}
+		}
+	}
+
+	evRows, err := q.Query(`
+		SELECT COALESCE(race, '')
+		FROM aperture_variant_events
+		WHERE aperture_id = $1 AND resolved = false AND event_type IN ('STRIKE', 'REBELLION')
+	`, apertureID)
+	if err == nil {
+		defer evRows.Close()
+		for evRows.Next() {
+			var r string
+			if evRows.Scan(&r) == nil && r != "" {
+				ctx.strikingRaces[normalizeWorkerRace(r)] = true
+			}
+		}
+	}
+
+	npcRows, err := q.Query(`
+		SELECT role, rank
+		FROM non_player_actors
+		WHERE aperture_id = $1 AND actor_kind = 'VARIANT_NPC' AND lifecycle_state = 'ACTIVE' AND execution_state IN ('STORED', 'WORKING')
+	`, apertureID)
+	if err == nil {
+		defer npcRows.Close()
+		for npcRows.Next() {
+			var role string
+			var rank int
+			if npcRows.Scan(&role, &rank) == nil {
+				switch role {
+				case "MINER":
+					ctx.minerNPCCount++
+				case "FARMER":
+					ctx.farmerNPCCount++
+				case "STEWARD":
+					if rank >= 6 {
+						ctx.immortalSteward++
+					}
+				}
 			}
 		}
 	}
@@ -813,21 +931,56 @@ func aperturePointYield(ctx *aperturePointRewardContext, pt models.ApertureResou
 	laborMult := 1.0
 	popBonus := 1.0
 	if ctx != nil {
-		if vh, ok := ctx.variantHumans[template.WorkerRace]; ok {
-			if vh.population > 0 {
-				popBonus = 1.0 + float64(vh.population)/1000.0
+		workers := ctx.pointWorkers[pt.ID]
+		if len(workers) > 0 {
+			expectedRace := normalizeWorkerRace(template.WorkerRace)
+			totalPop := 0
+			weightedLabor := 0.0
+			weightedAffinity := 0.0
+			for _, w := range workers {
+				if w.assignedPop <= 0 {
+					continue
+				}
+				lm := 1.0
+				switch w.laborIntensity {
+				case "LOW":
+					lm = 0.7
+				case "HIGH":
+					lm = 1.4
+				case "EXPLOIT":
+					lm = 1.8
+				}
+				if w.starving {
+					lm *= 0.6
+				}
+				if ctx.strikingRaces[w.raceKey] {
+					lm *= 0.5
+				}
+				aff := 0.8
+				if w.raceKey == expectedRace {
+					aff = 1.0 + 0.5*math.Min(1.0, float64(w.assignedPop)/500.0)
+				}
+				weightedLabor += lm * float64(w.assignedPop)
+				weightedAffinity += aff * float64(w.assignedPop)
+				totalPop += w.assignedPop
 			}
-			switch vh.laborIntensity {
-			case "LOW":
-				laborMult = 0.7
-			case "HIGH":
-				laborMult = 1.5
-			case "EXPLOIT":
-				laborMult = 2.0
+			if totalPop > 0 {
+				laborMult = weightedLabor / float64(totalPop)
+				popBonus = weightedAffinity / float64(totalPop)
 			}
 		}
+		// Apply MINER / FARMER / Immortal STEWARD NPC bonuses.
+		if template.Category == "MINERAL_VEIN" && ctx.minerNPCCount > 0 {
+			popBonus *= 1.0 + 0.05*math.Min(5.0, float64(ctx.minerNPCCount))
+		} else if (template.Category == "HERB_GARDEN" || template.Category == "BEAST_PASTURE" || template.IsFood) && ctx.farmerNPCCount > 0 {
+			popBonus *= 1.0 + 0.05*math.Min(5.0, float64(ctx.farmerNPCCount))
+		}
+		if ctx.immortalSteward > 0 {
+			popBonus *= 1.0 + 0.10*math.Min(3.0, float64(ctx.immortalSteward))
+		}
+	} else {
+		popBonus *= workerMult
 	}
-	popBonus *= workerMult
 
 	return gamefx.ComputeApertureYield(gamefx.ApertureYieldInputs{
 		Level:        pt.Level,

@@ -109,6 +109,8 @@ func schemaActors() error {
 	if err := execSchema("non_player_actors_aperture_position_compat", `
 	ALTER TABLE non_player_actors ADD COLUMN IF NOT EXISTS world_x INTEGER;
 	ALTER TABLE non_player_actors ADD COLUMN IF NOT EXISTS world_y INTEGER;
+	ALTER TABLE non_player_actors ADD COLUMN IF NOT EXISTS dao_marks BIGINT NOT NULL DEFAULT 0;
+	ALTER TABLE non_player_actors ADD COLUMN IF NOT EXISTS defense_stationed BOOLEAN NOT NULL DEFAULT false;
 	ALTER TABLE non_player_actors DROP CONSTRAINT IF EXISTS non_player_actors_owned_kind_check;
 	ALTER TABLE non_player_actors ADD CONSTRAINT non_player_actors_owned_kind_check CHECK (
 		(actor_kind NOT IN ('COMPANION_BEAST','VARIANT_NPC','CONSTRUCT') OR owner_player_id IS NOT NULL) OR
