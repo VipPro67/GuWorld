@@ -778,14 +778,17 @@ export const LobbyView: React.FC = () => {
           aria-label="Lộ trình tu hành hiện tại"
           className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-950/35 via-zinc-950/80 to-emerald-950/20 p-3.5 sm:p-4 shadow-[0_0_24px_rgba(234,179,8,0.08)]"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-amber-400">
-                <span>{currentQuest.chapter ? (STORY_CHAPTER_NAMES[currentQuest.chapter] || `Chặng ${currentQuest.chapter}`) : "Lộ Trình Tu Hành"}</span>
-                <span className="text-zinc-500">•</span>
-                <span className="text-emerald-400">{completedQuestCount}/{typedQuests.length} bước</span>
+              <div className="flex items-center justify-between gap-2 text-[10px] font-mono uppercase tracking-wider">
+                <span className="truncate text-amber-400">
+                  {currentQuest.chapter ? (STORY_CHAPTER_NAMES[currentQuest.chapter] || `Chặng ${currentQuest.chapter}`) : "Lộ Trình Tu Hành"}
+                </span>
+                <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-950/40 px-2 py-0.5 text-emerald-300">
+                  {completedQuestCount}/{typedQuests.length} bước
+                </span>
               </div>
-              <h3 className="mt-1 font-serif text-sm sm:text-base font-bold text-amber-100">
+              <h3 className="mt-1.5 font-serif text-sm sm:text-base font-bold text-amber-100">
                 Mục tiêu: {currentQuest.title}
               </h3>
               {(currentQuest.guide_tip || currentQuest.desc) && (
@@ -793,31 +796,31 @@ export const LobbyView: React.FC = () => {
                   {currentQuest.guide_tip || currentQuest.desc}
                 </p>
               )}
-              <div className="mt-2 flex flex-wrap items-center gap-3">
-                <span className="text-[11px] font-mono text-amber-300/90">
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <span className="inline-flex items-center rounded-lg border border-amber-500/25 bg-amber-950/30 px-2 py-0.5 text-[11px] font-mono text-amber-200">
                   {currentQuest.req_desc}
                   {typeof currentQuest.target_count === "number" && currentQuest.target_count > 1
                     ? ` (${currentQuest.current_count ?? 0}/${currentQuest.target_count})`
                     : ""}
                 </span>
                 {currentQuest.rewards && currentQuest.rewards.length > 0 && (
-                  <span className="text-[11px] font-mono text-emerald-400">
+                  <span className="inline-flex items-center rounded-lg border border-emerald-500/25 bg-emerald-950/30 px-2 py-0.5 text-[11px] font-mono text-emerald-300">
                     Thưởng: {formatRewards(currentQuest.rewards)}
                   </span>
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center">
               <button
                 type="button"
                 onClick={() => {
                   setSelectedChapter(currentQuest.chapter || 1);
                   setRoadmapOpen(true);
                 }}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-900/90 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:border-amber-400/60 cursor-pointer"
+                className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-zinc-700 bg-zinc-900/90 px-3 py-2 text-xs font-semibold text-zinc-200 hover:border-amber-400/60 cursor-pointer"
               >
-                <Layers className="h-3.5 w-3.5 text-amber-400" />
-                <span>Xem 7 Chặng</span>
+                <Layers className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                <span className="truncate">Xem 7 Chặng</span>
               </button>
               {currentQuest.can_claim ? (
                 <button
@@ -826,10 +829,10 @@ export const LobbyView: React.FC = () => {
                   onClick={() => {
                     void completeQuest(currentQuest.id);
                   }}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-3.5 py-1.5 text-xs font-bold text-zinc-950 shadow-[0_0_12px_rgba(234,179,8,0.3)] hover:from-amber-400 hover:to-yellow-400 cursor-pointer disabled:opacity-50"
+                  className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-3.5 py-2 text-xs font-bold text-zinc-950 shadow-[0_0_12px_rgba(234,179,8,0.3)] hover:from-amber-400 hover:to-yellow-400 cursor-pointer disabled:opacity-50"
                 >
-                  <Gift className="h-3.5 w-3.5" />
-                  <span>Nhận thưởng</span>
+                  <Gift className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Nhận thưởng</span>
                 </button>
               ) : (
                 currentQuest.target_route && (
@@ -843,10 +846,10 @@ export const LobbyView: React.FC = () => {
                         setView(currentQuest.target_route!);
                       }
                     }}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-3.5 py-1.5 text-xs font-bold text-zinc-950 shadow-[0_0_12px_rgba(234,179,8,0.25)] hover:from-amber-400 hover:to-yellow-400 cursor-pointer"
+                    className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-3 py-2 text-xs font-bold text-zinc-950 shadow-[0_0_12px_rgba(234,179,8,0.25)] hover:from-amber-400 hover:to-yellow-400 cursor-pointer"
                   >
-                    <span>Thực hiện ({LOBBY_ENTRY_LABELS[currentQuest.target_route] || currentQuest.target_route})</span>
-                    <ChevronRight className="h-3.5 w-3.5" />
+                    <span className="truncate">{LOBBY_ENTRY_LABELS[currentQuest.target_route] || currentQuest.target_route}</span>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0" />
                   </button>
                 )
               )}
@@ -1229,8 +1232,8 @@ export const LobbyView: React.FC = () => {
                 <X className="h-4 w-4" />
               </button>
             </header>
-            <div className="grid grid-cols-1 gap-4 overflow-y-auto p-4 sm:grid-cols-[240px_1fr] sm:p-5">
-              <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-3 overflow-y-auto p-4 sm:grid-cols-[240px_1fr] sm:gap-4 sm:p-5">
+              <div className="flex gap-2 overflow-x-auto pb-1 sm:block sm:space-y-2 sm:overflow-visible sm:pb-0">
                 {[1, 2, 3, 4, 5, 6, 7].map((ch) => {
                   const chQuests = typedQuests.filter((q) => (q.chapter || 1) === ch);
                   const chDone = chQuests.length > 0 && chQuests.every((q) => q.status === "COMPLETED");
@@ -1240,13 +1243,13 @@ export const LobbyView: React.FC = () => {
                       key={ch}
                       type="button"
                       onClick={() => setSelectedChapter(ch)}
-                      className={`w-full rounded-xl border px-3 py-2.5 text-left transition cursor-pointer ${
+                      className={`min-w-[175px] shrink-0 rounded-xl border px-3 py-2 text-left transition cursor-pointer sm:w-full sm:min-w-0 sm:py-2.5 ${
                         selectedChapter === ch
                           ? "border-amber-500/70 bg-amber-950/35 text-amber-100"
                           : "border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:border-zinc-700"
                       }`}
                     >
-                      <div className="text-xs font-serif font-bold">{STORY_CHAPTER_NAMES[ch]}</div>
+                      <div className="text-xs font-serif font-bold truncate sm:whitespace-normal">{STORY_CHAPTER_NAMES[ch]}</div>
                       <div className="mt-0.5 text-[10px] font-mono text-zinc-400">
                         {chDone ? "✓ Đã hoàn thành" : isCurrentCh ? "★ Đang thực hiện" : `${chQuests.filter((q) => q.status === "COMPLETED").length}/${chQuests.length} bước`}
                       </div>
@@ -1271,11 +1274,11 @@ export const LobbyView: React.FC = () => {
                             : "border-zinc-800 bg-zinc-900/50"
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                           <span className={`font-serif text-sm font-bold ${isDone ? "text-emerald-400 line-through" : "text-zinc-100"}`}>
                             {isDone ? "✓ " : isCurrent ? "★ " : ""}{q.title}
                           </span>
-                          <span className="text-[10px] font-mono text-zinc-400">{q.req_desc}</span>
+                          <span className="text-[10px] font-mono text-amber-300/80 sm:text-zinc-400">{q.req_desc}</span>
                         </div>
                         <p className="mt-1 text-xs leading-relaxed text-zinc-300">{q.guide_tip || q.desc}</p>
                         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
