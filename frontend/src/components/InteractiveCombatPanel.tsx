@@ -5,6 +5,7 @@ import { LogOut, Shield, Sparkles, Swords, Zap } from "lucide-react";
 import { Num } from "@/components/Num";
 import { MonsterSprite } from "@/components/MonsterSprite";
 import { combatLogKind } from "@/lib/combatLog";
+import { formatNumber } from "@/lib/utils";
 
 type GuHouseView = {
   id?: string;
@@ -150,7 +151,7 @@ function GridCombatant({
         <span className="block h-1.5 w-full overflow-hidden rounded-full border border-zinc-800 bg-zinc-900">
           <span className={`block h-full rounded-full transition-[width] ${dead ? "bg-zinc-700" : side === "ally" ? "bg-gradient-to-r from-emerald-600 to-emerald-400" : "bg-gradient-to-r from-rose-600 to-rose-400"}`} style={{ width: `${hpPercent}%` }} />
         </span>
-        {shield > 0 && <span className="mt-0.5 block truncate text-center text-[7px] font-mono text-cyan-300">🛡 {Math.round(shield)}</span>}
+        {shield > 0 && <span className="mt-0.5 block truncate text-center text-[7px] font-mono text-cyan-300">🛡 {formatNumber(shield, 0)}</span>}
       </span>
     </button>
   );
@@ -438,9 +439,9 @@ export function InteractiveCombatPanel({
                     const title = String(action.name || (actionType === "BASIC_ATTACK" ? "Đánh thường" : actionType));
                     const paths = Array.isArray(action.path) ? action.path.filter((path): path is string => typeof path === "string") : [];
                     const stats = [
-                      value(action.damage) > 0 ? `Uy lực ${Math.round(value(action.damage))}` : "",
-                      value(action.defense) > 0 ? `Khiên ${Math.round(value(action.defense))}` : "",
-                      value(action.healing) > 0 ? `Hồi ${Math.round(value(action.healing))}` : "",
+                      value(action.damage) > 0 ? `Uy lực ${formatNumber(value(action.damage), 0)}` : "",
+                      value(action.defense) > 0 ? `Khiên ${formatNumber(value(action.defense), 0)}` : "",
+                      value(action.healing) > 0 ? `Hồi ${formatNumber(value(action.healing), 0)}` : "",
                     ].filter(Boolean);
 
                     const buttonBorderClass = isExit

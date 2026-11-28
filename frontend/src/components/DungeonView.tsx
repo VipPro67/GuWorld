@@ -3,6 +3,7 @@ import React, { useEffect } from "react";
 import { GamePanel, GameCard } from "@/components/ui";
 // UI migrated to shared components
 import { useGameStore, InstanceListItem } from "@/store/useGameStore";
+import { formatNumber } from "@/lib/utils";
 import {
   Compass,
   ArrowLeft,
@@ -134,7 +135,7 @@ export const DungeonView: React.FC = () => {
             <div className="flex items-center gap-4 text-xs font-mono">
               <div className="flex items-center gap-1.5">
                 <Heart className="w-4 h-4 text-rose-500" />
-                <span className="text-zinc-300">HP: {Math.round(player.hp)}</span>
+                <span className="text-zinc-300">HP: {formatNumber(player.hp, 0)}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Activity className="w-4 h-4 text-indigo-400" />

@@ -6,6 +6,7 @@ import { getItemIconUrl } from "@/lib/item-icons";
 import { getGuIconUrl } from "@/lib/gu-icons";
 import { getGuRankColor } from "@/lib/gu-frames";
 import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
+import { formatNumber } from "@/lib/utils";
 
 interface ItemMeta {
   type: string;
@@ -148,7 +149,7 @@ export const ArenaShopView: React.FC = () => {
         <div className="flex items-center justify-between sm:justify-end gap-3">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 font-mono font-bold text-xs">
             <Coins className="w-4 h-4 text-amber-500" />
-            <span>{arenaCoinBalance.toLocaleString()} Xu</span>
+            <span>{formatNumber(arenaCoinBalance, 0)} Xu</span>
           </div>
 
           <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-0.5">
@@ -397,7 +398,7 @@ export const ArenaShopView: React.FC = () => {
                   <span className="text-zinc-400">Hiện có:</span>
                   <span className="text-emerald-400 font-bold flex items-center gap-1">
                     <Coins className="w-3.5 h-3.5 text-emerald-500" />
-                    {arenaCoinBalance.toLocaleString()} Xu
+                    {formatNumber(arenaCoinBalance, 0)} Xu
                   </span>
                 </div>
               </div>
@@ -408,7 +409,7 @@ export const ArenaShopView: React.FC = () => {
                   <span>Số lượng cần đổi:</span>
                   <span>
                     {selectedBuyItem.price > 0 &&
-                      `(Tối đa: ${Math.floor(arenaCoinBalance / selectedBuyItem.price).toLocaleString()})`}
+                      `(Tối đa: ${formatNumber(Math.floor(arenaCoinBalance / selectedBuyItem.price), 0)})`}
                   </span>
                 </div>
                 <div className="flex items-center justify-between border border-zinc-800 rounded-xl bg-zinc-900/40 overflow-hidden px-1">
@@ -478,7 +479,7 @@ export const ArenaShopView: React.FC = () => {
                 <span className="text-zinc-400">Tổng thanh toán:</span>
                 <span className="font-bold flex items-center gap-1 text-sm text-amber-400">
                   <Coins className="w-4 h-4 text-amber-500" />
-                  {(selectedBuyItem.price * (buyQuantity || 0)).toLocaleString()} Xu
+                  {formatNumber(selectedBuyItem.price * (buyQuantity || 0), 0)} Xu
                 </span>
               </div>
 

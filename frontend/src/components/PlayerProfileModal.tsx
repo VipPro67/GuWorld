@@ -3,7 +3,7 @@
 import React, { useEffect, useRef } from "react";
 import { useGameStore, ImmortalAperture } from "@/store/useGameStore";
 import { EffectEnvelopeView } from "@/components/EffectBlockView";
-import { statusRemainLabel } from "@/lib/utils";
+import { formatNumber, statusRemainLabel } from "@/lib/utils";
 import { X, Eye, EyeOff, Flame, Coins, Sparkles, Crown, Award, Activity, Heart, MessageCircle, Copy, ArrowLeftRight } from "lucide-react";
 import { Num } from "./Num";
 
@@ -384,7 +384,7 @@ export const PlayerProfileModal: React.FC = () => {
                   <Heart className="w-3.5 h-3.5 text-rose-500" /> Sinh Mệnh
                 </span>
                 <span>
-                  {base_hp === 0 || base_hp === -1 ? "???" : `${Math.round(hp)} / ${Math.round(base_hp)}`}
+                  {base_hp === 0 || base_hp === -1 ? "???" : `${formatNumber(hp, 0)} / ${formatNumber(base_hp, 0)}`}
                 </span>
               </div>
               <div className="w-full bg-zinc-950 rounded-full h-2 border border-zinc-900 overflow-hidden">
@@ -403,7 +403,7 @@ export const PlayerProfileModal: React.FC = () => {
                   <span>Tiên Nguyên</span>
                 </div>
                 <span className="font-mono font-bold text-purple-400 text-sm">
-                  {status_type === "failure" || status_type === "partial" ? "???" : `${Math.round(current_mana)} Hạt`}
+                  {status_type === "failure" || status_type === "partial" ? "???" : `${formatNumber(current_mana, 0)} Hạt`}
                 </span>
               </div>
             ) : (
@@ -413,7 +413,7 @@ export const PlayerProfileModal: React.FC = () => {
                     <Activity className="w-3.5 h-3.5 text-cyan-500" /> Chân Nguyên
                   </span>
                   <span>
-                    {max_mana === 0 || max_mana === -1 ? "???" : `${Math.round(current_mana)} / ${Math.round(max_mana)}`}
+                    {max_mana === 0 || max_mana === -1 ? "???" : `${formatNumber(current_mana, 0)} / ${formatNumber(max_mana, 0)}`}
                   </span>
                 </div>
                 <div className="w-full bg-zinc-950 rounded-full h-2 border border-zinc-900 overflow-hidden">
@@ -439,7 +439,7 @@ export const PlayerProfileModal: React.FC = () => {
                 {status_type === "failure" || status_type === "partial" ? (
                   "???"
                 ) : (
-                  `${Number(immortal_stones).toLocaleString(undefined, { maximumFractionDigits: 1 })} Viên`
+                  `${formatNumber(Number(immortal_stones), 1)} Viên`
                 )}
               </span>
             </div>
@@ -452,7 +452,7 @@ export const PlayerProfileModal: React.FC = () => {
                 <span className="text-xs text-[var(--text-secondary)] font-mono uppercase tracking-wider">Nguyên Thạch sở hữu</span>
               </div>
               <span className="font-mono font-bold text-yellow-500 text-sm">
-                {status_type === "failure" || status_type === "partial" ? "???" : `${primeval_stones.toLocaleString()} Đá`}
+                {status_type === "failure" || status_type === "partial" ? "???" : `${formatNumber(primeval_stones, 0)} Đá`}
               </span>
             </div>
           )}

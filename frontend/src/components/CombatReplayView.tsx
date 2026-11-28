@@ -1196,7 +1196,7 @@ export const CombatReplayView: React.FC<CombatReplayViewProps> = ({
               <span className="text-sm font-bold text-amber-300">Máu Tiên Khiếu</span>
             </div>
             <span className="text-xs font-mono text-amber-200">
-              {state.apertureHp.toLocaleString()} / {state.apertureMaxHp.toLocaleString()}
+              <Num value={state.apertureHp} decimals={0} /> / <Num value={state.apertureMaxHp} decimals={0} />
             </span>
           </div>
           <div className="h-3 w-full bg-zinc-900 rounded-full overflow-hidden">

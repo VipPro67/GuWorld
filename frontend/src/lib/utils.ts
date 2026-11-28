@@ -19,25 +19,37 @@ const units = [
 ];
 
 export function formatNumber(n: number, decimals = 2): string {
-    if (!Number.isFinite(n) || Number.isNaN(n)) return "0";
+    if (!Number.isFinite(n) || Number.isNaN(n) || n === 0) return "0";
 
+    const maxDecimals = Math.max(0, Math.min(20, Math.floor(decimals)));
     const abs = Math.abs(n);
 
     if (abs < 10_000) {
-        return n.toLocaleString("vi-VN", { maximumFractionDigits: 3 });
+        return n.toLocaleString("vi-VN", { maximumFractionDigits: maxDecimals });
     }
 
-    const level = Math.floor(Math.log10(abs) / 4) - 1;
-    const value = n / Math.pow(10, (level + 1) * 4);
-    const unit = units[level];
+    let level = Math.floor(Math.log10(abs) / 4) - 1;
+    let value = n / Math.pow(10, (level + 1) * 4);
+    let unit = units[level];
 
     if (!unit) {
-        return n.toExponential(decimals);
+        return n.toExponential(maxDecimals);
     }
 
-    const dec = Math.abs(value) >= 100 ? 0 : decimals;
+    let dec = Math.abs(value) >= 100 ? 0 : maxDecimals;
+    let rounded = Number(value.toFixed(dec));
 
-    return `${Number(value.toFixed(dec))} ${unit}`;
+    if (Math.abs(rounded) >= 10_000 && units[level + 1]) {
+        level += 1;
+        value = n / Math.pow(10, (level + 1) * 4);
+        unit = units[level];
+        dec = Math.abs(value) >= 100 ? 0 : maxDecimals;
+        rounded = Number(value.toFixed(dec));
+    }
+
+    if (rounded === 0) return "0";
+
+    return `${rounded.toLocaleString("vi-VN", { maximumFractionDigits: dec })} ${unit}`;
 }
 
 const PATH_COLORS: Record<string, { bg: string; text: string; border: string }> = {

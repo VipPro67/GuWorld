@@ -6,6 +6,7 @@ import { getItemIconUrl } from "@/lib/item-icons";
 import { getGuIconUrl } from "@/lib/gu-icons";
 import { getGuRankColor } from "@/lib/gu-frames";
 import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
+import { formatNumber } from "@/lib/utils";
 import {
   Shield,
   Activity,
@@ -1199,11 +1200,11 @@ export const SectView: React.FC = () => {
               <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">Quỹ Tông Môn</span>
               <span className="text-lg font-mono font-bold text-cyan-400 flex items-center gap-1.5">
                 <Coins className="w-4.5 h-4.5 text-cyan-400" />
-                {sect.funds.toLocaleString()}
+                {formatNumber(sect.funds, 0)}
               </span>
               {mySectStatus?.estimated_daily_maintenance !== undefined && (
                 <span className="text-[10px] font-mono text-zinc-400 mt-0.5" title="Phí duy trì mỗi 24h khấu trừ vào Quỹ tông môn">
-                  Duy trì: <span className="text-amber-400">-{mySectStatus.estimated_daily_maintenance.toLocaleString()}</span>/ngày
+                  Duy trì: <span className="text-amber-400">-{formatNumber(mySectStatus.estimated_daily_maintenance, 0)}</span>/ngày
                 </span>
               )}
             </div>
@@ -4212,7 +4213,7 @@ export const SectView: React.FC = () => {
                   <span className="text-[10px] text-zinc-500 font-mono block">Quỹ tông môn hiện có:</span>
                   <span className="font-mono font-bold text-cyan-400 text-sm flex items-center gap-1">
                     <Coins className="w-4 h-4 text-yellow-500" />
-                    {(mySectStatus?.sect?.funds || 0).toLocaleString()} Quỹ
+                    {formatNumber(mySectStatus?.sect?.funds || 0, 0)} Quỹ
                   </span>
                 </div>
               </div>
@@ -4245,7 +4246,7 @@ export const SectView: React.FC = () => {
                               <span className="font-mono text-zinc-400">{getRankName(m.member_rank)}</span>
                               <span className="text-zinc-100 truncate max-w-[120px]">{m.username}</span>
                             </div>
-                            <span className="font-bold text-emerald-400 font-mono">{totalSalary.toLocaleString()} Linh Thạch</span>
+                            <span className="font-bold text-emerald-400 font-mono">{formatNumber(totalSalary, 0)} Linh Thạch</span>
                           </div>
                         );
                       })}
@@ -4255,11 +4256,11 @@ export const SectView: React.FC = () => {
                 <div className="bg-zinc-950/50 rounded-lg p-3 text-center text-xs">
                   <span className="text-zinc-400 font-mono">Tổng lương dự kiến: </span>
                   <span className="font-bold text-emerald-400 text-lg font-mono">
-                    {(() => {
+                    {formatNumber((() => {
                       if (!sectMembers) return 0;
                       const base = (mySectStatus?.sect?.level || 1) * 100;
                       return sectMembers.reduce((sum, m) => sum + base + (rankSalaryBonus[m.member_rank] || 0), 0);
-                    })().toLocaleString()} Linh Thạch
+                    })(), 0)} Linh Thạch
                   </span>
                 </div>
                 <button
@@ -4413,7 +4414,7 @@ export const SectView: React.FC = () => {
                     <span className="text-[10px] text-zinc-500 font-mono block">Quỹ tông môn hiện có:</span>
                     <span className="font-mono font-bold text-cyan-400 text-sm flex items-center gap-1">
                       <Coins className="w-4 h-4 text-yellow-500" />
-                      {(sect?.funds || 0).toLocaleString()} Quỹ
+                      {formatNumber(sect?.funds || 0, 0)} Quỹ
                     </span>
                   </div>
                 </div>
@@ -4759,7 +4760,7 @@ export const SectView: React.FC = () => {
                               <div className="flex justify-between items-center text-xs font-mono">
                                 <span className="text-zinc-400 font-serif font-bold">Tổng chi phí:</span>
                                 <span className={`font-bold text-sm ${canAfford ? "text-cyan-400" : "text-red-400"}`}>
-                                  {totalCost.toLocaleString()} Quỹ
+                                  {formatNumber(totalCost, 0)} Quỹ
                                 </span>
                               </div>
                               <button
@@ -4909,7 +4910,7 @@ export const SectView: React.FC = () => {
                       <span className="text-xs font-bold text-zinc-300 font-serif">Chi Tiết Dự Toán Quỹ Di Dời</span>
                       <span className="text-xs font-mono text-zinc-400">
                         Quỹ hiện có: <span className={relocationEstimate.current_funds >= relocationEstimate.funds_needed ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
-                          {relocationEstimate.current_funds.toLocaleString()}
+                          {formatNumber(relocationEstimate.current_funds, 0)}
                         </span> Quỹ
                       </span>
                     </div>
@@ -4917,38 +4918,38 @@ export const SectView: React.FC = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
                       <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
                         <span className="text-zinc-400">Khởi tạo đại điển:</span>
-                        <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.base_cost.toLocaleString()} Quỹ</span>
+                        <span className="text-zinc-200 font-bold">{formatNumber(relocationEstimate.cost_breakdown.base_cost, 0)} Quỹ</span>
                       </div>
                       <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
                         <span className="text-zinc-400">Di dời môn nhân ({relocationEstimate.cost_breakdown.member_count} TV):</span>
-                        <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.member_cost.toLocaleString()} Quỹ</span>
+                        <span className="text-zinc-200 font-bold">{formatNumber(relocationEstimate.cost_breakdown.member_cost, 0)} Quỹ</span>
                       </div>
                       <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
                         <span className="text-zinc-400">Linh tài kho ({relocationEstimate.cost_breakdown.materials_count} món):</span>
-                        <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.materials_cost.toLocaleString()} Quỹ</span>
+                        <span className="text-zinc-200 font-bold">{formatNumber(relocationEstimate.cost_breakdown.materials_cost, 0)} Quỹ</span>
                       </div>
                       <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
                         <span className="text-zinc-400">Phàm Cổ kho ({relocationEstimate.cost_breakdown.mortal_gu_count} con):</span>
-                        <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.mortal_gu_cost.toLocaleString()} Quỹ</span>
+                        <span className="text-zinc-200 font-bold">{formatNumber(relocationEstimate.cost_breakdown.mortal_gu_cost, 0)} Quỹ</span>
                       </div>
                       <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
                         <span className="text-zinc-400">Tiên Cổ bảo khố ({relocationEstimate.cost_breakdown.immortal_gu_count} con):</span>
-                        <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.immortal_gu_cost.toLocaleString()} Quỹ</span>
+                        <span className="text-zinc-200 font-bold">{formatNumber(relocationEstimate.cost_breakdown.immortal_gu_cost, 0)} Quỹ</span>
                       </div>
                       <div className="flex justify-between p-2 rounded-xl bg-zinc-950/40 border border-zinc-900">
                         <span className="text-zinc-400">Bí phương ({relocationEstimate.cost_breakdown.recipes_count} quyển):</span>
-                        <span className="text-zinc-200 font-bold">{relocationEstimate.cost_breakdown.recipes_cost.toLocaleString()} Quỹ</span>
+                        <span className="text-zinc-200 font-bold">{formatNumber(relocationEstimate.cost_breakdown.recipes_cost, 0)} Quỹ</span>
                       </div>
                       <div className="flex justify-between p-2 rounded-xl bg-emerald-950/20 border border-emerald-900/50 text-emerald-400">
                         <span>Bảo Khố cấp {relocationEstimate.cost_breakdown.treasury_level} tiết kiệm:</span>
-                        <span className="font-bold">-{relocationEstimate.cost_breakdown.treasury_discount.toLocaleString()} Quỹ</span>
+                        <span className="font-bold">-{formatNumber(relocationEstimate.cost_breakdown.treasury_discount, 0)} Quỹ</span>
                       </div>
                     </div>
 
                     <div className="flex justify-between items-center p-3 rounded-xl bg-amber-950/20 border border-amber-500/30 mt-1">
                       <span className="text-xs font-serif font-bold text-amber-200">Tổng Chi Phí Di Dời:</span>
                       <span className="text-sm font-mono font-bold text-amber-400">
-                        {relocationEstimate.cost_breakdown.total_cost.toLocaleString()} Quỹ Tông Môn
+                        {formatNumber(relocationEstimate.cost_breakdown.total_cost, 0)} Quỹ Tông Môn
                       </span>
                     </div>
                   </div>

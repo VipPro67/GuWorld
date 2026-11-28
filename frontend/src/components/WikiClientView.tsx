@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { type GuDictionaryItem, type MonsterTemplate, type LootTable, type WikiRegion, type WikiMonsterSpawn, type WikiRegionLoot, reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { indexGus, guAt } from "@/lib/gu-index";
+import { formatNumber } from "@/lib/utils";
 import { type ItemSpec, type RefiningRecipe } from "@/store/useGameStore";
 import { getPathColor } from "@/lib/utils";
 import { translatePath } from "@/lib/translate";
@@ -1608,7 +1609,7 @@ export default function WikiClientView({
                         <div className="flex items-center gap-1 text-amber-500 font-bold text-[10px]">
                           <Coins className="w-3.5 h-3.5" />
                           <span>
-                            {item.base_price.toLocaleString()}{" "}
+                            {formatNumber(item.base_price, 0)}{" "}
                             {item.rank && item.rank >= 6 ? "Tiên nguyên thạch" : "Nguyên thạch"}
                           </span>
                         </div>
@@ -1772,12 +1773,12 @@ export default function WikiClientView({
                         <div className="space-y-1 mt-4 text-right">
                           {recipe.primeval_stones_cost > 0 && (
                             <div className="flex items-center justify-end gap-1.5 text-[10px] font-mono text-[var(--text-secondary)]">
-                              <span>{recipe.primeval_stones_cost.toLocaleString()} Nguyên thạch</span>
+                              <span>{formatNumber(recipe.primeval_stones_cost, 0)} Nguyên thạch</span>
                             </div>
                           )}
                           {recipe.immortal_essence_stones_cost > 0 && (
                             <div className="flex items-center justify-end gap-1.5 text-[10px] font-mono text-amber-500 font-bold">
-                              <span>{recipe.immortal_essence_stones_cost.toLocaleString()} Tiên nguyên thạch</span>
+                              <span>{formatNumber(recipe.immortal_essence_stones_cost, 0)} Tiên nguyên thạch</span>
                             </div>
                           )}
                         </div>
@@ -1907,11 +1908,11 @@ export default function WikiClientView({
                         </div>
                         <div className="text-right flex flex-col gap-1 items-end">
                           <span className="text-[10px] font-mono text-rose-400 px-2 py-0.5 rounded bg-rose-950/20 border border-rose-500/10 flex items-center gap-1">
-                            ❤️ {monster.max_hp.toLocaleString()}
+                            ❤️ {formatNumber(monster.max_hp, 0)}
                           </span>
                           <div className="flex gap-1">
-                            <span className="text-[9px] font-mono text-amber-400 px-1.5 py-0.5 rounded bg-amber-950/20">⚔️ {monster.base_attack}</span>
-                            <span className="text-[9px] font-mono text-sky-400 px-1.5 py-0.5 rounded bg-sky-950/20">🛡️ {monster.base_defense}</span>
+                            <span className="text-[9px] font-mono text-amber-400 px-1.5 py-0.5 rounded bg-amber-950/20">⚔️ {formatNumber(monster.base_attack, 0)}</span>
+                            <span className="text-[9px] font-mono text-sky-400 px-1.5 py-0.5 rounded bg-sky-950/20">🛡️ {formatNumber(monster.base_defense, 0)}</span>
                           </div>
                         </div>
                       </div>

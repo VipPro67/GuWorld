@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
 import type { EnvDaoStatus } from "@/store/slices/worldSlice";
+import { formatNumber } from "@/lib/utils";
 
 interface EnvDaoPanelProps {
   regionId?: string;
@@ -44,7 +45,7 @@ export const EnvDaoPanel: React.FC<EnvDaoPanelProps> = ({ regionId, compactBanne
             </span>
           ) : naturalEntries.length > 0 ? (
             <span className="text-amber-200/80">
-              Đạo Ngân Tự Nhiên: {naturalEntries.map(([k, v]) => `${k} (${Math.round(v)})`).join(", ")}
+              Đạo Ngân Tự Nhiên: {naturalEntries.map(([k, v]) => `${k} (${formatNumber(v, 0)})`).join(", ")}
             </span>
           ) : (
             <span className="text-slate-400">Đạo Ngân cân bằng</span>
@@ -90,7 +91,7 @@ export const EnvDaoPanel: React.FC<EnvDaoPanelProps> = ({ regionId, compactBanne
       {naturalEntries.length > 0 && (
         <div className="text-slate-400">
           Đạo Ngân Tự Nhiên:{" "}
-          <span className="text-slate-200">{naturalEntries.map(([k, v]) => `${k} (${Math.round(v).toLocaleString()})`).join(" · ")}</span>
+          <span className="text-slate-200">{naturalEntries.map(([k, v]) => `${k} (${formatNumber(v, 0)})`).join(" · ")}</span>
         </div>
       )}
 

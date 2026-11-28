@@ -17,6 +17,7 @@ import {
 import { authFetch } from "@/lib/auth";
 import { prepareAdminAction, canPerformAdminAction } from "./actions";
 import { useAdminAccess } from "./AdminAccessContext";
+import { formatNumber } from "@/lib/utils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -203,10 +204,10 @@ export const MarketplaceAdminTab: React.FC<{
     if (!offer) return <span className="text-zinc-600">—</span>;
     const parts = [];
     if (offer.primeval_stones && offer.primeval_stones > 0) {
-      parts.push(`${offer.primeval_stones.toLocaleString("vi-VN")} NT`);
+      parts.push(`${formatNumber(offer.primeval_stones, 0)} NT`);
     }
     if (offer.immortal_stones && offer.immortal_stones > 0) {
-      parts.push(`${offer.immortal_stones.toLocaleString("vi-VN")} TN`);
+      parts.push(`${formatNumber(offer.immortal_stones, 1)} TN`);
     }
     if (offer.gus && offer.gus.length > 0) {
       parts.push(`${offer.gus.length} Cổ`);
@@ -354,10 +355,10 @@ export const MarketplaceAdminTab: React.FC<{
                             {a.seller_name}
                           </td>
                           <td className="px-3 py-3 text-right font-mono text-zinc-400">
-                            {Number(a.start_price).toLocaleString("vi-VN")}
+                            {formatNumber(Number(a.start_price), 1)}
                           </td>
                           <td className="px-3 py-3 text-right font-mono text-yellow-400 font-semibold">
-                            {Number(a.current_price).toLocaleString("vi-VN")}
+                            {formatNumber(Number(a.current_price), 1)}
                           </td>
                           <td className="px-3 py-3 text-zinc-300 font-mono">
                             {a.highest_bidder_name || <span className="text-zinc-600">Chưa có</span>}

@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useGameStore, GuInstance, guSpecFor } from "@/store/useGameStore";
 import { Lock, Unlock, Search, Sparkles, AlertCircle, Layers, LayoutGrid, List, X, Info } from "lucide-react";
 import { translatePath } from "@/lib/translate";
-import { getPathColor as _getPathColor } from "@/lib/utils";
+import { formatNumber, getPathColor as _getPathColor } from "@/lib/utils";
 import { getSealingStoneCost } from "@/lib/balance";
 import { getGuIconUrl } from "@/lib/gu-icons";
 import { getGuRankColor } from "@/lib/gu-frames";
@@ -148,7 +148,7 @@ export const UtilitiesView: React.FC = () => {
         <div className="flex items-center gap-3 self-end sm:self-auto">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 text-xs font-mono">
             <span className="text-zinc-400">Đá Phong Ấn:</span>
-            <span className="font-bold text-amber-400">{sealingStoneQty.toLocaleString()}</span>
+            <span className="font-bold text-amber-400">{formatNumber(sealingStoneQty, 0)}</span>
           </div>
           <button
             type="button"
@@ -454,7 +454,7 @@ export const UtilitiesView: React.FC = () => {
                             }`}
                           >
                             <Lock className="w-3.5 h-3.5" />
-                            {isProcessing ? "Đang xử lý..." : `Phong Ấn (${neededStones.toLocaleString("vi-VN")} đá)`}
+                            {isProcessing ? "Đang xử lý..." : `Phong Ấn (${formatNumber(neededStones, 0)} đá)`}
                           </button>
                         ) : (
                           <button

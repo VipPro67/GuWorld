@@ -3,6 +3,7 @@
 import React from "react";
 import { Bug, FlaskConical, Gift, Package, PawPrint, Plus } from "lucide-react";
 import { AdminDataGrid, AdminGridColumn } from "./AdminDataGrid";
+import { formatNumber } from "@/lib/utils";
 
 type CoreDataKind = "gus" | "items" | "recipes" | "monsters" | "loot_tables";
 
@@ -40,7 +41,7 @@ const configs: Record<CoreDataKind, { title: string; icon: React.ReactNode; colu
       { key: "rank", label: "Rank", value: (row) => row.rank },
       { key: "gu_type", label: "Loại", value: (row) => row.gu_type },
       { key: "description", label: "Mô tả", value: (row) => row.description ?? "", render: (row) => <span className="truncate max-w-[200px] block text-zinc-400 text-[11px]" title={row.description}>{row.description || "—"}</span> },
-      { key: "base_price", label: "Giá", value: (row) => row.base_price, render: (row) => Number(row.base_price ?? 0).toLocaleString("vi-VN"), className: "text-right font-mono text-yellow-500" },
+      { key: "base_price", label: "Giá", value: (row) => row.base_price, render: (row) => formatNumber(Number(row.base_price ?? 0), 0), className: "text-right font-mono text-yellow-500" },
     ],
   },
   items: {
@@ -54,7 +55,7 @@ const configs: Record<CoreDataKind, { title: string; icon: React.ReactNode; colu
       { key: "rank", label: "Rank", value: (row) => row.rank },
       { key: "rarity", label: "Độ hiếm", value: (row) => row.rarity },
       { key: "path", label: "Tiên khiếu", value: (row) => row.path || "—" },
-      { key: "base_price", label: "Giá", value: (row) => row.base_price, render: (row) => Number(row.base_price ?? 0).toLocaleString("vi-VN"), className: "text-right font-mono text-yellow-500" },
+      { key: "base_price", label: "Giá", value: (row) => row.base_price, render: (row) => formatNumber(Number(row.base_price ?? 0), 0), className: "text-right font-mono text-yellow-500" },
     ],
   },
   recipes: {
@@ -69,7 +70,7 @@ const configs: Record<CoreDataKind, { title: string; icon: React.ReactNode; colu
         return <span className="truncate max-w-[240px] block font-mono text-[10px] text-zinc-400" title={matStr}>{matStr}</span>;
       } },
       { key: "success_rate", label: "Tỉ lệ", value: (row) => row.success_rate, render: (row) => `${Math.round(Number(row.success_rate ?? 0) * 100)}%` },
-      { key: "primeval_stones_cost", label: "Nguyên thạch", value: (row) => row.primeval_stones_cost, render: (row) => Number(row.primeval_stones_cost ?? 0).toLocaleString("vi-VN"), className: "text-right font-mono text-yellow-500" },
+      { key: "primeval_stones_cost", label: "Nguyên thạch", value: (row) => row.primeval_stones_cost, render: (row) => formatNumber(Number(row.primeval_stones_cost ?? 0), 0), className: "text-right font-mono text-yellow-500" },
     ],
   },
   monsters: {

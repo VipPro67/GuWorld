@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { authFetch } from "@/lib/auth";
 import { prepareAdminAction } from "./actions";
+import { formatNumber } from "@/lib/utils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -742,10 +743,10 @@ export const MinesAdminTab: React.FC<{
                         </td>
                         <td className="px-3 py-3">
                           <div className="text-zinc-200 font-semibold">
-                            +{v.accumulated_stones.toLocaleString()} {v.vein_type === "immortal" ? "Tiên Thạch" : "Nguyên Thạch"}
+                            +{formatNumber(v.accumulated_stones, 0)} {v.vein_type === "immortal" ? "Tiên Thạch" : "Nguyên Thạch"}
                           </div>
                           <div className="text-[11px] text-zinc-400 flex items-center gap-2">
-                            <span>+{v.accumulated_qi.toFixed(0)} Nhân Khí</span>
+                            <span>+{formatNumber(v.accumulated_qi, 0)} Nhân Khí</span>
                             {v.accumulated_chests > 0 && <span className="text-amber-400">+{v.accumulated_chests} Rương</span>}
                           </div>
                         </td>

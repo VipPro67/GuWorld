@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Gem, Coins, Sparkles, RefreshCw } from "lucide-react";
 import { authFetch } from "@/lib/auth";
+import { Num } from "./Num";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -72,15 +73,15 @@ export const PremiumWallet: React.FC<PremiumWalletProps> = ({ compact = false, o
     <div className={compact ? "flex flex-wrap items-center gap-2" : "grid grid-cols-1 gap-3 md:grid-cols-3"}>
       <div className={`${itemClass} text-amber-300`}>
         <span className="flex items-center gap-1.5"><Coins className="h-4 w-4" /> Nguyên Thạch</span>
-        <b>{wallet.primevalStone.toLocaleString()}</b>
+        <b><Num value={wallet.primevalStone} decimals={0} /></b>
       </div>
       <div className={`${itemClass} text-violet-300`}>
         <span className="flex items-center gap-1.5"><Sparkles className="h-4 w-4" /> Tiên Nguyên Thạch</span>
-        <b>{wallet.immortalEssenceStone.toLocaleString()}</b>
+        <b><Num value={wallet.immortalEssenceStone} decimals={0} /></b>
       </div>
       <div className={`${itemClass} text-emerald-300`}>
         <span className="flex items-center gap-1.5"><Gem className="h-4 w-4" /> Tiên Ngọc</span>
-        <b>{wallet.immortalJade.toLocaleString()}</b>
+        <b><Num value={wallet.immortalJade} decimals={0} /></b>
       </div>
       {!compact && (
         <button onClick={fetchWallet} disabled={loading} className="md:col-span-3 flex w-fit items-center gap-2 rounded-xl border border-emerald-700/40 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-60">

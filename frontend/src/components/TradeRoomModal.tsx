@@ -9,6 +9,7 @@ import {
 import { GameModal, GameTabs, GameButton, GameCard, GameBadge, GameInput } from "@/components/ui";
 import { getGuIconUrl } from "@/lib/gu-icons";
 import { getItemIconUrl } from "@/lib/item-icons";
+import { formatNumber } from "@/lib/utils";
 // UI migrated to shared components
 
 export const TradeRoomModal: React.FC = () => {
@@ -365,13 +366,13 @@ export const TradeRoomModal: React.FC = () => {
                 {((myOffer?.primeval_stones || 0) > 0) && (
                   <span className="px-2.5 py-1.5 rounded-xl bg-yellow-950/35 border border-yellow-500/20 text-yellow-500 flex items-center gap-1">
                     <Coins className="w-3.5 h-3.5" />
-                    {(myOffer.primeval_stones).toLocaleString()} Nguyên Thạch
+                    {formatNumber(myOffer.primeval_stones, 0)} Nguyên Thạch
                   </span>
                 )}
                 {((myOffer?.immortal_stones || 0) > 0) && (
                   <span className="px-2.5 py-1.5 rounded-xl bg-purple-950/35 border border-purple-500/20 text-purple-400 flex items-center gap-1">
                     <Sparkles className="w-3.5 h-3.5" />
-                    {(myOffer.immortal_stones).toFixed(1)} Tiên Nguyên
+                    {formatNumber(myOffer.immortal_stones, 1)} Tiên Nguyên
                   </span>
                 )}
               </div>
@@ -570,7 +571,7 @@ export const TradeRoomModal: React.FC = () => {
                           <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500">
                             <span className="flex items-center gap-1 text-yellow-500/95"><Coins className="w-3 h-3" /> Nguyên Thạch</span>
                             <div className="flex items-center gap-2">
-                              <span>Sở hữu: {(player.primeval_stones).toLocaleString()}</span>
+                              <span>Sở hữu: {formatNumber(player.primeval_stones, 0)}</span>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -609,7 +610,7 @@ export const TradeRoomModal: React.FC = () => {
                             <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500">
                               <span className="flex items-center gap-1 text-purple-400"><Sparkles className="w-3 h-3" /> Tiên Nguyên Thạch</span>
                               <div className="flex items-center gap-2">
-                                <span>Sở hữu: {player.immortal_stones.toLocaleString("vi-VN", { maximumFractionDigits: 3 })}</span>
+                                <span>Sở hữu: {formatNumber(player.immortal_stones, 1)}</span>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1048,13 +1049,13 @@ export const TradeRoomModal: React.FC = () => {
                 {((oppOffer?.primeval_stones || 0) > 0) && (
                   <span className="px-2.5 py-1.5 rounded-xl bg-yellow-950/20 border border-yellow-500/10 text-yellow-500 flex items-center gap-1 select-none">
                     <Coins className="w-3.5 h-3.5" />
-                    {(oppOffer.primeval_stones).toLocaleString()} Nguyên Thạch
+                    {formatNumber(oppOffer.primeval_stones, 0)} Nguyên Thạch
                   </span>
                 )}
                 {((oppOffer?.immortal_stones || 0) > 0) && (
                   <span className="px-2.5 py-1.5 rounded-xl bg-purple-950/20 border border-purple-500/10 text-purple-400 flex items-center gap-1 select-none">
                     <Sparkles className="w-3.5 h-3.5" />
-                    {(oppOffer.immortal_stones).toFixed(1)} Tiên Nguyên
+                    {formatNumber(oppOffer.immortal_stones, 1)} Tiên Nguyên
                   </span>
                 )}
               </div>

@@ -9,6 +9,7 @@ import { reqGuQty, reqGuRank } from "@/lib/gu-dict";
 import { getItemIconUrl } from "@/lib/item-icons";
 import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import { RefineConceiveTab } from "@/components/RefineConceiveTab";
+import { formatNumber } from "@/lib/utils";
 import { Flame, Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Trophy, HelpCircle, ChevronDown, Search, Brain, ShieldCheck, Clock, TrendingUp, Award } from "lucide-react";
 
 interface RefiningFurnaceProps {
@@ -1193,7 +1194,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                         <div className="flex items-center justify-between text-[10px] font-mono">
                           <span className="text-zinc-500">Niệm Lực hiện có:</span>
                             <span className={(player.current_thought ?? 0) >= 15 ? "text-violet-300" : "text-rose-400 font-bold"}>
-                              {(player.current_thought ?? 0).toFixed(1)} / {player.max_thought ?? 100}
+                              {formatNumber(player.current_thought ?? 0, 1)} / {formatNumber(player.max_thought ?? 100, 0)}
                             </span>
                         </div>
                         <button
@@ -1236,7 +1237,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                           Nguyên Thạch tiêu hao:
                         </span>
                         <span className={`font-bold font-mono ${hasEnoughStones ? "text-amber-400" : "text-rose-400 font-bold text-sm animate-pulse"}`}>
-                          {player.primeval_stones}/{selectedRecipe.primeval_stones_cost} viên
+                          {formatNumber(player.primeval_stones, 0)}/{formatNumber(selectedRecipe.primeval_stones_cost, 0)} viên
                         </span>
                       </div>
 
@@ -1247,7 +1248,7 @@ export const RefiningFurnace: React.FC<RefiningFurnaceProps> = ({
                             Tiên Tinh Thạch tiêu hao:
                           </span>
                           <span className={`font-bold font-mono ${hasEnoughImmortalStones ? "text-violet-300" : "text-rose-400 font-bold text-sm animate-pulse"}`}>
-                            {player.immortal_stones.toFixed(1)}/{selectedRecipe.immortal_essence_stones_cost} viên
+                            {formatNumber(player.immortal_stones, 1)}/{formatNumber(selectedRecipe.immortal_essence_stones_cost, 1)} viên
                           </span>
                         </div>
                       )}

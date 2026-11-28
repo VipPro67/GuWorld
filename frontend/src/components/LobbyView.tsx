@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { LogConsole } from "./LogConsole";
 import { Num } from "./Num";
+import { formatNumber } from "@/lib/utils";
 import { SpatialRealmsModal } from "./SpatialRealmsModal";
 import { LobbySettingsPanel } from "./LobbySettingsPanel";
 import { LobbyGridSettingsEditor } from "./LobbyGridSettingsEditor";
@@ -668,7 +669,7 @@ export const LobbyView: React.FC = () => {
             {[
               {
                 label: "Sinh Lực",
-                value: `${Math.round(displayedHP)}/${Math.round(displayedMaxHP)}`,
+                value: `${formatNumber(displayedHP, 0)}/${formatNumber(displayedMaxHP, 0)}`,
                 percent: displayedHPPercent,
                 regen: hpRegenRealHourly,
                 current: displayedHP,
@@ -679,7 +680,7 @@ export const LobbyView: React.FC = () => {
               },
               {
                 label: player.rank >= 6 ? "Tiên Nguyên" : "Chân Nguyên",
-                value: player.rank >= 6 ? Math.round(displayedMana).toLocaleString("vi-VN") : `${Math.round(displayedMana)}/${Math.round(displayedMaxMana)}`,
+                value: player.rank >= 6 ? formatNumber(displayedMana, 0) : `${formatNumber(displayedMana, 0)}/${formatNumber(displayedMaxMana, 0)}`,
                 percent: player.rank >= 6 ? 100 : displayedManaPercent,
                 regen: manaRegenRealHourly,
                 current: displayedMana,
@@ -690,7 +691,7 @@ export const LobbyView: React.FC = () => {
               },
               {
                 label: "Niệm Lực",
-                value: `${(player.current_thought ?? 0).toFixed(1)}/${(player.max_thought ?? 100).toFixed(0)}`,
+                value: `${formatNumber(player.current_thought ?? 0, 1)}/${formatNumber(player.max_thought ?? 100, 0)}`,
                 percent: displayedThoughtPercent,
                 regen: thoughtRegenRealHourly,
                 current: player.current_thought ?? 0,
@@ -701,7 +702,7 @@ export const LobbyView: React.FC = () => {
               },
               {
                 label: "Linh Hồn",
-                value: `${player.soul_hp}/${player.max_soul}`,
+                value: `${formatNumber(player.soul_hp, 0)}/${formatNumber(player.max_soul, 0)}`,
                 percent: displayedSoulPercent,
                 regen: soulRegenRealHourly,
                 current: player.soul_hp,
@@ -713,7 +714,7 @@ export const LobbyView: React.FC = () => {
             ].map((resource) => {
               const isFull = resource.current >= resource.max;
               const regenText = resource.regen > 0 && (!isFull || resource.label === "Tiên Nguyên")
-                ? `+${resource.regen.toFixed(1)}/giờ`
+                ? `+${formatNumber(resource.regen, 1)}/giờ`
                 : "";
               const remainingText = !resource.uncapped && !isFull && resource.regen > 0
                 ? ` • ${formatTimeRemaining(resource.current, resource.max, resource.regen)}`

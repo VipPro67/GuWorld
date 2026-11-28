@@ -7,6 +7,7 @@ import { PremiumWallet, WalletBalance } from "./PremiumWallet";
 import { useGameStore } from "@/store/useGameStore";
 import { GamePanel, GameTabs, GameButton, GameCard } from "@/components/ui";
 import { authFetch } from "@/lib/auth";
+import { formatNumber } from "@/lib/utils";
 // UI migrated to shared components
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -608,7 +609,7 @@ const ExchangePanel: React.FC<ExchangePanelProps> = ({
               {sourceIcon} {sourceLabel}
             </span>
             <span>
-              Sở hữu: <b className="text-zinc-300">{sourceBalance.toLocaleString()}</b>
+              Sở hữu: <b className="text-zinc-300">{formatNumber(sourceBalance, 0)}</b>
             </span>
           </div>
           <div className="flex gap-2">

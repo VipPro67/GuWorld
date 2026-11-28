@@ -4,6 +4,7 @@ import { Coins, RefreshCw, Search, CheckCircle, Clock, XCircle, ArrowUpRight, Ar
 import { AdminServerPagination } from "./AdminServerPagination";
 import { useAdminUrlState } from "./useAdminUrlState";
 import { AdminServerSort } from "./AdminServerSort";
+import { formatNumber } from "@/lib/utils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 const BILLING_DEFAULTS = { tab: "orders", page: "1", page_size: "25", search: "", status: "", user_id: "", sort: "created_at", direction: "desc" };
@@ -137,7 +138,7 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
                         {Number(o.amountVnd).toLocaleString("vi-VN")} đ
                       </td>
                       <td className="py-2.5 px-3 font-mono text-sky-400 font-bold whitespace-nowrap">
-                        +{Number(o.jadeAmount).toLocaleString()}
+                        +{formatNumber(Number(o.jadeAmount), 0)}
                       </td>
                       <td className="py-2.5 px-3 uppercase text-zinc-400 whitespace-nowrap">{o.provider || "payos"}</td>
                       <td className="py-2.5 px-3 whitespace-nowrap">
@@ -237,10 +238,10 @@ export const TopupWalletAdminTab: React.FC<{ addToast: (msg: string, type: "succ
                         <td className="py-2.5 px-3 font-mono text-zinc-400 whitespace-nowrap">{t.userId}</td>
                         <td className="py-2.5 px-3 uppercase text-amber-400 font-mono whitespace-nowrap">{t.currency}</td>
                         <td className={`py-2.5 px-3 font-mono font-bold whitespace-nowrap ${isPositive ? "text-emerald-400" : "text-rose-400"}`}>
-                          {isPositive ? "+" : ""}{Number(t.amount).toLocaleString()}
+                          {isPositive ? "+" : ""}{formatNumber(Number(t.amount), 0)}
                         </td>
                         <td className="py-2.5 px-3 font-mono text-zinc-400 whitespace-nowrap">
-                          {Number(t.balanceBefore).toLocaleString()} → {Number(t.balanceAfter).toLocaleString()}
+                          {formatNumber(Number(t.balanceBefore), 0)} → {formatNumber(Number(t.balanceAfter), 0)}
                         </td>
                         <td className="py-2.5 px-3 text-zinc-300 max-w-xs truncate whitespace-nowrap" title={t.note || ""}>{t.note || "-"}</td>
                         <td className="py-2.5 px-3 text-zinc-400 font-mono whitespace-nowrap">

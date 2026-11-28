@@ -28,6 +28,7 @@ import { GamePanel, GameTabs, GameButton, GameCard, GameInput, GameBadge, Search
 import { TradeAssetPickerModal, type AssetTab } from "./TradeAssetPickerModal";
 import { buildBuyOrderExecution, reconcileGuSelection, toggleGuSelection } from "./marketplaceGuSelection";
 import { getItemIconUrl } from "@/lib/item-icons";
+import { formatNumber } from "@/lib/utils";
 import { getGuIconUrl } from "@/lib/gu-icons";
 import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 
@@ -587,11 +588,11 @@ export function BaoHoangMarket({
         <div className="grid w-full grid-cols-2 gap-2 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 p-2 font-mono text-xs md:w-[33rem] md:shrink-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center md:gap-3 md:px-4 md:py-2.5">
           <div className="flex min-w-0 flex-col gap-1 rounded-xl bg-black/20 p-2 md:bg-transparent md:p-0 md:pr-3 md:border-r md:border-zinc-800">
             <span className="flex items-center gap-1.5 text-zinc-400"><Coins className="h-4 w-4 shrink-0 text-amber-500" />Nguyên Thạch</span>
-            <span className="break-words text-xs font-bold tabular-nums text-amber-400">{Number(player.primeval_stones).toLocaleString("vi-VN", { maximumFractionDigits: 3 })}</span>
+            <span className="break-words text-xs font-bold tabular-nums text-amber-400">{formatNumber(Number(player.primeval_stones), 2)}</span>
           </div>
           <div className="flex min-w-0 flex-col gap-1 rounded-xl bg-black/20 p-2 md:bg-transparent md:p-0">
             <span className="flex items-center gap-1.5 text-zinc-400"><Sparkles className="h-4 w-4 shrink-0 text-cyan-400" />Tiên Nguyên</span>
-            <span className="break-words text-xs font-bold tabular-nums text-cyan-400">{Number(player.immortal_stones).toLocaleString("vi-VN", { maximumFractionDigits: 3 })}</span>
+            <span className="break-words text-xs font-bold tabular-nums text-cyan-400">{formatNumber(Number(player.immortal_stones), 2)}</span>
           </div>
           <GameButton
             size="xs"
@@ -1227,9 +1228,9 @@ export function BaoHoangMarket({
                 </div>
 
                 <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-xs font-mono text-zinc-400 space-y-1">
-                  <div>• Tổng giá trị đơn: <strong className="text-amber-400">{bbUnitPrice * bbQuantity} {bbCurrency}</strong></div>
-                  <div>• Phí niêm yết (4% trả trước): <strong className="text-amber-400">{(bbUnitPrice * bbQuantity * 0.04).toFixed(3)} {bbCurrency}</strong></div>
-                  <div>• Tổng tiền cọc bị khóa: <strong className="text-amber-300">{(bbUnitPrice * bbQuantity * 1.04).toFixed(3)} {bbCurrency}</strong></div>
+                  <div>• Tổng giá trị đơn: <strong className="text-amber-400">{formatNumber(bbUnitPrice * bbQuantity, 2)} {bbCurrency}</strong></div>
+                  <div>• Phí niêm yết (4% trả trước): <strong className="text-amber-400">{formatNumber(bbUnitPrice * bbQuantity * 0.04, 2)} {bbCurrency}</strong></div>
+                  <div>• Tổng tiền cọc bị khóa: <strong className="text-amber-300">{formatNumber(bbUnitPrice * bbQuantity * 1.04, 2)} {bbCurrency}</strong></div>
                 </div>
 
                 <GameButton type="submit" variant="primary" className="w-full" loading={actionLoading}>
@@ -1384,10 +1385,10 @@ export function BaoHoangMarket({
                 </div>
 
                 <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-xs font-mono text-zinc-400 space-y-1">
-                  <div>• Tổng giá trị rao bán: <strong className="text-amber-400">{sellUnitPrice * effectiveSellQuantity} {sellCurrency}</strong></div>
-                  <div>• Phí niêm yết (4% nộp trước): <strong className="text-amber-400">{(sellUnitPrice * effectiveSellQuantity * 0.04).toFixed(3)} {sellCurrency}</strong></div>
-                  <div>• Phí hoa hồng (6% khi bán thành công): <strong className="text-red-400">{(sellUnitPrice * effectiveSellQuantity * 0.06).toFixed(3)} {sellCurrency}</strong></div>
-                  <div>• Thực nhận dự kiến: <strong className="text-emerald-400 font-bold">{(sellUnitPrice * effectiveSellQuantity * 0.94).toFixed(3)} {sellCurrency}</strong></div>
+                  <div>• Tổng giá trị rao bán: <strong className="text-amber-400">{formatNumber(sellUnitPrice * effectiveSellQuantity, 2)} {sellCurrency}</strong></div>
+                  <div>• Phí niêm yết (4% nộp trước): <strong className="text-amber-400">{formatNumber(sellUnitPrice * effectiveSellQuantity * 0.04, 2)} {sellCurrency}</strong></div>
+                  <div>• Phí hoa hồng (6% khi bán thành công): <strong className="text-red-400">{formatNumber(sellUnitPrice * effectiveSellQuantity * 0.06, 2)} {sellCurrency}</strong></div>
+                  <div>• Thực nhận dự kiến: <strong className="text-emerald-400 font-bold">{formatNumber(sellUnitPrice * effectiveSellQuantity * 0.94, 2)} {sellCurrency}</strong></div>
                 </div>
 
                 <GameButton type="submit" variant="primary" className="w-full" loading={actionLoading} disabled={sellItemType === "Gu" && sellGuInstIDs.length === 0}>
@@ -1453,7 +1454,7 @@ export function BaoHoangMarket({
                               onClick={() => setOfferedStones(Math.floor(player.primeval_stones || 0))}
                               className="text-[10px] text-emerald-400 hover:text-emerald-300 font-medium"
                             >
-                              Tối đa: {(player.primeval_stones || 0).toLocaleString()}
+                              Tối đa: {formatNumber(player.primeval_stones || 0, 0)}
                             </button>
                           </div>
                           <GameInput
@@ -1472,7 +1473,7 @@ export function BaoHoangMarket({
                                 onClick={() => setOfferedImmortal(Math.floor(player.immortal_stones || 0))}
                                 className="text-[10px] text-emerald-400 hover:text-emerald-300 font-medium"
                               >
-                                Tối đa: {(player.immortal_stones || 0).toLocaleString()}
+                                Tối đa: {formatNumber(player.immortal_stones || 0, 1)}
                               </button>
                             )}
                           </div>
@@ -2142,13 +2143,13 @@ export function BaoHoangMarket({
             <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 text-xs font-mono space-y-1">
               {selectedBuybackOrder.order_type === "SELL" ? (
                 <>
-                  <div className="text-zinc-400">• Tổng thanh toán: <span className="text-amber-400 font-bold">{sellQtyInput * selectedBuybackOrder.unit_price} {selectedBuybackOrder.currency}</span></div>
+                  <div className="text-zinc-400">• Tổng thanh toán: <span className="text-amber-400 font-bold">{formatNumber(sellQtyInput * selectedBuybackOrder.unit_price, 2)} {selectedBuybackOrder.currency}</span></div>
                 </>
               ) : (
                 <>
-                  <div className="text-zinc-400">• Tổng nhận thô: <span className="text-amber-400">{sellQtyInput * selectedBuybackOrder.unit_price} {selectedBuybackOrder.currency}</span></div>
-                  <div className="text-zinc-400">• Phí hoa hồng (6%): <span className="text-red-400">-{(sellQtyInput * selectedBuybackOrder.unit_price * 0.06).toFixed(3)} {selectedBuybackOrder.currency}</span></div>
-                  <div className="text-amber-200 font-bold">• Thực nhận: {(sellQtyInput * selectedBuybackOrder.unit_price * 0.94).toFixed(3)} {selectedBuybackOrder.currency}</div>
+                  <div className="text-zinc-400">• Tổng nhận thô: <span className="text-amber-400">{formatNumber(sellQtyInput * selectedBuybackOrder.unit_price, 2)} {selectedBuybackOrder.currency}</span></div>
+                  <div className="text-zinc-400">• Phí hoa hồng (6%): <span className="text-red-400">-{formatNumber(sellQtyInput * selectedBuybackOrder.unit_price * 0.06, 2)} {selectedBuybackOrder.currency}</span></div>
+                  <div className="text-amber-200 font-bold">• Thực nhận: {formatNumber(sellQtyInput * selectedBuybackOrder.unit_price * 0.94, 2)} {selectedBuybackOrder.currency}</div>
                 </>
               )}
             </div>

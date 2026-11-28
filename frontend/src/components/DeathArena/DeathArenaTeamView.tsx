@@ -5,6 +5,7 @@ import { useGameStore } from "@/store/useGameStore";
 import { GameCard, GameProgressBar } from "@/components/ui";
 import { Shield, Skull, Users } from "lucide-react";
 import { TournamentEmptyState } from "../Arena/TournamentShared";
+import { formatNumber } from "@/lib/utils";
 
 export default function DeathArenaTeamView() {
   const { deathArenaMyTeam, deathArenaMyTeamMembers, deathArenaTournament, fetchDeathArenaMyTeam } = useGameStore();
@@ -25,7 +26,7 @@ export default function DeathArenaTeamView() {
 
   const formatHP = (current: number, max: number) => {
     const percent = max > 0 ? (current / max) * 100 : 0;
-    return { percent, display: `${Math.round(current)}/${Math.round(max)}` };
+    return { percent, display: `${formatNumber(current, 0)}/${formatNumber(max, 0)}` };
   };
 
   const placementLabel = (place: number) => {
@@ -124,7 +125,7 @@ export default function DeathArenaTeamView() {
                     <GameProgressBar value={mpPercent} max={100} variant="mana" />
                   </div>
                   <span className="w-20 text-right font-mono text-xs text-zinc-300">
-                    {Math.round(member.current_mana)}/{Math.round(member.max_mana)}
+                    {formatNumber(member.current_mana, 0)}/{formatNumber(member.max_mana, 0)}
                   </span>
                 </div>
               </div>

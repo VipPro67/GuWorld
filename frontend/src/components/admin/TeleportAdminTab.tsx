@@ -15,6 +15,7 @@ import {
 import { authFetch } from "@/lib/auth";
 import { prepareAdminAction, canPerformAdminAction } from "./actions";
 import { useAdminAccess } from "./AdminAccessContext";
+import { formatNumber } from "@/lib/utils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 
@@ -249,7 +250,7 @@ export const TeleportAdminTab: React.FC<{
                     <td className="px-3 py-2.5 text-right font-mono">
                       {row.fee_enabled ? (
                         <span className="text-yellow-400 font-semibold">
-                          {Number(row.fee_amount).toLocaleString("vi-VN")} NT
+                          {formatNumber(Number(row.fee_amount), 0)} NT
                         </span>
                       ) : (
                         <span className="text-zinc-500">Miễn phí</span>

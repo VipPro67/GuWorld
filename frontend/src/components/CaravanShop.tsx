@@ -11,6 +11,7 @@ import { getItemIconUrl } from "@/lib/item-icons";
 import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
 import { getGuIconUrl } from "@/lib/gu-icons";
 import { getGuRankColor } from "@/lib/gu-frames";
+import { formatNumber } from "@/lib/utils";
 // UI migrated to shared components
 
 interface ShopItem {
@@ -486,11 +487,11 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs text-amber-400 font-mono font-bold bg-zinc-950/40 border border-amber-500/20 px-3 py-1.5 rounded-xl">
             <Coins className="w-4 h-4 text-amber-500" />
-            <span>{player.primeval_stones} Nguyên Thạch</span>
+            <span>{formatNumber(player.primeval_stones, 0)} Nguyên Thạch</span>
           </div>
           <div className="flex items-center gap-1.5 text-xs text-cyan-300 font-mono font-bold bg-zinc-950/40 border border-cyan-500/20 px-3 py-1.5 rounded-xl">
             <Sparkles className="w-4 h-4 text-violet-400" />
-            <span>{(player.immortal_stones || 0).toLocaleString()} Tiên Nguyên Thạch</span>
+            <span>{formatNumber(player.immortal_stones || 0, 1)} Tiên Nguyên Thạch</span>
           </div>
           <div
             className="flex items-center gap-1.5 text-xs text-emerald-300 font-mono font-bold bg-zinc-950/40 border border-emerald-500/20 px-3 py-1.5 rounded-xl"
@@ -791,13 +792,13 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                   {bulkGainByCurrency.primeval > 0 && (
                     <span className="flex items-center gap-1">
                       <Coins className="w-4 h-4 text-emerald-500" />
-                      +{bulkGainByCurrency.primeval.toLocaleString()} NT
+                      +{formatNumber(bulkGainByCurrency.primeval, 0)} NT
                     </span>
                   )}
                   {bulkGainByCurrency.immortal > 0 && (
                     <span className="flex items-center gap-1">
                       <Sparkles className="w-4 h-4 text-violet-400" />
-                      +{bulkGainByCurrency.immortal.toLocaleString()} TNT
+                      +{formatNumber(bulkGainByCurrency.immortal, 1)} TNT
                     </span>
                   )}
                 </span>
@@ -1303,7 +1304,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                 <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500 uppercase">
                   <span>Số lượng cần mua:</span>
                   <span>
-                    {selectedBuyItem.price > 0 && `(Có thể mua: ${Math.floor(getBalance(buyTier) / selectedBuyItem.price).toLocaleString()})`}
+                    {selectedBuyItem.price > 0 && `(Có thể mua: ${formatNumber(Math.floor(getBalance(buyTier) / selectedBuyItem.price), 0)})`}
                   </span>
                 </div>
                 <div className="flex items-center justify-between border border-zinc-850 rounded-xl bg-zinc-900/20 overflow-hidden px-1">
@@ -1385,7 +1386,7 @@ export const CaravanShop: React.FC<CaravanShopProps> = ({
                 {buyTier === "immortal"
                   ? <Sparkles className="w-4 h-4 text-violet-400" />
                   : <Coins className="w-4 h-4 text-amber-500" />}
-                {(selectedBuyItem.price * (buyQuantity || 0)).toLocaleString()} {currencyLabel(buyTier)}
+                {formatNumber(selectedBuyItem.price * (buyQuantity || 0), 1)} {currencyLabel(buyTier)}
               </span>
             </div>
 

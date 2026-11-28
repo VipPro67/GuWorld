@@ -644,11 +644,11 @@ export const Aperture: React.FC<ApertureProps> = ({
                       {manaQuality}:
                     </div>
                     <div className="text-xl font-bold font-mono text-cyan-400">
-                      {player ? Math.floor(currentMana).toLocaleString() : "--"} viên
+                      {player ? formatNumber(Math.floor(currentMana), 0) : "--"} viên
                     </div>
                     <div className="text-[10px] text-zinc-400 mt-0.5 tracking-wider uppercase font-semibold">{energyPoolName}</div>
                     <div className="mmo-paper-ink text-[10px] text-zinc-300 mt-2 font-mono" style={{ color: c.textLight }}>
-                      Tốc lưu tiên khiếu: +{manaRegenRealHourly.toFixed(1)} viên/giờ
+                      Tốc lưu tiên khiếu: +{formatNumber(manaRegenRealHourly, 1)} viên/giờ
                     </div>
                     {!isImmortal && currentMana < maxMana && manaRegenRealHourly > 0 && (
                       <div className="text-[9px] text-zinc-400 mt-0.5 font-mono">
@@ -665,14 +665,14 @@ export const Aperture: React.FC<ApertureProps> = ({
                     {percent.toFixed(1)}%
                   </span>
                   <span className="text-xs font-bold mt-1 drop-shadow-[0_1.5px_4px_rgba(0,0,0,0.95)] font-mono" style={{ color: c.textLight }}>
-                    {currentMana.toFixed(1)} / {maxMana.toFixed(0)}
+                    {formatNumber(currentMana, 1)} / {formatNumber(maxMana, 0)}
                   </span>
                   <span className="text-[9px] mt-1 text-zinc-400 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] uppercase font-semibold tracking-wider font-mono">
                     {energyPoolName}
                   </span>
                   {currentMana < maxMana && manaRegenRealHourly > 0 && (
                     <span className="text-[9px] mt-1 text-zinc-300 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] font-mono">
-                      +{manaRegenRealHourly.toFixed(1)}/giờ • {formatTimeRemaining(currentMana, maxMana, manaRegenRealHourly)}
+                      +{formatNumber(manaRegenRealHourly, 1)}/giờ • {formatTimeRemaining(currentMana, maxMana, manaRegenRealHourly)}
                     </span>
                   )}
                 </div>
@@ -1107,25 +1107,25 @@ export const Aperture: React.FC<ApertureProps> = ({
                     {b.attack > 0 && (
                       <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                         <div className="text-[10px] text-zinc-500 font-mono">Công Kích</div>
-                        <div className="text-lg font-bold text-zinc-100 font-mono">+{(b.attack || 0).toFixed(2)}</div>
+                        <div className="text-lg font-bold text-zinc-100 font-mono">+{formatNumber(b.attack || 0, 2)}</div>
                       </div>
                     )}
                     {b.defense > 0 && (
                       <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                         <div className="text-[10px] text-zinc-500 font-mono">Phòng Ngự</div>
-                        <div className="text-lg font-bold text-zinc-100 font-mono">+{(b.defense || 0).toFixed(2)}</div>
+                        <div className="text-lg font-bold text-zinc-100 font-mono">+{formatNumber(b.defense || 0, 2)}</div>
                       </div>
                     )}
                     {b.hp > 0 && (
                       <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                         <div className="text-[10px] text-zinc-500 font-mono">Máu Tối Đa</div>
-                        <div className="text-lg font-bold text-zinc-100 font-mono">+{(b.hp || 0).toFixed(2)}</div>
+                        <div className="text-lg font-bold text-zinc-100 font-mono">+{formatNumber(b.hp || 0, 2)}</div>
                       </div>
                     )}
                     {b.speed > 0 && (
                       <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-900">
                         <div className="text-[10px] text-zinc-500 font-mono">Tốc Độ</div>
-                        <div className="text-lg font-bold text-zinc-100 font-mono">+{(b.speed || 0).toFixed(2)}</div>
+                        <div className="text-lg font-bold text-zinc-100 font-mono">+{formatNumber(b.speed || 0, 2)}</div>
                       </div>
                     )}
                   </div>
@@ -1935,7 +1935,7 @@ function WallControls() {
               Nạp Nguyên Thạch
             </span>
             <span className="text-[10px] text-cyan-400 font-mono font-bold">
-              Khả dụng: {player.primeval_stones.toLocaleString()}
+              Khả dụng: {formatNumber(player.primeval_stones, 0)}
             </span>
           </div>
           <div className="flex gap-2">
@@ -1987,7 +1987,7 @@ function WallControls() {
             Trùng Kích Vách Khiếu
           </span>
           <span className="text-[10px] text-emerald-400 font-mono font-bold">
-            Khả dụng: {Math.floor(player.current_mana)}
+            Khả dụng: {formatNumber(Math.floor(player.current_mana), 0)}
           </span>
         </div>
         <div className="flex gap-2">
@@ -2034,7 +2034,7 @@ function WallControls() {
             Luyện Hóa Nguyên Thạch
           </span>
           <span className="text-[10px] text-cyan-400 font-mono font-bold">
-            Khả dụng: {player.primeval_stones.toLocaleString()}
+            Khả dụng: {formatNumber(player.primeval_stones, 0)}
           </span>
         </div>
         <div className="flex gap-2">
@@ -2182,7 +2182,7 @@ function AscensionRitual() {
         Nghi Thức Thăng Tiên
       </div>
       <div className="text-[10.5px] text-zinc-400 mb-3 text-center leading-relaxed max-w-md">
-        Nát Khiếu → Dẫn Khí → Thả Cổ. Nhân Khí hiện tại: <span className="font-bold text-amber-400 font-mono">{humanQi.toLocaleString("vi-VN", { maximumFractionDigits: 0 })}</span>
+        Nát Khiếu → Dẫn Khí → Thả Cổ. Nhân Khí hiện tại: <span className="font-bold text-amber-400 font-mono">{formatNumber(humanQi, 0)}</span>
         {" "}— dưới <span className="font-mono text-rose-400">100.000</span> thì Dẫn Khí tất thất bại.
         {deadlineLeft && <> Thời hạn phiên: <span className="font-mono text-rose-300 font-bold">{deadlineLeft}</span></>}
       </div>

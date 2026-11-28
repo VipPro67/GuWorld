@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { HeartPulse, RefreshCw, Search, Skull, Trash2, X } from "lucide-react";
 import { authFetch } from "@/lib/auth";
 import { prepareAdminAction } from "./actions";
+import { formatNumber } from "@/lib/utils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8080";
 const REFRESH_MS = 10_000;
@@ -210,7 +211,7 @@ export const WorldBossesAdminTab: React.FC<{
             return <tr key={`${boss.region_id}:${boss.instance_id}`} className="hover:bg-zinc-900/70">
               <td className="px-3 py-3"><span className="font-semibold text-zinc-200">{boss.name}</span><span className="mt-0.5 block text-[10px] text-zinc-500">{boss.monster_template_id} · Chuyển {boss.rank}.{boss.sub_rank}</span><span className="block font-mono text-[9px] text-zinc-600">{boss.instance_id}</span></td>
               <td className="px-3 py-3 text-zinc-300"><span className="font-semibold">{boss.region_id}</span><span className="mt-0.5 block text-[10px] text-zinc-500">({Math.round(boss.x)}, {Math.round(boss.y)}) · spawn ({boss.spawn_x}, {boss.spawn_y})</span></td>
-              <td className="px-3 py-3"><span className={dead ? "text-zinc-500" : "text-zinc-200"}>{Math.round(boss.hp)} / {Math.round(boss.max_hp)}</span><span className="mt-1 block h-1.5 w-28 overflow-hidden rounded bg-zinc-800"><span className={`block h-full ${pct < 30 ? "bg-red-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} /></span></td>
+              <td className="px-3 py-3"><span className={dead ? "text-zinc-500" : "text-zinc-200"}>{formatNumber(boss.hp, 0)} / {formatNumber(boss.max_hp, 0)}</span><span className="mt-1 block h-1.5 w-28 overflow-hidden rounded bg-zinc-800"><span className={`block h-full ${pct < 30 ? "bg-red-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} /></span></td>
               <td className="px-3 py-3">{stateBadge(boss)}{boss.target_id ? <span className="mt-1 block font-mono text-[9px] text-zinc-500">target {boss.target_id.slice(0, 8)}</span> : null}</td>
               <td className="px-3 py-3 text-zinc-400"><span>{boss.respawn_seconds}s</span><span className="mt-0.5 block text-[10px] text-zinc-500">{time(boss.respawn_at)}</span><span className="block text-[10px] text-zinc-600">rev {boss.revision} · {time(boss.last_update_at)}</span></td>
               <td className="px-3 py-3 text-right whitespace-nowrap">
@@ -234,7 +235,7 @@ export const WorldBossesAdminTab: React.FC<{
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="X" type="number" value={form.x} onChange={(value) => setForm({ ...form, x: Number(value) })} />
         <Field label="Y" type="number" value={form.y} onChange={(value) => setForm({ ...form, y: Number(value) })} />
-        <Field label={`HP (0-${Math.round(edit.max_hp)})`} type="number" value={form.hp} onChange={(value) => setForm({ ...form, hp: Number(value) })} />
+        <Field label={`HP (0-${formatNumber(edit.max_hp, 0)})`} type="number" value={form.hp} onChange={(value) => setForm({ ...form, hp: Number(value) })} />
       </div>
       <p className="text-[10px] text-zinc-500">HP = 0 sẽ chuyển boss sang trạng thái đã hạ và bắt đầu hồi sinh sau {edit.respawn_seconds}s. Toạ độ phải nằm trong khu vực.</p>
       <div className="flex justify-end gap-2"><button type="button" onClick={() => setEdit(null)} className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800">Huỷ</button><button type="button" disabled={busyId === edit.instance_id} onClick={() => void saveEdit()} className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-zinc-950 hover:bg-amber-400 disabled:opacity-50"><HeartPulse className="mr-1.5 inline h-3.5 w-3.5" />Lưu</button></div>

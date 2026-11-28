@@ -7,6 +7,7 @@ import { restoreHunger } from "@/lib/effect-blocks";
 import { MonsterSprite } from "@/components/MonsterSprite";
 import { getItemIconUrl } from "@/lib/item-icons";
 import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
+import { formatNumber } from "@/lib/utils";
 import {
   PawPrint,
   Heart,
@@ -412,7 +413,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                 <div className="mt-2.5 pt-2 border-t border-zinc-800/60 space-y-1">
                   <div className="flex items-center justify-between text-[9px] font-mono text-zinc-400">
                     <span>HP</span>
-                    <span className="text-zinc-300">{Math.round(pet.hp)}/{Math.round(pet.max_hp)}</span>
+                    <span className="text-zinc-300">{formatNumber(pet.hp, 0)}/{formatNumber(pet.max_hp, 0)}</span>
                   </div>
                   <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
                     <div
@@ -486,9 +487,9 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                     </div>
                     {/* Stats */}
                     <div className="flex gap-3 mt-1 text-[10px] text-zinc-400">
-                      <span>HP: {Math.round(pet.hp)}/{Math.round(pet.max_hp)}</span>
-                      <span>ATK: {Math.round(pet.base_attack)}</span>
-                      <span>DEF: {Math.round(pet.base_defense)}</span>
+                      <span>HP: {formatNumber(pet.hp, 0)}/{formatNumber(pet.max_hp, 0)}</span>
+                      <span>ATK: {formatNumber(pet.base_attack, 0)}</span>
+                      <span>DEF: {formatNumber(pet.base_defense, 0)}</span>
                     </div>
                     {/* Hunger Bar */}
                     <div className="mt-1.5 flex items-center gap-2">
@@ -644,7 +645,7 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                       <Heart className="w-3.5 h-3.5 text-rose-400" /> Sinh Mệnh (HP)
                     </span>
                     <span className="text-zinc-200 font-bold">
-                      {Math.round(inspectedPet.hp)} / {Math.round(inspectedPet.max_hp)} ({hpPct}%)
+                      {formatNumber(inspectedPet.hp, 0)} / {formatNumber(inspectedPet.max_hp, 0)} ({hpPct}%)
                     </span>
                   </div>
                   <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
@@ -675,19 +676,19 @@ export const PetPanel: React.FC<PetPanelProps> = ({
                   <div className="bg-zinc-950/60 p-2 rounded-xl border border-zinc-850">
                     <div className="text-[10px] text-zinc-500">Công Kích</div>
                     <div className="text-sm font-bold text-amber-300 mt-0.5">
-                      {Math.round(inspectedPet.base_attack)}
+                      {formatNumber(inspectedPet.base_attack, 0)}
                     </div>
                   </div>
                   <div className="bg-zinc-950/60 p-2 rounded-xl border border-zinc-855">
                     <div className="text-[10px] text-zinc-500">Phòng Ngự</div>
                     <div className="text-sm font-bold text-cyan-300 mt-0.5">
-                      {Math.round(inspectedPet.base_defense)}
+                      {formatNumber(inspectedPet.base_defense, 0)}
                     </div>
                   </div>
                   <div className="bg-zinc-950/60 p-2 rounded-xl border border-zinc-855">
                     <div className="text-[10px] text-zinc-500">Phí Hồn Phách</div>
                     <div className="text-sm font-bold text-purple-300 mt-0.5">
-                      {inspectedPet.count} soul
+                      {formatNumber(inspectedPet.count, 0)} soul
                     </div>
                   </div>
                 </div>

@@ -5,6 +5,7 @@ import { Player, GuSpec, ItemSpec, useGameStore, ConceiveCandidate, ConceiveResu
 import { pathLabels, translatePath } from "@/lib/translate";
 import { getItemIconUrl } from "@/lib/item-icons";
 import { useAccessibleDialog } from "@/hooks/useAccessibleDialog";
+import { formatNumber } from "@/lib/utils";
 import { 
   Sparkles, AlertCircle, Check, X, RefreshCw, Coins, Zap, Brain, 
   Search, ShieldAlert, ArrowRight, Skull, Dna, Info, Flame 
@@ -212,7 +213,7 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
             <div>
               <div className="text-xs text-neutral-400">Niệm Lực</div>
               <div className="text-sm font-semibold text-indigo-200">
-                {Math.floor(player.current_thought)} / {player.max_thought || 100}
+                {formatNumber(Math.floor(player.current_thought), 0)} / {formatNumber(player.max_thought || 100, 0)}
               </div>
             </div>
           </div>
@@ -222,7 +223,7 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
             <div>
               <div className="text-xs text-neutral-400">Nguyên Thạch</div>
               <div className="text-sm font-semibold text-amber-200">
-                {Math.floor(player.primeval_stones).toLocaleString()}
+                {formatNumber(Math.floor(player.primeval_stones), 0)}
               </div>
             </div>
           </div>
@@ -233,7 +234,7 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
               <div>
                 <div className="text-xs text-neutral-400">Tiên Nguyên Thạch</div>
                 <div className="text-sm font-semibold text-cyan-200">
-                  {Math.floor(player.immortal_stones || 0).toLocaleString()}
+                  {formatNumber(Math.floor(player.immortal_stones || 0), 0)}
                 </div>
               </div>
             </div>
@@ -536,10 +537,10 @@ export const RefineConceiveTab: React.FC<RefineConceiveTabProps> = ({
                 <div className="flex items-center justify-between text-xs text-neutral-400 pt-1 border-t border-neutral-800">
                   <span>Chi phí cần tiêu hao:</span>
                   <div className="flex items-center gap-3 font-medium">
-                    <span className="text-indigo-300">{selectedCandidate.required_thought} Niệm Lực</span>
-                    <span className="text-amber-300">{selectedCandidate.required_stones.toLocaleString()} Nguyên Thạch</span>
+                    <span className="text-indigo-300">{formatNumber(selectedCandidate.required_thought, 0)} Niệm Lực</span>
+                    <span className="text-amber-300">{formatNumber(selectedCandidate.required_stones, 0)} Nguyên Thạch</span>
                     {selectedCandidate.required_immortal_stones > 0 && (
-                      <span className="text-cyan-300">{selectedCandidate.required_immortal_stones} Tiên Thạch</span>
+                      <span className="text-cyan-300">{formatNumber(selectedCandidate.required_immortal_stones, 0)} Tiên Thạch</span>
                     )}
                   </div>
                 </div>

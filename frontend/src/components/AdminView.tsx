@@ -405,8 +405,7 @@ interface PlayerGuRow {
 const genderLabels: Record<string, string> = { male: "Nam", female: "Nữ" };
 
 function formatStat(val: number): string {
-  if (Math.abs(val) >= 10000) return val.toLocaleString();
-  return val % 1 === 0 ? val.toString() : val.toFixed(2);
+  return formatNumber(val, 2);
 }
 
 const rankNames = [
@@ -1606,20 +1605,20 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               </div>
               <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-3">
                 <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono mb-1"><Heart className="w-3.5 h-3.5 text-red-400" />Máu</div>
-                <span className="text-sm font-bold text-zinc-200">{Math.round(detail.hp)}/{Math.round(detail.base_hp)}</span>
+                <span className="text-sm font-bold text-zinc-200">{formatNumber(detail.hp, 0)}/{formatNumber(detail.base_hp, 0)}</span>
               </div>
               <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-3">
                 <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono mb-1"><Zap className="w-3.5 h-3.5 text-blue-400" />{detail.rank < 6 ? "Chân nguyên" : "Tiên nguyên"}</div>
-                <span className="text-sm font-bold text-zinc-200">{Math.round(detail.current_mana)}/{Math.round(detail.max_mana)}</span>
+                <span className="text-sm font-bold text-zinc-200">{formatNumber(detail.current_mana, 0)}/{formatNumber(detail.max_mana, 0)}</span>
               </div>
               <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-3">
                 <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono mb-1"><Coins className="w-3.5 h-3.5 text-yellow-500" />Nguyên Thạch</div>
-                <span className="text-sm font-bold text-yellow-500">{detail.primeval_stones.toLocaleString()}</span>
+                <span className="text-sm font-bold text-yellow-500">{formatNumber(detail.primeval_stones, 0)}</span>
               </div>
               {/*Tiên Nguyên Thạch */}
               <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-3">
                 <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono mb-1"><Star className="w-3.5 h-3.5 text-purple-500" />Tiên Nguyên Thạch</div>
-                <span className="text-sm font-bold text-purple-500">{detail.immortal_stones.toLocaleString()}</span>
+                <span className="text-sm font-bold text-purple-500">{formatNumber(detail.immortal_stones, 1)}</span>
               </div>
             </div>
 
@@ -1713,7 +1712,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                               <td className="px-3 py-2.5 text-zinc-400">{it.category || "materials"}</td>
                               <td className="px-3 py-2.5 text-zinc-400">{it.category === "recipe" ? `${it.completion_rate ?? 0}%${it.is_unlocked ? " · mở" : " · khóa"}` : "—"}</td>
                               <td className="px-3 py-2.5 text-zinc-400">{it.rank || spec?.rank || "?"}</td>
-                              <td className="px-3 py-2.5 text-right font-mono font-bold text-zinc-200">{it.quantity.toLocaleString()}</td>
+                              <td className="px-3 py-2.5 text-right font-mono font-bold text-zinc-200">{formatNumber(it.quantity, 0)}</td>
                               <td className="px-3 py-2.5 text-zinc-500">{it.created_at ? new Date(it.created_at).toLocaleDateString("vi-VN") : "—"}<span className="block text-[10px]">{it.updated_at ? new Date(it.updated_at).toLocaleDateString("vi-VN") : "—"}</span></td>
                               <td className="px-3 py-2.5 text-right">
                                 {it.category !== "recipe" && canAdminAction("updatePlayerInventoryItem") && <button onClick={() => { setInventoryEditQuantity(String(it.quantity)); setInventoryEditCategory(it.category || "materials"); setShowInventoryItemEditor(it); }} className="p-1 rounded-lg hover:bg-amber-950/40 text-zinc-500 hover:text-amber-400 transition-colors cursor-pointer mr-1" title="Sửa số lượng/nhóm"><Edit3 className="w-3.5 h-3.5" /></button>}
@@ -1896,9 +1895,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                             <td className="px-3 py-2 font-mono text-zinc-400">{pet.id.substring(0, 8)}...</td>
                             <td className="px-3 py-2 font-bold text-zinc-200">{pet.monster_name || pet.monster_template_id}</td>
                             <td className="px-3 py-2 text-zinc-300">Rank {pet.rank}</td>
-                            <td className="px-3 py-2 text-red-400">{Math.round(pet.current_hp)}/{Math.round(pet.max_hp)}</td>
-                            <td className="px-3 py-2 text-amber-400">{Math.round(pet.attack)}</td>
-                            <td className="px-3 py-2 text-blue-400">{Math.round(pet.defense)}</td>
+                            <td className="px-3 py-2 text-red-400">{formatNumber(pet.current_hp, 0)}/{formatNumber(pet.max_hp, 0)}</td>
+                            <td className="px-3 py-2 text-amber-400">{formatNumber(pet.attack, 0)}</td>
+                            <td className="px-3 py-2 text-blue-400">{formatNumber(pet.defense, 0)}</td>
                             <td className="px-3 py-2 text-purple-400">{Math.round(pet.hunger)}%</td>
                             <td className="px-3 py-2">
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${pet.status === "active" ? "bg-emerald-900/40 text-emerald-400" : "bg-zinc-800 text-zinc-500"}`}>
@@ -2329,7 +2328,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                               <Heart className="w-3.5 h-3.5" /> Sinh Mệnh (HP)
                             </div>
                             <div className="text-xl font-bold text-emerald-300 font-mono">
-                              {Math.round(detail.hp)} / {Math.round(totalHP)}
+                              {formatNumber(detail.hp, 0)} / {formatNumber(totalHP, 0)}
                             </div>
                           </div>
                         </div>
@@ -2396,25 +2395,25 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                             {b.attack > 0 && (
                               <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-800">
                                 <div className="text-[10px] text-zinc-500 font-mono">Công Kích</div>
-                                <div className="text-lg font-bold text-zinc-100 font-mono">+{b.attack.toFixed(2)}</div>
+                                <div className="text-lg font-bold text-zinc-100 font-mono">+{formatNumber(b.attack, 2)}</div>
                               </div>
                             )}
                             {b.defense > 0 && (
                               <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-800">
                                 <div className="text-[10px] text-zinc-500 font-mono">Phòng Ngự</div>
-                                <div className="text-lg font-bold text-zinc-100 font-mono">+{b.defense.toFixed(2)}</div>
+                                <div className="text-lg font-bold text-zinc-100 font-mono">+{formatNumber(b.defense, 2)}</div>
                               </div>
                             )}
                             {b.hp > 0 && (
                               <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-800">
                                 <div className="text-[10px] text-zinc-500 font-mono">Máu Tối Đa</div>
-                                <div className="text-lg font-bold text-zinc-100 font-mono">+{b.hp.toFixed(2)}</div>
+                                <div className="text-lg font-bold text-zinc-100 font-mono">+{formatNumber(b.hp, 2)}</div>
                               </div>
                             )}
                             {b.speed > 0 && (
                               <div className="bg-zinc-950/40 p-3 rounded-xl border border-zinc-800">
                                 <div className="text-[10px] text-zinc-500 font-mono">Tốc Độ</div>
-                                <div className="text-lg font-bold text-zinc-100 font-mono">+{b.speed.toFixed(2)}</div>
+                                <div className="text-lg font-bold text-zinc-100 font-mono">+{formatNumber(b.speed, 2)}</div>
                               </div>
                             )}
                           </div>
@@ -3251,7 +3250,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
               </div>
               <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-3">
                 <div className="text-xs text-zinc-500 font-mono mb-1"><Coins className="w-3.5 h-3.5 inline mr-1 text-yellow-500" />Quỹ</div>
-                <span className="text-sm font-bold text-yellow-500">{selectedSect.funds?.toLocaleString() || 0}</span>
+                <span className="text-sm font-bold text-yellow-500">{formatNumber(selectedSect.funds || 0, 0)}</span>
               </div>
               <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-3">
                 <div className="text-xs text-zinc-500 font-mono mb-1"><Globe className="w-3.5 h-3.5 inline mr-1" />Khu vực</div>
@@ -3304,7 +3303,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                           <td className="px-3 py-2.5">
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${memberRankStyle(m.member_rank)}`}>{memberRankLabel(m.member_rank)}</span>
                           </td>
-                          <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{m.contribution_points?.toLocaleString() || 0}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-zinc-300">{formatNumber(m.contribution_points || 0, 0)}</td>
                           <td className="px-3 py-2.5 text-zinc-500 font-mono text-[10px]">{formatDate(m.joined_at)}</td>
                           <td className="px-3 py-2.5 text-right">
                             <div className="flex items-center justify-end gap-1">
@@ -3358,7 +3357,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                               <tr key={i} className="border-t border-zinc-800/40">
                                 <td className="px-3 py-2 text-zinc-500 font-mono">{item.id}</td>
                                 <td className="px-3 py-2 font-semibold text-zinc-200">{spec?.name || item.id}</td>
-                                <td className="px-3 py-2 text-right font-mono text-zinc-400">{item.cost?.toLocaleString() || 0}</td>
+                                <td className="px-3 py-2 text-right font-mono text-zinc-400">{formatNumber(item.cost || 0, 0)}</td>
                                 <td className="px-3 py-2 text-right font-mono text-zinc-300">{item.quantity}</td>
                                 <td className="px-3 py-2 text-right">
                                   <button onClick={() => { setShowRemoveVault({ type: "gu", id: item.id, maxQty: item.quantity }); setRemoveVaultQty(1); }} className="p-1 hover:bg-red-950/40 rounded text-zinc-500 hover:text-red-400 cursor-pointer"><Trash2 className="w-3 h-3" /></button>
@@ -3822,10 +3821,10 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                         <td className="px-3 py-2.5 text-zinc-500 font-mono max-w-[80px] truncate whitespace-nowrap" title={p.id}>{p.id.slice(0, 8)}...</td>
                         <td className="px-3 py-2.5 font-semibold text-zinc-200 whitespace-nowrap">{p.username}{p.is_banned && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-950/80 border border-red-500/40 text-red-400">ĐÃ KHÓA</span>}</td>
                         <td className={`px-3 py-2.5 font-bold whitespace-nowrap ${rankColor(p.rank)}`}>{getRankName(p.rank, p.sub_rank)}</td>
-                        <td className="px-3 py-2.5 font-mono text-zinc-300 whitespace-nowrap">{Math.round(p.hp)}/{Math.round(p.base_hp)}</td>
-                        <td className="px-3 py-2.5 font-mono text-zinc-300 whitespace-nowrap">{Math.round(p.current_mana)}/{Math.round(p.max_mana)}</td>
-                        <td className="px-3 py-2.5 font-mono text-yellow-500 whitespace-nowrap">{p.primeval_stones.toLocaleString()}</td>
-                        <td className="px-3 py-2.5 font-mono text-purple-400 whitespace-nowrap">{p.immortal_stones.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 font-mono text-zinc-300 whitespace-nowrap">{formatNumber(p.hp, 0)}/{formatNumber(p.base_hp, 0)}</td>
+                        <td className="px-3 py-2.5 font-mono text-zinc-300 whitespace-nowrap">{formatNumber(p.current_mana, 0)}/{formatNumber(p.max_mana, 0)}</td>
+                        <td className="px-3 py-2.5 font-mono text-yellow-500 whitespace-nowrap">{formatNumber(p.primeval_stones, 0)}</td>
+                        <td className="px-3 py-2.5 font-mono text-purple-400 whitespace-nowrap">{formatNumber(p.immortal_stones, 1)}</td>
                         <td className="px-3 py-2.5 whitespace-nowrap">{p.is_admin ? <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-950/80 border border-amber-500/40 text-amber-400">ADMIN</span> : <span className="text-zinc-600">–</span>}</td>
                         <td className="px-3 py-2.5 text-zinc-400 max-w-[120px] truncate whitespace-nowrap" title={p.current_region}>{p.current_region}</td>
                         <td className="px-3 py-2.5 text-zinc-500 font-mono text-[10px] whitespace-nowrap">{formatDate(p.created_at)}</td>
@@ -4800,7 +4799,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                         <td className="px-3 py-2.5 font-semibold text-zinc-200 whitespace-nowrap">{s.name}</td>
                         <td className="px-3 py-2.5 text-zinc-400 whitespace-nowrap">{s.region}</td>
                         <td className="px-3 py-2.5 font-bold text-zinc-300 whitespace-nowrap">{s.level}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-yellow-500 whitespace-nowrap">{s.funds?.toLocaleString() || 0}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-yellow-500 whitespace-nowrap">{formatNumber(s.funds || 0, 0)}</td>
                         <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{s.member_count}</td>
                         <td className="px-3 py-2.5 text-zinc-300 whitespace-nowrap">{s.leader_name || <span className="text-zinc-600 italic">Trống</span>}</td>
                         <td className="px-3 py-2.5 whitespace-nowrap">{s.require_approval ? <span className="text-amber-400 text-[10px]">✓</span> : <span className="text-zinc-600">–</span>}</td>
@@ -4933,9 +4932,9 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{ap.time_rate}x</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{ap.aperture_hp?.toLocaleString()}/{ap.max_aperture_hp?.toLocaleString()}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{ap.area_size?.toLocaleString()} mẫu</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-yellow-500 font-bold whitespace-nowrap">{ap.immortal_essence?.toLocaleString()}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{formatNumber(ap.aperture_hp || 0, 0)}/{formatNumber(ap.max_aperture_hp || 0, 0)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{formatNumber(ap.area_size || 0, 0)} mẫu</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-yellow-500 font-bold whitespace-nowrap">{formatNumber(ap.immortal_essence || 0, 1)}</td>
                         <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">Năm {Math.round(ap.next_tribulation_year || 0)}</td>
                         <td className="px-3 py-2.5 text-right font-mono text-zinc-300 whitespace-nowrap">{ap.tribulation_count}</td>
                         <td className="px-3 py-2.5 text-center whitespace-nowrap">
@@ -5007,7 +5006,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                           </span>
                         )}
                       </div>
-                      <p className="mt-1 text-[10px] font-mono text-zinc-500">Rank {apertureDetail?.aperture_rank} · {apertureDetail?.grade} · Diện tích {Number(apertureDetail?.area_size || 0).toLocaleString()} mẫu · HP {Number(apertureDetail?.aperture_hp || 0).toLocaleString()}/{Number(apertureDetail?.max_aperture_hp || 0).toLocaleString()}</p>
+                      <p className="mt-1 text-[10px] font-mono text-zinc-500">Rank {apertureDetail?.aperture_rank} · {apertureDetail?.grade} · Diện tích {formatNumber(Number(apertureDetail?.area_size || 0), 0)} mẫu · HP {formatNumber(Number(apertureDetail?.aperture_hp || 0), 0)}/{formatNumber(Number(apertureDetail?.max_aperture_hp || 0), 0)}</p>
                     </div>
                     <span className="text-[10px] font-mono text-zinc-500">{String(apertureDetail?.id || "")}</span>
                   </div>
@@ -5021,7 +5020,7 @@ export const AdminView: React.FC<{ authorized?: boolean; embedded?: boolean; ini
                             <td className="px-2 py-2 text-zinc-400">{String(resource.point_type)} · {String(resource.grade)}{resource.point_class === "FAMOUS" ? " · Danh mỏ" : ""}</td>
                             <td className="px-2 py-2 text-center font-mono text-zinc-400">({String(resource.x)}, {String(resource.y)})</td>
                             <td className="px-2 py-2 text-center font-mono text-zinc-400">{String(resource.vitality)}</td>
-                            <td className="px-2 py-2 text-zinc-400">{Object.entries((resource.stock as Record<string, number>) || {}).filter(([, amount]) => amount > 0).map(([item, amount]) => `${item}: ${Number(amount).toLocaleString()}`).join(", ") || "Trống"}</td>
+                            <td className="px-2 py-2 text-zinc-400">{Object.entries((resource.stock as Record<string, number>) || {}).filter(([, amount]) => amount > 0).map(([item, amount]) => `${item}: ${formatNumber(Number(amount), 0)}`).join(", ") || "Trống"}</td>
                             <td className="px-2 py-2 text-zinc-400">{String(resource.state)}</td>
                           </tr>
                         ))}

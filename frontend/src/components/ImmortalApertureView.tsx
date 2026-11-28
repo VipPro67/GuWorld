@@ -952,7 +952,7 @@ return (
                 <Sparkles className="w-3.5 h-3.5" /> Thiên Khí:
               </span>
               <span className="font-mono text-slate-200">
-                {Math.round(aperture?.heaven_qi ?? 1000)} / {Math.round(aperture?.max_heaven_qi ?? 1000)}
+                {formatNumber(aperture?.heaven_qi ?? 1000, 0)} / {formatNumber(aperture?.max_heaven_qi ?? 1000, 0)}
               </span>
               <div className="w-16 h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
                 <div
@@ -967,7 +967,7 @@ return (
                 <Layers className="w-3.5 h-3.5" /> Địa Khí:
               </span>
               <span className="font-mono text-slate-200">
-                {Math.round(aperture?.earth_qi ?? 1000)} / {Math.round(aperture?.max_earth_qi ?? 1000)}
+                {formatNumber(aperture?.earth_qi ?? 1000, 0)} / {formatNumber(aperture?.max_earth_qi ?? 1000, 0)}
               </span>
               <div className="w-16 h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
                 <div
@@ -1065,22 +1065,22 @@ return (
 
                 <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/80">
                   <div className="text-slate-400 text-xs font-semibold">Gia Tốc Thời Gian</div>
-                  <div className="text-lg font-bold text-cyan-400 mt-1">x{aperture.time_rate} lần</div>
+                  <div className="text-lg font-bold text-cyan-400 mt-1">x{formatNumber(aperture.time_rate, 2)} lần</div>
                 </div>
 
                 <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/80">
                   <div className="text-slate-400 text-xs font-semibold">Tốc Độ Cá Nhân</div>
-                  <div className="text-lg font-bold text-violet-400 mt-1">x{timeSpeedMultiplier.toFixed(2)} lần</div>
+                  <div className="text-lg font-bold text-violet-400 mt-1">x{formatNumber(timeSpeedMultiplier, 2)} lần</div>
                 </div>
 
                 <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800/80">
                   <div className="text-slate-400 text-xs font-semibold">{manaName} Dự Trữ</div>
                   <div className="text-lg font-bold text-yellow-400 mt-1 flex items-center gap-1">
                     <Coins className="w-5 h-5 text-yellow-500" />
-                    {Math.floor(player.current_mana)} viên
+                    {formatNumber(Math.floor(player.current_mana), 0)} viên
                   </div>
                   <div className="text-[10px] text-slate-400 mt-1 font-mono">
-                    Hồi phục: +{hourlyRegen.toFixed(1)} viên/giờ
+                    Hồi phục: +{formatNumber(hourlyRegen, 1)} viên/giờ
                   </div>
                 </div>
 
@@ -2597,12 +2597,12 @@ return (
                         <div className="grid grid-cols-3 gap-2 text-center">
                           <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-2">
                             <div className="text-[10px] text-slate-500 uppercase">Chi Phí</div>
-                            <div className="font-bold text-amber-300">{cleanseStoneCost.toLocaleString()} TNT</div>
+                            <div className="font-bold text-amber-300">{formatNumber(cleanseStoneCost, 0)} TNT</div>
                           </div>
                           <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-2">
                             <div className="text-[10px] text-slate-500 uppercase">Đạo Tài Thu Hồi</div>
-                            <div className="font-bold text-emerald-300">{cleanseRefundQty.toLocaleString()} món</div>
-                            <div className="text-[10px] text-emerald-500/80">+{cleanseRefundMarks.toLocaleString()} Đạo Ngân</div>
+                            <div className="font-bold text-emerald-300">{formatNumber(cleanseRefundQty, 0)} món</div>
+                            <div className="text-[10px] text-emerald-500/80">+{formatNumber(cleanseRefundMarks, 0)} Đạo Ngân</div>
                           </div>
                           <div className="bg-slate-950/60 border border-slate-800 rounded-lg p-2">
                             <div className="text-[10px] text-slate-500 uppercase">Độ Thuần Khiết</div>
@@ -3034,7 +3034,7 @@ return (
                               <div className="space-y-1">
                                 <div className="flex justify-between text-xs">
                                   <span className="text-slate-400">Dân số:</span>
-                                  <span className="font-bold text-slate-200">{population.toLocaleString()} / {maxPop.toLocaleString()}</span>
+                                  <span className="font-bold text-slate-200">{formatNumber(population, 0)} / {formatNumber(maxPop, 0)}</span>
                                 </div>
                                 <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-800">
                                   <div className="h-full bg-cyan-500" style={{ width: `${maxPop > 0 ? Math.min(100, (population / maxPop) * 100) : 0}%` }} />
@@ -3052,7 +3052,7 @@ return (
                                 </div>
                                 <div className="p-1.5 bg-slate-900/60 rounded-lg flex justify-between">
                                   <span className="text-slate-400">Lương thực</span>
-                                  <span className="font-bold text-amber-300">{Math.floor(foodStored).toLocaleString()}</span>
+                                  <span className="font-bold text-amber-300">{formatNumber(Math.floor(foodStored), 0)}</span>
                                 </div>
                                 <div className="p-1.5 bg-slate-900/60 rounded-lg flex justify-between">
                                   <span className="text-slate-400">Sư / Tiên</span>
@@ -3132,19 +3132,19 @@ return (
                   <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
                     <div className="text-slate-400">Tổng Sức Chứa Dân Số</div>
                     <div className="text-base font-bold text-emerald-400 mt-0.5">
-                      {settlements.reduce((acc, s) => acc + s.population_capacity, 0).toLocaleString()}
+                      {formatNumber(settlements.reduce((acc, s) => acc + s.population_capacity, 0), 0)}
                     </div>
                   </div>
                   <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
                     <div className="text-slate-400">Tổng Mức Nhà Ở</div>
                     <div className="text-base font-bold text-amber-400 mt-0.5">
-                      {settlements.reduce((acc, s) => acc + s.housing, 0).toLocaleString()}
+                      {formatNumber(settlements.reduce((acc, s) => acc + s.housing, 0), 0)}
                     </div>
                   </div>
                   <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
                     <div className="text-slate-400">Kho Lương Thực</div>
                     <div className="text-base font-bold text-purple-400 mt-0.5">
-                      {settlements.reduce((acc, s) => acc + s.food_storage, 0).toLocaleString()}
+                      {formatNumber(settlements.reduce((acc, s) => acc + s.food_storage, 0), 0)}
                     </div>
                   </div>
                 </div>
@@ -3218,15 +3218,15 @@ return (
                             <div className="space-y-2 text-xs bg-slate-900/60 p-3 rounded-lg border border-slate-850">
                               <div className="flex justify-between items-center">
                                 <span className="text-slate-400">Sức chứa dân số:</span>
-                                <span className="text-cyan-400 font-bold">{s.population_capacity.toLocaleString()}</span>
+                                <span className="text-cyan-400 font-bold">{formatNumber(s.population_capacity, 0)}</span>
                               </div>
                               <div className="flex justify-between items-center">
                                 <span className="text-slate-400">Nhà ở (Housing):</span>
-                                <span className="text-amber-400 font-bold">{s.housing.toLocaleString()}</span>
+                                <span className="text-amber-400 font-bold">{formatNumber(s.housing, 0)}</span>
                               </div>
                               <div className="flex justify-between items-center">
                                 <span className="text-slate-400">Kho lương thực:</span>
-                                <span className="text-purple-400 font-bold">{s.food_storage.toLocaleString()}</span>
+                                <span className="text-purple-400 font-bold">{formatNumber(s.food_storage, 0)}</span>
                               </div>
                               <div className="flex justify-between items-center">
                                 <span className="text-slate-400">Chỉ số an ninh:</span>
@@ -3367,7 +3367,7 @@ return (
                             <div className="font-bold text-xs text-slate-100 truncate">{npc.name}</div>
                             <div className="text-[9px] text-slate-500">Rank {npc.rank} · {rankLabels[npc.sub_rank] || "?"} · {npc.path}</div>
                             <div className="text-[9px] text-slate-500">Loyal: {npc.loyalty.toFixed(0)} · Talent: {npc.talent.toFixed(0)}</div>
-                            <div className="text-[9px] text-slate-500">HP {npc.hp.toFixed(0)}/{npc.max_hp.toFixed(0)} · Tu vi {npc.experience} · Slot {npc.formation_slot || "—"}</div>
+                            <div className="text-[9px] text-slate-500">HP {formatNumber(npc.hp, 0)}/{formatNumber(npc.max_hp, 0)} · Tu vi {formatNumber(npc.experience, 0)} · Slot {npc.formation_slot || "—"}</div>
                           </div>
                           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${npc.status === "IDLE" ? "bg-slate-800 text-slate-400" : "bg-amber-500/20 text-amber-400"}`}>
                             {npc.role}
