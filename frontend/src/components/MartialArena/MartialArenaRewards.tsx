@@ -62,7 +62,7 @@ export default function MartialArenaRewards() {
           <div className="grid gap-2 border-t border-white/10 pt-4 sm:grid-cols-2">
             <div className="flex items-center gap-2.5 rounded-lg bg-black/20 px-3 py-2.5"><Gem className="h-4 w-4 text-amber-300" /><span className="text-sm text-zinc-200">{reward.reward_stones.toLocaleString()} <span className="text-zinc-400">Nguyên Thạch</span></span></div>
             <div className="flex items-center gap-2.5 rounded-lg bg-black/20 px-3 py-2.5"><Gem className="h-4 w-4 text-sky-300" /><span className="text-sm text-zinc-200">{reward.reward_immortal_stones.toLocaleString()} <span className="text-zinc-400">Tiên Nguyên Thạch</span></span></div>
-            {reward.reward_gu_id && <div className="flex items-center gap-2.5 rounded-lg bg-black/20 px-3 py-2.5"><span className="text-purple-300">✦</span><span className="text-sm text-purple-200">Đã trao trực tiếp: {reward.reward_gu_id.replace("GU_", "").replace(/_/g, " ")}{reward.reward_gu_rank && <span className="ml-1 text-xs text-zinc-400">(Rank {reward.reward_gu_rank})</span>}</span></div>}
+            {reward.reward_gu_id && <div className="flex items-center gap-2.5 rounded-lg bg-black/20 px-3 py-2.5"><span className="text-purple-300">✦</span><span className="text-sm text-purple-200">Cổ Trùng thưởng: {reward.reward_gu_id.replace("GU_", "").replace(/_/g, " ")}{reward.reward_gu_rank && <span className="ml-1 text-xs text-zinc-400">(Rank {reward.reward_gu_rank})</span>}</span></div>}
             {reward.title && <div className="flex items-center gap-2.5 rounded-lg bg-black/20 px-3 py-2.5"><Crown className="h-4 w-4 text-amber-300" /><span className="text-sm text-zinc-200">{reward.title}</span></div>}
           </div>
         </GameCard>

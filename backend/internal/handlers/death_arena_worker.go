@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -29,7 +30,9 @@ func StartDeathArenaWorker(ctx context.Context) {
 	logger.S.Info("Started Death Arena worker (event-driven timer schedule)")
 
 	// 1. Recover state on startup (handles server restarts during tournaments)
-	recoverDeathArenaOnStartup()
+	worker.SafeRun("death_arena_recovery", ctx, func(context.Context) {
+		recoverDeathArenaOnStartup()
+	})
 
 	// 2. Schedule next event
 	scheduleNextDeathArenaEvent(ctx)

@@ -67,6 +67,7 @@ func GenerateBracket(tournamentID string) error {
 	}
 
 	if len(teams) < 2 {
+		var rewardedPlayers []string
 		// Auto-win if only 1 team
 		if len(teams) == 1 {
 			_, _ = tx.Exec(`
@@ -76,7 +77,8 @@ func GenerateBracket(tournamentID string) error {
 			`, teams[0].ID, tournamentID)
 
 			// Award champion rewards
-			if err := awardChampionRewards(tx, tournamentID, teams[0].ID, 1); err != nil {
+			rewardedPlayers, err = awardChampionRewards(tx, tournamentID, teams[0].ID, 1)
+			if err != nil {
 				return err
 			}
 		} else {
@@ -87,7 +89,17 @@ func GenerateBracket(tournamentID string) error {
 				WHERE id = $1
 			`, tournamentID)
 		}
-		return tx.Commit()
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		invalidateTournamentCache(tournamentID)
+		BroadcastDeathArenaEvent("tournament_finished", tournamentID, nil)
+		if len(rewardedPlayers) > 0 {
+			BroadcastDeathArenaEvent("reward_available", tournamentID, map[string]interface{}{
+				"player_ids": rewardedPlayers,
+			})
+		}
+		return nil
 	}
 
 	// Shuffle teams randomly

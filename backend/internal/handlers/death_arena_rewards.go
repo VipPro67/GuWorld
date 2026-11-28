@@ -66,12 +66,13 @@ type teamMemberCombatant struct {
 	PathMasteries models.PathMasteriesMap
 }
 
-// awardChampionRewards awards rewards to top 3 teams
-func awardChampionRewards(tx *sql.Tx, tournamentID, championTeamID string, placement int) error {
-	// Get all teams ordered by placement
-	teams, err := getTeamPlacements(tx, tournamentID)
+// awardChampionRewards writes claimable rewards for the top 3 teams.
+// Gu rewards are recorded on the claim row and granted when the player claims
+// so a full aperture never rolls back tournament settlement.
+func awardChampionRewards(tx *sql.Tx, tournamentID, championTeamID string, finalRound int) ([]string, error) {
+	teams, err := getTeamPlacements(tx, tournamentID, championTeamID, finalRound)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	placementTitles := map[int]string{
@@ -92,7 +93,6 @@ func awardChampionRewards(tx *sql.Tx, tournamentID, championTeamID string, place
 		3: 150,
 	}
 
-	// Gu rewards for top 3 (guID, rank)
 	type guReward struct {
 		guID string
 		rank int
@@ -103,6 +103,7 @@ func awardChampionRewards(tx *sql.Tx, tournamentID, championTeamID string, place
 		3: {guID: "GU_LIFESPAN_50", rank: 4},
 	}
 
+	var rewardedPlayers []string
 	for i, teamID := range teams {
 		if i >= 3 {
 			break
@@ -113,10 +114,9 @@ func awardChampionRewards(tx *sql.Tx, tournamentID, championTeamID string, place
 		immortalStones := placementImmortalStones[place]
 		gu := placementGuRewards[place]
 
-		// Get team members
 		members, err := getTeamMembers(tx, teamID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, memberID := range members {
 			_, err := tx.Exec(`
@@ -125,103 +125,29 @@ func awardChampionRewards(tx *sql.Tx, tournamentID, championTeamID string, place
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			`, tournamentID, memberID, place, teamID, title, stones, immortalStones, gu.guID, gu.rank)
 			if err != nil {
-				return fmt.Errorf("insert death arena placement %d reward for player %s: %w", place, memberID, err)
+				return nil, fmt.Errorf("insert death arena placement %d reward for player %s: %w", place, memberID, err)
 			}
-
-			// Award Gu directly to player
-			newGu := models.GuInstance{
-				InstanceID: fmt.Sprintf("death_arena_%s_%d_%s", tournamentID, place, memberID[:8]),
-				GuID:       gu.guID,
-				Rank:       gu.rank,
-				Hunger:     100,
-				Status:     "ACTIVE",
-				Equipped:   false,
-				IsVital:    false,
-			}
-			if err := db.AddPlayerGu(tx, memberID, newGu); err != nil {
-				return fmt.Errorf("award Gu %s rank %d to player %s: %w", gu.guID, gu.rank, memberID, err)
-			}
+			rewardedPlayers = append(rewardedPlayers, memberID)
 		}
 
-		// Update team final placement
 		if _, err := tx.Exec(`UPDATE death_arena_teams SET final_placement = $1 WHERE id = $2`, place, teamID); err != nil {
-			return fmt.Errorf("save death arena placement %d for team %s: %w", place, teamID, err)
+			return nil, fmt.Errorf("save death arena placement %d for team %s: %w", place, teamID, err)
 		}
 	}
 
-	return nil
+	return rewardedPlayers, nil
 }
 
-// getTeamPlacements returns team IDs ordered by placement
-func getTeamPlacements(tx *sql.Tx, tournamentID string) ([]string, error) {
-	// First get champion
-	var championID string
-	err := tx.QueryRow(`
-		SELECT champion_team_id FROM death_arena_tournaments WHERE id = $1
-	`, tournamentID).Scan(&championID)
-	if err != nil || championID == "" {
-		if err == nil {
-			err = fmt.Errorf("tournament %s has no champion team", tournamentID)
-		}
-		return nil, err
-	}
-
-	result := []string{championID}
-
-	// Get runner-up from final match (the loser of the final match)
-	var runnerUp *string
-	err = tx.QueryRow(`
-		SELECT CASE WHEN winner_team_id = team_a_id THEN team_b_id ELSE team_a_id END
-		FROM death_arena_matches
-		WHERE tournament_id = $1 AND round_number = (
-			SELECT total_rounds FROM death_arena_tournaments WHERE id = $1
-		) AND status = 'FINISHED'
-		LIMIT 1
-	`, tournamentID).Scan(&runnerUp)
-	if err == nil && runnerUp != nil && *runnerUp != "" {
-		result = append(result, *runnerUp)
-	} else if err != nil && err != sql.ErrNoRows {
-		return nil, err
-	}
-
-	// Get 3rd place from semi-final losers
-	runnerUpID := ""
-	if runnerUp != nil {
-		runnerUpID = *runnerUp
-	}
-	rows, err := tx.Query(`
-		SELECT DISTINCT 
-			CASE WHEN winner_team_id = team_a_id THEN team_b_id ELSE team_a_id END AS loser_id
-		FROM death_arena_matches
-		WHERE tournament_id = $1 
-		AND round_number = (SELECT total_rounds - 1 FROM death_arena_tournaments WHERE id = $1)
-		AND status = 'FINISHED'
-		AND (CASE WHEN winner_team_id = team_a_id THEN team_b_id ELSE team_a_id END) IS NOT NULL
-		AND (CASE WHEN winner_team_id = team_a_id THEN team_b_id ELSE team_a_id END) != $2
-		AND (CASE WHEN winner_team_id = team_a_id THEN team_b_id ELSE team_a_id END) != $3
-		LIMIT 1
-	`, tournamentID, championID, runnerUpID)
-	if err == nil {
-		if rows.Next() {
-			var third string
-			if errScan := rows.Scan(&third); errScan != nil {
-				rows.Close()
-				return nil, errScan
-			}
-			if third != "" {
-				result = append(result, third)
-			}
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		rows.Close()
-	} else if err != sql.ErrNoRows {
-		return nil, err
-	}
-
-	return result, nil
+// getTeamPlacements returns team IDs ordered by placement.
+func getTeamPlacements(tx *sql.Tx, tournamentID, championTeamID string, finalRound int) ([]string, error) {
+	return resolveTournamentPlacements(tx, placementQueryConfig{
+		TournamentTable:  "death_arena_tournaments",
+		ChampionColumn:   "champion_team_id",
+		MatchTable:       "death_arena_matches",
+		SideAColumn:      "team_a_id",
+		SideBColumn:      "team_b_id",
+		WinnerSideColumn: "winner_team_id",
+	}, tournamentID, championTeamID, finalRound)
 }
 
 // getTeamMembers returns player IDs for a team

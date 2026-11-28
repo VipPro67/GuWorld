@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/worker"
 	"github.com/vippro67/GuWorld/backend/pkg/logger"
 )
 
@@ -30,7 +31,9 @@ func StartMartialArenaWorker(ctx context.Context) {
 
 	logger.S.Info("Started Martial Arena worker (weekly Tuesday 12:00 VN)")
 
-	recoverMartialArenaOnStartup()
+	worker.SafeRun("martial_arena_recovery", ctx, func(context.Context) {
+		recoverMartialArenaOnStartup()
+	})
 	scheduleNextMartialArenaEvent(ctx)
 
 	go func() {
@@ -120,7 +123,9 @@ func handleMartialArenaEvent(ctx context.Context) {
 		return
 	default:
 	}
-	runMartialArenaEvent()
+	worker.SafeRun("martial_arena_event", ctx, func(context.Context) {
+		runMartialArenaEvent()
+	})
 	scheduleNextMartialArenaEvent(ctx)
 }
 

@@ -2,108 +2,47 @@
 
 import { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
-import { GameCard } from "@/components/ui";
-import { ScrollText } from "lucide-react";
+import { Crown } from "lucide-react";
 import { rankLabel } from "@/lib/combat";
-import type { MartialBracketEntry, MartialMatch } from "@/store/slices/martialArenaSlice";
+import type { MartialBracketEntry } from "@/store/slices/martialArenaSlice";
 import MartialArenaCombatModal from "./MartialArenaCombatModal";
+import { TournamentBracketGrid, TournamentEmptyState, TournamentStatusBadge } from "../Arena/TournamentShared";
 
 const rankName = (r: number) => (r >= 10 ? "Vĩnh Sinh" : rankLabel(r));
 
-function BracketColumn({ entry }: { entry: MartialBracketEntry }) {
+function BracketSection({ entry }: { entry: MartialBracketEntry }) {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
-  const totalRounds = entry.tournament.total_rounds;
 
-  const matchesByRound: Record<number, MartialMatch[]> = {};
-  entry.matches.forEach((match) => {
-    if (!matchesByRound[match.round_number]) matchesByRound[match.round_number] = [];
-    matchesByRound[match.round_number].push(match);
-  });
-  const rounds = Object.keys(matchesByRound).map(Number).sort((a, b) => a - b);
-
-  const roundLabel = (round: number) => {
-    if (round === totalRounds) return "Chung Kết";
-    if (round === totalRounds - 1) return "Bán Kết";
-    if (round === totalRounds - 2) return "Tứ Kết";
-    return `Vòng ${round}`;
-  };
-
-  const statusBadge = (status: string) => {
-    switch (status) {
-      case "PENDING": return <span className="px-2 py-1 text-xs bg-gray-600 rounded">Chờ</span>;
-      case "BYE": return <span className="px-2 py-1 text-xs bg-blue-600 rounded">BYE</span>;
-      case "IN_PROGRESS": return <span className="px-2 py-1 text-xs bg-yellow-600 rounded animate-pulse">Đang đấu</span>;
-      case "FINISHED": return <span className="px-2 py-1 text-xs bg-green-600 rounded">Xong</span>;
-      default: return null;
-    }
-  };
+  const mappedMatches = entry.matches.map((match) => ({
+    id: match.id,
+    round_number: match.round_number,
+    bracket_position: match.bracket_position,
+    status: match.status,
+    sideAId: match.combatant_a_id,
+    sideAName: match.combatant_a_name,
+    sideBId: match.combatant_b_id,
+    sideBName: match.combatant_b_name,
+    winnerId: match.winner_combatant_id,
+    rewardStones: match.reward_stones,
+    rewardLabel: "NT",
+  }));
 
   return (
-    <div className="mb-6">
-      <div className="font-bold text-lg mb-2">{rankName(entry.rank)}</div>
-      <div className="overflow-x-auto">
-        <div className="flex gap-4 min-w-max pb-4">
-          {rounds.map((round) => (
-            <div key={round} className="flex flex-col gap-2">
-              <div className="text-center font-bold text-sm mb-2 text-gray-300">
-                {roundLabel(round)}
-              </div>
-              {matchesByRound[round].map((match) => (
-                <GameCard key={match.id} className="p-3 w-64">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs text-gray-400">#{match.bracket_position}</span>
-                    {statusBadge(match.status)}
-                  </div>
-                  <div className="space-y-1">
-                    <div
-                      className={`p-2 rounded ${
-                        match.winner_combatant_id === match.combatant_a_id
-                          ? "bg-green-900/50 border border-green-500"
-                          : "bg-black/30"
-                      }`}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium text-sm truncate">{match.combatant_a_name}</span>
-                        {match.winner_combatant_id === match.combatant_a_id && (
-                          <span className="text-green-400 text-xs">✓</span>
-                        )}
-                      </div>
-                    </div>
-                    {match.combatant_b_name ? (
-                      <div
-                        className={`p-2 rounded ${
-                          match.winner_combatant_id === match.combatant_b_id
-                            ? "bg-green-900/50 border border-green-500"
-                            : "bg-black/30"
-                        }`}
-                      >
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-sm truncate">{match.combatant_b_name}</span>
-                          {match.winner_combatant_id === match.combatant_b_id && (
-                            <span className="text-green-400 text-xs">✓</span>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-2 rounded bg-black/30 text-gray-500 text-sm text-center">BYE</div>
-                    )}
-                  </div>
-                  {match.status === "FINISHED" && (
-                    <div className="mt-2.5 pt-2 border-t border-zinc-800/80 flex justify-end">
-                      <button
-                        onClick={() => setSelectedMatchId(match.id)}
-                        className="flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition font-medium cursor-pointer"
-                      >
-                        <ScrollText className="w-3 h-3" /> Xem chiến báo
-                      </button>
-                    </div>
-                  )}
-                </GameCard>
-              ))}
-            </div>
-          ))}
+    <div className="space-y-3 rounded-2xl border border-white/10 bg-zinc-900/40 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
+        <div className="flex items-center gap-2">
+          <Crown className="h-4 w-4 text-amber-300" />
+          <h3 className="text-base font-bold text-zinc-100">{rankName(entry.rank)}</h3>
+          <span className="text-xs text-zinc-400">· {entry.tournament.total_players} võ giả</span>
         </div>
+        <TournamentStatusBadge status={entry.tournament.status} />
       </div>
+
+      <TournamentBracketGrid
+        matches={mappedMatches}
+        totalRounds={entry.tournament.total_rounds}
+        onSelectMatch={setSelectedMatchId}
+      />
 
       <MartialArenaCombatModal matchId={selectedMatchId} onClose={() => setSelectedMatchId(null)} />
     </div>
@@ -112,20 +51,62 @@ function BracketColumn({ entry }: { entry: MartialBracketEntry }) {
 
 export default function MartialArenaBracket() {
   const { martialBracket, fetchMartialBracket } = useGameStore();
+  const [selectedRank, setSelectedRank] = useState<number | "all">("all");
 
   useEffect(() => {
     fetchMartialBracket();
   }, [fetchMartialBracket]);
 
   if (!martialBracket || martialBracket.length === 0) {
-    return <div className="text-center text-gray-400 py-8">Không có bảng đấu nào</div>;
+    return (
+      <TournamentEmptyState
+        icon="swords"
+        title="Không có bảng đấu nào"
+        description="Bảng đấu theo từng cảnh giới sẽ hiển thị tại đây khi Đại Hội Võ Thuật khai mở."
+      />
+    );
   }
+
+  const visibleEntries =
+    selectedRank === "all"
+      ? martialBracket
+      : martialBracket.filter((entry) => entry.rank === selectedRank);
 
   return (
     <div className="space-y-4">
-      {martialBracket.map((entry) => (
-        <BracketColumn key={entry.tournament.id} entry={entry} />
-      ))}
+      {martialBracket.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setSelectedRank("all")}
+            className={`cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+              selectedRank === "all"
+                ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
+                : "border-white/10 bg-white/5 text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            Tất cả ({martialBracket.length})
+          </button>
+          {martialBracket.map((entry) => (
+            <button
+              key={entry.tournament.id}
+              onClick={() => setSelectedRank(entry.rank)}
+              className={`cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                selectedRank === entry.rank
+                  ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
+                  : "border-white/10 bg-white/5 text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              {rankName(entry.rank)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-5">
+        {visibleEntries.map((entry) => (
+          <BracketSection key={entry.tournament.id} entry={entry} />
+        ))}
+      </div>
     </div>
   );
 }

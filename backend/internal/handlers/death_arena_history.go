@@ -1,17 +1,13 @@
 package handlers
 
 import (
-	"database/sql"
-	"fmt"
 	"math/rand"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
 	"github.com/vippro67/GuWorld/backend/internal/httperr"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
-	"github.com/vippro67/GuWorld/backend/pkg/auditlog"
 )
 
 // GetTournamentHistory returns past tournaments
@@ -84,127 +80,7 @@ func GetMyRewards(c *gin.Context) {
 
 // ClaimReward claims a champion reward
 func ClaimReward(c *gin.Context) {
-	var req struct {
-		RewardID string `json:"reward_id" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Reward ID is required"})
-		return
-	}
-
-	authID, exists := middleware.GetPlayerID(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	rewardUUID, err := uuid.Parse(req.RewardID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reward ID"})
-		return
-	}
-
-	tx, err := db.DB.Begin()
-	if err != nil {
-		httperr.Respond(c, httperr.Internal("Database error", err))
-		return
-	}
-	defer tx.Rollback()
-
-	// Verify ownership and not claimed
-	var reward ChampionReward
-	err = tx.QueryRow(`
-		SELECT id, player_id, placement, reward_stones, reward_immortal_stones, reward_gu_id, reward_gu_rank, claimed
-		FROM death_arena_champion_rewards
-		WHERE id = $1 AND player_id = $2
-	`, rewardUUID, authID).Scan(&reward.ID, &reward.PlayerID, &reward.Placement,
-		&reward.RewardStones, &reward.RewardImmortalStones, &reward.RewardGuID,
-		&reward.RewardGuRank, &reward.Claimed)
-
-	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phần thưởng"})
-		return
-	} else if err != nil {
-		httperr.Respond(c, httperr.Internal("Database error", err))
-		return
-	}
-
-	if reward.Claimed {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Phần thưởng đã được nhận rồi"})
-		return
-	}
-
-	// Award stones
-	if reward.RewardStones > 0 {
-		_, err = tx.Exec(`UPDATE players SET primeval_stones = primeval_stones + $1 WHERE id = $2`,
-			reward.RewardStones, authID)
-		if err != nil {
-			httperr.Respond(c, httperr.Internal("Failed to award stones", err))
-			return
-		}
-	}
-
-	if reward.RewardImmortalStones > 0 {
-		_, err = tx.Exec(`UPDATE players SET immortal_stones = immortal_stones + $1 WHERE id = $2`,
-			reward.RewardImmortalStones, authID)
-		if err != nil {
-			httperr.Respond(c, httperr.Internal("Failed to award immortal stones", err))
-			return
-		}
-	}
-
-	// Award title
-	if reward.Title != "" {
-		_, err = tx.Exec(`UPDATE players SET death_arena_title = $1 WHERE id = $2`,
-			reward.Title, authID)
-		if err != nil {
-			httperr.Respond(c, httperr.Internal("Failed to award title", err))
-			return
-		}
-	}
-
-	// Mark as claimed
-	_, err = tx.Exec(`UPDATE death_arena_champion_rewards SET claimed = true, claimed_at = NOW() WHERE id = $1`,
-		rewardUUID)
-	if err != nil {
-		httperr.Respond(c, httperr.Internal("Failed to mark as claimed", err))
-		return
-	}
-
-	if err := auditlog.LogCheckedContext(c.Request.Context(), tx, auditlog.Entry{
-		PlayerID:       &authID,
-		Action:         "tournament.claim_reward",
-		EntityType:     "death_arena_reward",
-		EntityID:       rewardUUID.String(),
-		RequestSummary: fmt.Sprintf("Nhận thưởng Tử Chiến Đấu Trường hạng %d: %d Nguyên Thạch, %d Tiên Thạch, danh hiệu '%s'", reward.Placement, reward.RewardStones, reward.RewardImmortalStones, reward.Title),
-		Metadata: map[string]interface{}{
-			"reward_id":       rewardUUID.String(),
-			"placement":       reward.Placement,
-			"stones":          reward.RewardStones,
-			"immortal_stones": reward.RewardImmortalStones,
-			"title":           reward.Title,
-			"reward_gu_id":    reward.RewardGuID,
-			"reward_gu_rank":  reward.RewardGuRank,
-		},
-		IPAddress: c.ClientIP(),
-		Success:   true,
-	}); err != nil {
-		httperr.Respond(c, httperr.Internal("Không thể ghi audit", err))
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		httperr.Respond(c, httperr.Internal("Database commit failed", err))
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":         "Nhận phần thưởng thành công!",
-		"placement":       reward.Placement,
-		"title":           reward.Title,
-		"stones":          reward.RewardStones,
-		"immortal_stones": reward.RewardImmortalStones,
-	})
+	claimTournamentReward(c, deathArenaRewardClaimSpec)
 }
 
 // generateTeamName generates a random team name

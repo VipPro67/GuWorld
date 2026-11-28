@@ -2327,56 +2327,27 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       });
 
-      // Listen for death_arena events
-      const unsubscribeDeathArena = uiRealtimeManager.subscribe("death_arena", (payload: ApiResponseData) => {
+      const handleTournamentRealtimeEvent = (
+        kind: "death_arena" | "martial_arena",
+        payload: ApiResponseData
+      ) => {
         try {
           const eventType = payload?.type;
           const eventData = payload?.data;
-          if (eventType === "match_updated" && eventData?.match_id) {
-            set((state) => {
-              const currentMatches = state.deathArenaBracket || [];
-              const updated = currentMatches.map((m) =>
-                m.id === eventData.match_id
-                  ? { ...m, winner_team_id: eventData.winner_team_id, status: eventData.status }
-                  : m
-              );
-              return { deathArenaBracket: updated };
-            });
-          } else if (eventType === "round_advanced" || eventType === "tournament_started") {
-            if (useUIStore.getState().currentView === "death-arena") {
-              get().fetchDeathArenaBracket();
-              get().fetchDeathArenaCurrent();
-            }
-          } else if (eventType === "tournament_finished") {
-            set((state) => {
-              if (!state.deathArenaTournament) return {};
-              return {
-                deathArenaTournament: {
-                  ...state.deathArenaTournament,
-                  status: "FINISHED",
-                  champion_team_id: eventData?.champion_team_id || state.deathArenaTournament.champion_team_id,
-                },
-              };
-            });
-            if (useUIStore.getState().currentView === "death-arena") {
-              get().fetchDeathArenaBracket();
-            }
-            get().fetchDeathArenaRewards();
-          }
-        } catch (err) {
-          console.error("Failed to process death arena event", err);
-        }
-      });
+          const isDeath = kind === "death_arena";
+          const activeView = isDeath ? "death-arena" : "martial-arena";
 
-      // Listen for martial_arena events
-      const unsubscribeMartialArena = uiRealtimeManager.subscribe("martial_arena", (payload: ApiResponseData) => {
-        try {
-          const eventType = payload?.type;
-          const eventData = payload?.data;
           if (eventType === "match_updated" && eventData?.match_id) {
             set((state) => {
-              const tournaments = state.martialBracket || [];
-              const updated = tournaments.map((entry) => ({
+              if (isDeath) {
+                const updated = (state.deathArenaBracket || []).map((m) =>
+                  m.id === eventData.match_id
+                    ? { ...m, winner_team_id: eventData.winner_team_id, status: eventData.status }
+                    : m
+                );
+                return { deathArenaBracket: updated };
+              }
+              const updated = (state.martialBracket || []).map((entry) => ({
                 ...entry,
                 matches: (entry.matches || []).map((m) =>
                   m.id === eventData.match_id
@@ -2386,22 +2357,74 @@ export const useGameStore = create<GameState>((set, get) => {
               }));
               return { martialBracket: updated };
             });
-          } else if (eventType === "round_advanced" || eventType === "tournament_started") {
-            if (useUIStore.getState().currentView === "martial-arena") {
-              get().fetchMartialBracket();
-              get().fetchMartialCurrent();
+          } else if (
+            eventType === "round_advanced" ||
+            eventType === "tournament_started" ||
+            eventType === "round_intermission"
+          ) {
+            if (useUIStore.getState().currentView === activeView) {
+              if (isDeath) {
+                get().fetchDeathArenaBracket();
+                get().fetchDeathArenaCurrent();
+              } else {
+                get().fetchMartialBracket();
+                get().fetchMartialCurrent();
+              }
             }
           } else if (eventType === "tournament_finished") {
-            get().fetchMartialRewards();
-            if (useUIStore.getState().currentView === "martial-arena") {
-              get().fetchMartialBracket();
-              get().fetchMartialCurrent();
+            if (isDeath) {
+              set((state) => {
+                if (!state.deathArenaTournament) return {};
+                return {
+                  deathArenaTournament: {
+                    ...state.deathArenaTournament,
+                    status: "FINISHED",
+                    champion_team_id: eventData?.champion_team_id || state.deathArenaTournament.champion_team_id,
+                  },
+                };
+              });
+              get().fetchDeathArenaRewards();
+              if (useUIStore.getState().currentView === activeView) {
+                get().fetchDeathArenaBracket();
+              }
+            } else {
+              get().fetchMartialRewards();
+              if (useUIStore.getState().currentView === activeView) {
+                get().fetchMartialBracket();
+                get().fetchMartialCurrent();
+              }
+            }
+          } else if (eventType === "reward_available") {
+            const playerId = get().player?.id;
+            const playerIds: string[] = Array.isArray(eventData?.player_ids) ? eventData.player_ids : [];
+            if (!playerId || playerIds.length === 0 || playerIds.includes(playerId)) {
+              if (isDeath) {
+                get().fetchDeathArenaRewards();
+              } else {
+                get().fetchMartialRewards();
+              }
+              if (playerId && playerIds.includes(playerId)) {
+                get().addToast(
+                  isDeath
+                    ? "Bạn có phần thưởng Đấu Trường Sinh Tử mới! Hãy vào mục Phần thưởng để nhận."
+                    : "Bạn có phần thưởng Đại Hội Võ Thuật mới! Hãy vào mục Phần thưởng để nhận.",
+                  "success"
+                );
+              }
             }
           }
         } catch (err) {
-          console.error("Failed to process martial arena event", err);
+          console.error(`Failed to process ${kind} event`, err);
         }
-      });
+      };
+
+      const unsubscribeDeathArena = uiRealtimeManager.subscribe("death_arena", (payload: ApiResponseData) =>
+        handleTournamentRealtimeEvent("death_arena", payload)
+      );
+
+      const unsubscribeMartialArena = uiRealtimeManager.subscribe("martial_arena", (payload: ApiResponseData) =>
+        handleTournamentRealtimeEvent("martial_arena", payload)
+      );
 
       const unsubscribeWorldChange = uiRealtimeManager.subscribe("world:change", (payload: ApiResponseData) => {
         const event = payload as ApiResponseData;

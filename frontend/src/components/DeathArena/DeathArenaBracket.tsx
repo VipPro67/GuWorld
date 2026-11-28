@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useGameStore } from "@/store/useGameStore";
-import { GameCard } from "@/components/ui";
-import { ScrollText } from "lucide-react";
 import DeathArenaCombatModal from "./DeathArenaCombatModal";
+import { TournamentBracketGrid, TournamentEmptyState } from "../Arena/TournamentShared";
 
 export default function DeathArenaBracket() {
   const { deathArenaTournament, deathArenaBracket, fetchDeathArenaBracket } = useGameStore();
@@ -15,122 +14,46 @@ export default function DeathArenaBracket() {
   }, [fetchDeathArenaBracket]);
 
   if (!deathArenaTournament) {
-    return <div className="text-center text-gray-400">Không có dữ liệu giải đấu</div>;
+    return (
+      <TournamentEmptyState
+        icon="swords"
+        title="Không có dữ liệu giải đấu"
+        description="Bảng đấu sẽ xuất hiện khi giải đấu Đấu Trường Sinh Tử được mở."
+      />
+    );
   }
 
   if (deathArenaTournament.status === "REGISTRATION") {
     return (
-      <div className="text-center text-gray-400">
-        Bảng đấu sẽ được tạo sau khi kết thúc đăng ký
-      </div>
+      <TournamentEmptyState
+        icon="swords"
+        title="Đang trong thời gian đăng ký"
+        description="Bảng đấu loại trực tiếp sẽ được khởi tạo tự động ngay khi cổng đăng ký đóng lúc 17:00."
+      />
     );
   }
 
-  // Group matches by round
-  const matchesByRound: Record<number, typeof deathArenaBracket> = {};
-  deathArenaBracket.forEach((match) => {
-    if (!matchesByRound[match.round_number]) {
-      matchesByRound[match.round_number] = [];
-    }
-    matchesByRound[match.round_number].push(match);
-  });
-
-  const rounds = Object.keys(matchesByRound)
-    .map(Number)
-    .sort((a, b) => a - b);
-
-  const getRoundLabel = (round: number, totalRounds: number) => {
-    if (round === totalRounds) return "Chung Kết";
-    if (round === totalRounds - 1) return "Bán Kết";
-    if (round === totalRounds - 2) return "Tứ Kết";
-    return `Vòng ${round}`;
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "PENDING":
-        return <span className="px-2 py-1 text-xs bg-gray-600 rounded">Chờ</span>;
-      case "BYE":
-        return <span className="px-2 py-1 text-xs bg-blue-600 rounded">BYE</span>;
-      case "IN_PROGRESS":
-        return <span className="px-2 py-1 text-xs bg-yellow-600 rounded animate-pulse">Đang đấu</span>;
-      case "FINISHED":
-        return <span className="px-2 py-1 text-xs bg-green-600 rounded">Xong</span>;
-      default:
-        return null;
-    }
-  };
+  const mappedMatches = deathArenaBracket.map((match) => ({
+    id: match.id,
+    round_number: match.round_number,
+    bracket_position: match.bracket_position,
+    status: match.status,
+    sideAId: match.team_a_id,
+    sideAName: match.team_a_name,
+    sideBId: match.team_b_id,
+    sideBName: match.team_b_name,
+    winnerId: match.winner_team_id,
+    rewardStones: match.reward_stones_per_member,
+    rewardLabel: "NT/người",
+  }));
 
   return (
-    <div className="overflow-x-auto">
-      <div className="flex gap-4 min-w-max pb-4">
-        {rounds.map((round) => (
-          <div key={round} className="flex flex-col gap-2">
-            <div className="text-center font-bold text-sm mb-2 text-gray-300">
-              {getRoundLabel(round, deathArenaTournament.total_rounds)}
-            </div>
-            {matchesByRound[round].map((match) => (
-              <GameCard key={match.id} className="p-3 w-64">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs text-gray-400">#{match.bracket_position}</span>
-                  {getStatusBadge(match.status)}
-                </div>
-                <div className="space-y-1">
-                  <div
-                    className={`p-2 rounded ${
-                      match.winner_team_id === match.team_a_id
-                        ? "bg-green-900/50 border border-green-500"
-                        : "bg-black/30"
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-sm truncate">{match.team_a_name}</span>
-                      {match.winner_team_id === match.team_a_id && (
-                        <span className="text-green-400 text-xs">✓</span>
-                      )}
-                    </div>
-                  </div>
-                  {match.team_b_name ? (
-                    <div
-                      className={`p-2 rounded ${
-                        match.winner_team_id === match.team_b_id
-                          ? "bg-green-900/50 border border-green-500"
-                          : "bg-black/30"
-                      }`}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium text-sm truncate">{match.team_b_name}</span>
-                        {match.winner_team_id === match.team_b_id && (
-                          <span className="text-green-400 text-xs">✓</span>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-2 rounded bg-black/30 text-gray-500 text-sm text-center">
-                      BYE
-                    </div>
-                  )}
-                </div>
-                {match.reward_stones_per_member > 0 && (
-                  <div className="mt-2 text-xs text-gray-400 text-center">
-                    +{match.reward_stones_per_member} Nguyên Thạch/người
-                  </div>
-                )}
-                {match.status === "FINISHED" && (
-                  <div className="mt-2.5 pt-2 border-t border-zinc-800/80 flex justify-end">
-                    <button
-                      onClick={() => setSelectedMatchId(match.id)}
-                      className="flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition font-medium cursor-pointer"
-                    >
-                      <ScrollText className="w-3 h-3" /> Xem chiến báo
-                    </button>
-                  </div>
-                )}
-              </GameCard>
-            ))}
-          </div>
-        ))}
-      </div>
+    <div>
+      <TournamentBracketGrid
+        matches={mappedMatches}
+        totalRounds={deathArenaTournament.total_rounds}
+        onSelectMatch={setSelectedMatchId}
+      />
 
       <DeathArenaCombatModal
         matchId={selectedMatchId}

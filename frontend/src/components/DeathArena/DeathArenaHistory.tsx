@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
-import { GameCard } from "@/components/ui";
+import { TournamentEmptyState, TournamentHistoryItem } from "../Arena/TournamentShared";
 
 export default function DeathArenaHistory() {
   const { deathArenaHistory, fetchDeathArenaHistory } = useGameStore();
@@ -13,9 +13,11 @@ export default function DeathArenaHistory() {
 
   if (!deathArenaHistory || deathArenaHistory.length === 0) {
     return (
-      <div className="text-center text-gray-400">
-        Chưa có lịch sử giải đấu
-      </div>
+      <TournamentEmptyState
+        icon="trophy"
+        title="Chưa có lịch sử giải đấu"
+        description="Kết quả các mùa Đấu Trường Sinh Tử đã kết thúc sẽ được lưu lại tại đây."
+      />
     );
   }
 
@@ -37,22 +39,16 @@ export default function DeathArenaHistory() {
   return (
     <div className="space-y-3">
       {deathArenaHistory.map((tournament) => (
-        <GameCard key={tournament.id} className="p-4">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="font-bold">Giải Đấu {formatDate(tournament.scheduled_at)}</div>
-              <div className="text-sm text-gray-400">
-                {tournament.total_players} người | {tournament.total_teams} đội
-              </div>
-            </div>
-            <span className="px-3 py-1 text-sm bg-gray-600 rounded">Đã kết thúc</span>
-          </div>
-          {tournament.champion_team_id && (
-            <div className="mt-2 text-sm text-yellow-400">
-              🏆 Vô địch: Đội #{tournament.champion_team_id.substring(0, 8)}
-            </div>
-          )}
-        </GameCard>
+        <TournamentHistoryItem
+          key={tournament.id}
+          title={`Giải Đấu · ${formatDate(tournament.scheduled_at)}`}
+          subtitle={`${tournament.total_players} chiến sĩ · ${tournament.total_teams} tổ đội`}
+          championText={
+            tournament.champion_team_id
+              ? `Đội Vô Địch: #${tournament.champion_team_id.substring(0, 8)}`
+              : null
+          }
+        />
       ))}
     </div>
   );

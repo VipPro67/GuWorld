@@ -268,6 +268,15 @@ func resolveMartialArenaTurnBasedMatch(tournamentID, matchID, combatantAID, comb
 	if _, err := tx.Exec(`UPDATE martial_matches SET status='FINISHED',winner_combatant_id=$1,combat_log=$2,finished_at=NOW() WHERE id=$3 AND status='IN_PROGRESS'`, winnerID, logJSON, matchID); err != nil {
 		return fmt.Errorf("finish martial arena match: %w", err)
 	}
+	var reward int
+	if err := tx.QueryRow(`SELECT reward_stones FROM martial_matches WHERE id=$1`, matchID).Scan(&reward); err != nil {
+		return fmt.Errorf("load martial arena round reward: %w", err)
+	}
+	if reward > 0 {
+		if _, err := tx.Exec(`UPDATE players SET primeval_stones=primeval_stones+$1 WHERE id=(SELECT player_id FROM martial_combatants WHERE id=$2)`, reward, winnerID); err != nil {
+			return fmt.Errorf("award martial arena round reward: %w", err)
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}

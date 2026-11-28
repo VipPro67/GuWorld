@@ -148,6 +148,7 @@ func GenerateMartialBracket(tournamentID string) error {
 	n := len(combatants)
 	if n < 2 {
 		var champion interface{}
+		var rewardedPlayers []string
 		if n == 1 {
 			var pid string
 			_ = tx.QueryRow(`SELECT player_id FROM martial_combatants WHERE id = $1`, combatants[0]).Scan(&pid)
@@ -157,31 +158,44 @@ func GenerateMartialBracket(tournamentID string) error {
 			UPDATE martial_tournaments SET status = 'FINISHED', finished_at = NOW(), champion_player_id = $1, total_players = $2
 			WHERE id = $3
 		`, champion, n, tournamentID)
-		return tx.Commit()
+		if n == 1 {
+			rewardedPlayers, err = awardMartialChampionRewards(tx, tournamentID, 1)
+			if err != nil {
+				return err
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		invalidateMartialCache(tournamentID)
+		BroadcastMartialArenaEvent("tournament_finished", tournamentID, nil)
+		if len(rewardedPlayers) > 0 {
+			BroadcastMartialArenaEvent("reward_available", tournamentID, map[string]interface{}{
+				"player_ids": rewardedPlayers,
+			})
+		}
+		return nil
 	}
 
 	totalRounds := int(math.Ceil(math.Log2(float64(n))))
-	_, byes := martialBracketShape(n)
+	slots := buildBracketPairs(n)
+	round1Reward := martialRoundReward(1)
 
-	matchPos := 0
-	for i := 0; i < byes; i++ {
-		matchPos++
-		if _, err = tx.Exec(`
-			INSERT INTO martial_matches (tournament_id, round_number, bracket_position, combatant_a_id, winner_combatant_id, status)
-			VALUES ($1, 1, $2, $3, $3, 'BYE')
-		`, tournamentID, matchPos, combatants[i]); err != nil {
-			return err
-		}
-	}
-
-	rest := combatants[byes:]
-	for i := 0; i < len(rest); i += 2 {
-		matchPos++
-		if _, err = tx.Exec(`
-			INSERT INTO martial_matches (tournament_id, round_number, bracket_position, combatant_a_id, combatant_b_id, status)
-			VALUES ($1, 1, $2, $3, $4, 'PENDING')
-		`, tournamentID, matchPos, rest[i], rest[i+1]); err != nil {
-			return err
+	for _, slot := range slots {
+		if slot.IsBye {
+			if _, err = tx.Exec(`
+				INSERT INTO martial_matches (tournament_id, round_number, bracket_position, combatant_a_id, winner_combatant_id, status, reward_stones)
+				VALUES ($1, 1, $2, $3, $3, 'BYE', 0)
+			`, tournamentID, slot.Position, combatants[slot.SideAIdx]); err != nil {
+				return err
+			}
+		} else {
+			if _, err = tx.Exec(`
+				INSERT INTO martial_matches (tournament_id, round_number, bracket_position, combatant_a_id, combatant_b_id, status, reward_stones)
+				VALUES ($1, 1, $2, $3, $4, 'PENDING', $5)
+			`, tournamentID, slot.Position, combatants[slot.SideAIdx], combatants[slot.SideBIdx], round1Reward); err != nil {
+				return err
+			}
 		}
 	}
 

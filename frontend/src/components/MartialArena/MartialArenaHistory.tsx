@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { useGameStore } from "@/store/useGameStore";
-import { GameCard } from "@/components/ui";
 import { rankLabel } from "@/lib/combat";
+import { TournamentEmptyState, TournamentHistoryItem } from "../Arena/TournamentShared";
 
 const rankName = (r: number) => (r >= 10 ? "Vĩnh Sinh" : rankLabel(r));
 
@@ -15,7 +15,13 @@ export default function MartialArenaHistory() {
   }, [fetchMartialHistory]);
 
   if (!martialHistory || martialHistory.length === 0) {
-    return <div className="text-center text-gray-400">Chưa có lịch sử giải đấu</div>;
+    return (
+      <TournamentEmptyState
+        icon="trophy"
+        title="Chưa có lịch sử giải đấu"
+        description="Lịch sử các kỳ Đại Hội Võ Thuật theo từng cảnh giới sẽ hiển thị tại đây."
+      />
+    );
   }
 
   const formatDate = (dateStr: string) => {
@@ -36,18 +42,14 @@ export default function MartialArenaHistory() {
   return (
     <div className="space-y-3">
       {martialHistory.map((tournament) => (
-        <GameCard key={tournament.id} className="p-4">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="font-bold">{rankName(tournament.rank)} — {formatDate(tournament.scheduled_at)}</div>
-              <div className="text-sm text-gray-400">{tournament.total_players} người tham gia</div>
-            </div>
-            <span className="px-3 py-1 text-sm bg-gray-600 rounded">Đã kết thúc</span>
-          </div>
-          {tournament.champion_player_id && (
-            <div className="mt-2 text-sm text-yellow-400">🏆 Đã có nhà vô địch</div>
-          )}
-        </GameCard>
+        <TournamentHistoryItem
+          key={tournament.id}
+          title={`${rankName(tournament.rank)} · ${formatDate(tournament.scheduled_at)}`}
+          subtitle={`${tournament.total_players} võ giả tham gia`}
+          championText={
+            tournament.champion_player_id ? "Đã vinh danh Quán Quân bảng đấu" : null
+          }
+        />
       ))}
     </div>
   );
