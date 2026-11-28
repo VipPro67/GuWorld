@@ -65,7 +65,7 @@ Các status mới thêm có chance gốc 75%, kéo dài 2 lượt và cường �
 
 - Routes `/killer-moves/*` và `/gu-houses/*` yêu cầu đăng nhập và onboarding.
 - Component Gu phải thuộc player, đang sống, hợp lệ cho product profile/context và không bị product khác giữ.
-- Sát Chiêu cần preview hợp lệ; create yêu cầu đúng fingerprint của preview gần nhất. Nếu preview tự scale effect, player phải chấp nhận điều chỉnh trước khi lưu.
+- Sát Chiêu cần preview hợp lệ; create yêu cầu đúng fingerprint của preview gần nhất. Với `balance_version >= 3`, Sát Chiêu và Trận Kích Tiên Cổ Ốc dùng hệ **Ngân sách Sức mạnh (`PowerBudget`)** thống nhất (`Hard Reject` khi vượt ngân sách, `OpCap`, hoặc `MinRankGate`); các bản ghi cũ (`balance_version < 3`) vẫn được giữ nguyên (grandfathered). Trận Kích Tiên Cổ Ốc hỗ trợ đầy đủ các op chiến đấu hợp lệ đạt `MinRankGate` và Tiên Cổ Ốc giữ chỉ số `max_house_hp`/`house_defense` riêng.
 - Giới hạn số product đã lưu/equipped, số Gu component và số effect do product profile trả về; xem `/killer-moves/options` thay vì hard-code UI cap.
 - Một Gu không thể đồng thời nằm trong active Sát Chiêu, active Gu House hoặc teleport array reservation xung đột.
 

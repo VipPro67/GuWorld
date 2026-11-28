@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/middleware"
@@ -19,7 +20,7 @@ import (
 )
 
 const (
-	killerMoveBalanceVersion = 2
+	killerMoveBalanceVersion = 3
 )
 
 type killerMoveComponent struct {
@@ -111,6 +112,11 @@ type killerMovePreview struct {
 	PathMasteryLevel   int                            `json:"path_mastery_level"`
 	PowerBudget        float64                        `json:"power_budget"`
 	PowerLoad          float64                        `json:"power_load"`
+	PowerCost          float64                        `json:"power_cost"`
+	OpCount            int                            `json:"op_count"`
+	OpCap              int                            `json:"op_cap"`
+	MinRankRequired    int                            `json:"min_rank_required"`
+	Violations         []effectcatalog.PowerViolation `json:"violations"`
 	EffectScale        float64                        `json:"effect_scale"`
 	Harmony            float64                        `json:"harmony"`
 	Complexity         float64                        `json:"complexity"`

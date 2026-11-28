@@ -220,6 +220,17 @@ func guEffectWarnings(c *gin.Context) []effectcatalog.Issue {
 	return warnings
 }
 
+func buildAdminGuPowerAudit(rank int, raw json.RawMessage) *effectcatalog.PowerBudgetReport {
+	if rank <= 0 || len(raw) == 0 {
+		return nil
+	}
+	rep, err := effectcatalog.EvaluatePowerBudgetJSON(rank, raw)
+	if err != nil {
+		return nil
+	}
+	return &rep
+}
+
 func AdminCreateGuItem(c *gin.Context) {
 	adminID, ok := requireAdmin(c)
 	if !ok {
@@ -281,7 +292,7 @@ func AdminCreateGuItem(c *gin.Context) {
 		return
 	}
 	auditlog.Logf(db.DB, &adminID, "admin.create_gu", "id=%s name=%s", req.ID, req.Name)
-	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo cổ trùng", "issues": guEffectWarnings(c)})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã tạo cổ trùng", "issues": guEffectWarnings(c), "power_audit": buildAdminGuPowerAudit(req.Rank, req.Effects)})
 }
 
 func AdminUpdateGuItem(c *gin.Context) {
@@ -485,8 +496,12 @@ func AdminUpdateGuItem(c *gin.Context) {
 		httperr.Respond(c, httperr.Internal("Đã ghi dữ liệu nhưng không thể tải lại catalog Cổ: "+err.Error(), err))
 		return
 	}
+	auditRank := req.Rank
+	if auditRank <= 0 {
+		auditRank = oldRank
+	}
 	auditlog.Logf(db.DB, &adminID, "admin.update_gu", "id=%s", guID)
-	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật cổ trùng", "issues": guEffectWarnings(c)})
+	c.JSON(http.StatusOK, gin.H{"message": "Đã cập nhật cổ trùng", "issues": guEffectWarnings(c), "power_audit": buildAdminGuPowerAudit(auditRank, req.Effects)})
 }
 
 func AdminDeleteGuItem(c *gin.Context) {

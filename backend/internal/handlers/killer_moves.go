@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
@@ -479,13 +480,25 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 		pathMasteryLevel = gamefx.PathMasteryLevel(masteries[gamefx.CleanPath(path)])
 	}
 	componentCount := len(components)
-	budget := productProfile.PowerBudgetBase + float64(main.Rank)*productProfile.PowerBudgetPerCoreRank
+	mainCleanPath := gamefx.CleanPath(path)
+	supports := make([]composition.SupportBudgetInput, 0, max(0, componentCount-1))
 	for i := 1; i < componentCount; i++ {
-		budget += productProfile.PowerBudgetPerSupport / math.Pow(float64(i), productProfile.SupportBudgetExponent)
+		affinity := 0.70
+		if pathByGu[components[i].InstanceID] == mainCleanPath && mainCleanPath != "" {
+			affinity = 1.0
+		}
+		supports = append(supports, composition.SupportBudgetInput{
+			Rank:         components[i].Rank,
+			PathAffinity: affinity,
+		})
 	}
-	if budget <= 0 {
-		budget = 30
+	budget := composition.KillerMovePowerBudget(main.Rank, supports)
+	opCap := effectcatalog.MaxOpsForRank(main.Rank) + min(4, max(0, componentCount-1))
+	powerReport := effectcatalog.EvaluatePowerBudgetWithLimits(main.Rank, budget, opCap, composition.ToPowerBlockInputs(blocks))
+	if len(powerReport.Violations) > 0 {
+		return killerMovePreview{}, main, fmt.Errorf("%s", powerReport.Violations[0].Message)
 	}
+	load = powerReport.PowerCost
 	complexity := 1 + 0.14*float64(componentCount-1) + 0.12*float64(len(selected)-1) + 0.10*float64(max(0, len(paths)-1))
 	harmony := 1.0
 	if componentCount > 1 {
@@ -501,26 +514,7 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 		harmony = 0.6 + 0.4*float64(matching)/float64(pairs)
 	}
 	scale := 1.0
-	if load > budget {
-		scalableLoad := load - unscalableLoad
-		if unscalableLoad >= budget || scalableLoad <= 0 {
-			return killerMovePreview{}, main, fmt.Errorf("Các hiệu ứng không thể tự cân đã vượt ngân sách rank; hãy bỏ bớt effect hoặc chọn Cổ chính rank cao hơn")
-		}
-		scale = (budget - unscalableLoad) / scalableLoad
-	}
-	if scale < productProfile.MinimumEffectScale {
-		return killerMovePreview{}, main, fmt.Errorf("Công thức vượt ngân sách sức mạnh quá xa; hãy giảm số hiệu ứng hoặc chọn Cổ rank cao hơn")
-	}
-	for i := range selected {
-		if selected[i].PlayerATKCoefficient != nil {
-			*selected[i].PlayerATKCoefficient *= scale
-		}
-	}
-	for bi := range blocks {
-		for oi := range blocks[bi].Operations {
-			composition.ScaleOperation(&blocks[bi].Operations[oi], scale)
-		}
-	}
+	_ = unscalableLoad
 	masteryBonus := math.Min(0.15, float64(masteryXP)/1000*0.15)
 	success := 0.55 + float64(pathMasteryLevel)*0.035 + (harmony-0.6)*0.18 + masteryBonus - (complexity-1)*0.15
 	if success < 0.10 {
@@ -530,14 +524,11 @@ func calculateKillerMoveDraft(tx *sql.Tx, playerID uuid.UUID, req killerMoveDraf
 		success = 0.95
 	}
 	warnings := []string{}
-	if scale < 0.999 {
-		warnings = append(warnings, fmt.Sprintf("Hiệu ứng được giảm còn %.0f%% để vừa ngân sách rank %d", scale*100, main.Rank))
-	}
 	if harmony < 0.8 {
 		warnings = append(warnings, "Các lưu phái phối hợp chưa hòa hợp; tỉ lệ thành công giảm")
 	}
 	profile := compileKillerMoveCombatProfile(mainSpec, main, components, selected, blocks, path, pathMasteryLevel, harmony, complexity, success, manaCost)
-	preview := killerMovePreview{Components: components, CompositionGraph: graph, SelectedEffects: selected, CompiledEffects: blocks, Rank: main.Rank, Path: path, PathMasteryLevel: pathMasteryLevel, PowerBudget: budget, PowerLoad: load, EffectScale: scale, Harmony: harmony, Complexity: complexity, SuccessChance: success, ManaCost: manaCost, CombatProfile: profile, Warnings: warnings}
+	preview := killerMovePreview{Components: components, CompositionGraph: graph, SelectedEffects: selected, CompiledEffects: blocks, Rank: main.Rank, Path: path, PathMasteryLevel: pathMasteryLevel, PowerBudget: budget, PowerLoad: load, PowerCost: powerReport.PowerCost, OpCount: powerReport.OpCount, OpCap: powerReport.OpCap, MinRankRequired: powerReport.MinRankRequired, Violations: powerReport.Violations, EffectScale: scale, Harmony: harmony, Complexity: complexity, SuccessChance: success, ManaCost: manaCost, CombatProfile: profile, Warnings: warnings}
 	preview.PreviewFingerprint = killerMovePreviewHash(preview)
 	return preview, main, nil
 }

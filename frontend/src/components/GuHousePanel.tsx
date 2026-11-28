@@ -327,6 +327,12 @@ export function GuHousePanel() {
               </div>
               <div className="text-[11px] text-zinc-400">
                 Tích hợp {preview.actions?.length || 0} Trận Kích (Sát chiêu đặc hữu của Tiên Cổ Ốc).
+                {typeof preview.power_budget === "number" && preview.power_budget > 0 && (
+                  <span className="ml-2 font-mono text-amber-300">
+                    Ngân sách: {Math.round(preview.power_cost ?? 0).toLocaleString()} / {Math.round(preview.power_budget).toLocaleString()}
+                    {typeof preview.op_cap === "number" && ` · Ops ${preview.op_count ?? 0}/${preview.op_cap}`}
+                  </span>
+                )}
               </div>
               {preview.actions?.map((action: KillerMoveCombatProfile) => <div key={action.id} className="flex justify-between rounded-lg bg-zinc-900/70 px-2 py-1.5 text-[10px]">
                 <span className="text-zinc-300">{action.name}</span>

@@ -25,6 +25,12 @@ export interface GuHouseCombatProfile {
   damage_reduction: number;
   immune_debuffs: boolean;
   zero_backfire: boolean;
+  power_budget?: number;
+  power_cost?: number;
+  op_count?: number;
+  op_cap?: number;
+  min_rank_required?: number;
+  violations?: Array<{ code: string; block_id?: string; op?: string; message: string }>;
   actions: KillerMoveCombatProfile[];
 }
 

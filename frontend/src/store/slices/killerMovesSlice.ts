@@ -157,6 +157,13 @@ export interface KillerMoveDraft {
   accept_adjustments?: boolean;
 }
 
+export interface PowerViolation {
+  code: string;
+  block_id?: string;
+  op?: string;
+  message: string;
+}
+
 export interface KillerMovePreview {
   components: Array<{ instance_id: string; gu_id: string; rank: number }>;
   composition_graph: KillerMoveCompositionGraph;
@@ -165,6 +172,11 @@ export interface KillerMovePreview {
   path: string;
   power_budget: number;
   power_load: number;
+  power_cost?: number;
+  op_count?: number;
+  op_cap?: number;
+  min_rank_required?: number;
+  violations?: PowerViolation[];
   effect_scale: number;
   harmony: number;
   complexity: number;

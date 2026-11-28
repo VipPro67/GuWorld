@@ -161,11 +161,11 @@ func checkEffectCompatibility(contextID string, block gameplayeffects.Block, ope
 		return "supported", ""
 
 	case "GU_HOUSE_COMBAT":
-		if block.Trigger != gameplayeffects.TriggerOnAction || len(block.Conditions) > 0 {
-			return "unsupported", "Trận Kích cần ON_ACTION và không có condition."
+		if block.Trigger != gameplayeffects.TriggerOnAction {
+			return "unsupported", "Trận Kích cần trigger ON_ACTION."
 		}
 		if len(block.Operations) != 1 || !guHouseActionOperationAllowed(operation, target) {
-			return "unsupported", "Trận Kích cần đúng một DAMAGE/HEAL/SHIELD/BARRIER FLAT có target SELF hoặc TARGET."
+			return "unsupported", "Trận Kích cần đúng một operation chiến đấu hợp lệ."
 		}
 		return "supported", ""
 
@@ -357,20 +357,32 @@ func isNativeHookFor(code, trigger string, domains ...string) bool {
 }
 
 func guHouseActionOperationAllowed(operation gameplayeffects.Operation, target gameplayeffects.Target) bool {
-	if target.Selector != gameplayeffects.TargetSelf && target.Selector != gameplayeffects.TargetSingle {
-		return false
-	}
-	if operation.SubType != "" && !strings.EqualFold(operation.SubType, "FLAT") {
-		return false
-	}
-	if operation.Value <= 0 {
+	if target.Selector == "" {
 		return false
 	}
 	switch operation.Op {
-	case gameplayeffects.OpDamage:
-		return target.Selector == gameplayeffects.TargetSingle
-	case gameplayeffects.OpHeal, gameplayeffects.OpShield, gameplayeffects.OpBarrier:
-		return target.Selector == gameplayeffects.TargetSelf
+	case gameplayeffects.OpDamage,
+		gameplayeffects.OpDirectHP,
+		gameplayeffects.OpHeal,
+		gameplayeffects.OpShield,
+		gameplayeffects.OpBarrier,
+		gameplayeffects.OpStatMod,
+		gameplayeffects.OpStatus,
+		gameplayeffects.OpCleanse,
+		gameplayeffects.OpDispel,
+		gameplayeffects.OpBonusStrike,
+		gameplayeffects.OpChainDamage,
+		gameplayeffects.OpDefensePenetration,
+		gameplayeffects.OpDamageModifier,
+		gameplayeffects.OpTargetDamageModifier,
+		gameplayeffects.OpDetonateStatus,
+		gameplayeffects.OpRevive,
+		gameplayeffects.OpGuSeal,
+		gameplayeffects.OpTargetRedirection,
+		gameplayeffects.OpTransferResource,
+		gameplayeffects.OpResourceConversion,
+		gameplayeffects.OpSummon:
+		return true
 	default:
 		return false
 	}

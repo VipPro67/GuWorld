@@ -52,8 +52,8 @@ Snapshot player trả `map_instance_id` cùng `current_region`, `x`, `y` để f
 | `/inventory` | POST `/feed`, `/feed-group`, `/feed-all`, `/equip`, `/subjugate-gu`, `/nourish-gu`, `/repair-gu`, `/unequip-all`, `/status`, `/set-vital`, `/use-gu`, `/use-support`, `/drop`, `/drop-batch` |
 | `/refine` | POST `/`, `/deduce`, `/conceive`; GET `/conceive/candidates`, `/preview`, `/sessions/active`, `/sessions/:id`; POST `/sessions`, `/sessions/:id/steps`, `/sessions/:id/abort`, `/sessions/:id/ack` |
 | `/combat` | POST `/start`, `/session/start`, `/session/:id/command`, `/flee/:id`, `/capture`, `/practice`, `/practice/exit`; GET `/session`, `/session/:id`, `/history`, `/history/:id` |
-| `/killer-moves` | GET `/options`, `/`; POST `/preview`, `/`, `/:id/equip`, `/:id/use`, `/:id/repair`; DELETE `/:id` |
-| `/gu-houses` | GET `/`; POST `/preview`, `/`, `/:id/equip`, `/:id/use`, `/:id/repair` |
+| `/killer-moves` | GET `/options`, `/`; POST `/preview`, `/`, `/:id/equip`, `/:id/use`, `/:id/repair`; DELETE `/:id`. Preview trả về `power_budget`, `power_cost`, `op_count`, `op_cap`, `min_rank_required`, `violations[]` và áp dụng Hard Reject nếu vượt trần (bản ghi `balance_version < 3` được giữ nguyên). |
+| `/gu-houses` | GET `/`; POST `/preview`, `/`, `/:id/equip`, `/:id/use`, `/:id/repair`. Preview/tạo trả về `power_budget`, `power_cost`, `op_count`, `op_cap`, `min_rank_required`, `violations[]` kèm `max_house_hp`/`house_defense` riêng. |
 | `/pets` | GET `/`; POST `/feed`, `/formation`, `/sleep`, `/release`, `/merge` |
 | `/actors` | GET `/`, `/:id`; chỉ đọc roster actor của player hiện tại |
 

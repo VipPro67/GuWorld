@@ -5,8 +5,92 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 )
+
+// SupportBudgetInput describes one support Gu's rank and path affinity for Killer Move budget calculation.
+type SupportBudgetInput struct {
+	Rank         int
+	PathAffinity float64
+}
+
+// KillerMovePowerBudget computes the unified Power Budget of a Killer Move from its core Gu rank
+// and support Gu components using diminishing support efficiency (0.60 / sqrt(i)).
+func KillerMovePowerBudget(mainRank int, supports []SupportBudgetInput) float64 {
+	budget := effectcatalog.PowerBudget(mainRank)
+	for i, sup := range supports {
+		affinity := sup.PathAffinity
+		if affinity <= 0 {
+			affinity = 0.70
+		}
+		eff := 0.60 / math.Sqrt(float64(i+1))
+		budget += effectcatalog.PowerBudget(sup.Rank) * eff * affinity
+	}
+	return math.Round(budget*100) / 100
+}
+
+// GuHousePowerBudget computes the unified Power Budget of an Immortal Gu House from its core Gu ranks
+// (each contributing 85%) and mortal auxiliary Gu count (up to +25% bonus).
+func GuHousePowerBudget(coreRanks []int, auxGuCount int) float64 {
+	coreSum := 0.0
+	for _, r := range coreRanks {
+		coreSum += effectcatalog.PowerBudget(r) * 0.85
+	}
+	auxBonus := 0.0
+	if auxGuCount > 0 {
+		// Diminishing log curve reaching +25% at MaxAuxGuCount (100,000).
+		auxBonus = math.Min(0.25, 0.25*math.Log10(1+float64(auxGuCount))/5.0)
+	}
+	return math.Round(coreSum*(1.0+auxBonus)*100) / 100
+}
+
+// ToPowerBlockInputs converts gameplayeffects.Block slices into effectcatalog.PowerBlockInput slices.
+func ToPowerBlockInputs(blocks []gameplayeffects.Block) []effectcatalog.PowerBlockInput {
+	out := make([]effectcatalog.PowerBlockInput, 0, len(blocks))
+	for _, b := range blocks {
+		conds := make([]any, len(b.Conditions))
+		for i, c := range b.Conditions {
+			conds[i] = c
+		}
+		ops := make([]effectcatalog.PowerOpInput, 0, len(b.Operations))
+		for _, o := range b.Operations {
+			var target *effectcatalog.PowerTargetInput
+			if o.Target != nil {
+				target = &effectcatalog.PowerTargetInput{
+					Selector:        string(o.Target.Selector),
+					BypassFrontline: o.Target.BypassFrontline,
+				}
+			}
+			var chance *float64
+			if o.Chance != 0 || o.Op == gameplayeffects.OpStatus {
+				c := o.Chance
+				chance = &c
+			}
+			ops = append(ops, effectcatalog.PowerOpInput{
+				Op:      string(o.Op),
+				SubType: o.SubType,
+				Unit:    o.Unit,
+				Status:  o.StatusID,
+				Target:  target,
+				Value:   o.Value,
+				Turns:   o.Turns,
+				Chance:  chance,
+			})
+		}
+		out = append(out, effectcatalog.PowerBlockInput{
+			ID:      b.ID,
+			Trigger: string(b.Trigger),
+			Target: effectcatalog.PowerTargetInput{
+				Selector:        string(b.Target.Selector),
+				BypassFrontline: b.Target.BypassFrontline,
+			},
+			Conditions: conds,
+			Operations: ops,
+		})
+	}
+	return out
+}
 
 // EffectLoad calculates the power load of an authored effect operation based on
 // its opcode, value scaling, target selector, and duration/chance.

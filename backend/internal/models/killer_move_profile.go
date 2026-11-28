@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
 	"github.com/vippro67/GuWorld/backend/internal/statusfx"
@@ -90,21 +91,27 @@ func (p *KillerMoveCombatProfile) upgradeLegacyEffectBlockIDs() {
 // GuHouseCombatProfile represents an Immortal Gu House (Tiên Cổ Ốc) in combat.
 // It acts as a materialized immortal killer move entity / vehicle stance.
 type GuHouseCombatProfile struct {
-	ProfileVersion     int                       `json:"profile_version,omitempty"`
-	ProductProfile     string                    `json:"product_profile,omitempty"`
-	Context            string                    `json:"context,omitempty"`
-	Executor           string                    `json:"executor,omitempty"`
-	PreviewFingerprint string                    `json:"preview_fingerprint,omitempty"`
-	ID                 string                    `json:"id"`
-	Name               string                    `json:"name"`
-	Rank               int                       `json:"rank"`
-	CoreGuIDs          []string                  `json:"core_gu_ids"`
-	AuxGuCount         int                       `json:"aux_gu_count"`
-	MaxHouseHP         float64                   `json:"max_house_hp"`
-	CurrentHouseHP     float64                   `json:"current_house_hp"`
-	HouseDefense       float64                   `json:"house_defense"`
-	DamageReduction    float64                   `json:"damage_reduction"` // % damage reduction (0..1)
-	ImmuneDebuffs      bool                      `json:"immune_debuffs"`
-	ZeroBackfire       bool                      `json:"zero_backfire"`
-	Actions            []KillerMoveCombatProfile `json:"actions"`
+	ProfileVersion     int                            `json:"profile_version,omitempty"`
+	ProductProfile     string                         `json:"product_profile,omitempty"`
+	Context            string                         `json:"context,omitempty"`
+	Executor           string                         `json:"executor,omitempty"`
+	PreviewFingerprint string                         `json:"preview_fingerprint,omitempty"`
+	ID                 string                         `json:"id"`
+	Name               string                         `json:"name"`
+	Rank               int                            `json:"rank"`
+	CoreGuIDs          []string                       `json:"core_gu_ids"`
+	AuxGuCount         int                            `json:"aux_gu_count"`
+	MaxHouseHP         float64                        `json:"max_house_hp"`
+	CurrentHouseHP     float64                        `json:"current_house_hp"`
+	HouseDefense       float64                        `json:"house_defense"`
+	DamageReduction    float64                        `json:"damage_reduction"` // % damage reduction (0..1)
+	ImmuneDebuffs      bool                           `json:"immune_debuffs"`
+	ZeroBackfire       bool                           `json:"zero_backfire"`
+	PowerBudget        float64                        `json:"power_budget,omitempty"`
+	PowerCost          float64                        `json:"power_cost,omitempty"`
+	OpCount            int                            `json:"op_count,omitempty"`
+	OpCap              int                            `json:"op_cap,omitempty"`
+	MinRankRequired    int                            `json:"min_rank_required,omitempty"`
+	Violations         []effectcatalog.PowerViolation `json:"violations,omitempty"`
+	Actions            []KillerMoveCombatProfile      `json:"actions"`
 }

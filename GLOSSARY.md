@@ -31,6 +31,18 @@ Lưu phái đại diện cho hành động, dùng khi effect cần kiểm tra af
 **Điều kiện race mục tiêu**:
 Điều kiện effect so khớp race key cụ thể của tác nhân hoặc mục tiêu theo vai trò được khai báo; race không suy ra từ path và thiếu race trong context thì không khớp.
 
+**Ngân sách Sức mạnh (Power Budget)**:
+Trần điểm tối đa của một thực thể (Cổ Trùng theo Rank, Sát Chiêu hoặc Tiên Cổ Phòng) giới hạn tổng sức mạnh effect mà thực thể đó có thể mang.
+
+**Chi phí Effect (Effect Cost)**:
+Tổng điểm tiêu tốn của một Block hoặc Operation sau khi quy đổi giá trị cơ bản và nhân các hệ số (loại Op, giá trị, bộ chọn mục tiêu, trigger, thời hạn, điều kiện).
+
+**Ngưỡng Chuyển Tối thiểu (Min Rank Gate)**:
+Bậc Rank thấp nhất được phép sở hữu hoặc kích hoạt một loại Operation, Trigger hoặc Rule đặc biệt.
+
+**Cổ Tự Sáng Tạo (Custom Gu)**:
+Cổ trùng do người chơi tự thiết kế cấu trúc effect trong phạm vi Ngân sách Sức mạnh của Rank mục tiêu.
+
 ## Tiên Khiếu
 
 **Tiên Khiếu vô chủ**:

@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/vippro67/GuWorld/backend/internal/db"
+	"github.com/vippro67/GuWorld/backend/internal/effectcatalog"
 	"github.com/vippro67/GuWorld/backend/internal/gamefx"
 	"github.com/vippro67/GuWorld/backend/internal/gameplay/composition"
 	gameplayeffects "github.com/vippro67/GuWorld/backend/internal/gameplay/effects"
@@ -183,6 +184,7 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 
 	highestRank := 6
 	coreGuIDs := make([]string, 0, len(req.CoreGuInstanceIDs))
+	coreRanks := make([]int, 0, len(req.CoreGuInstanceIDs))
 	seen := map[string]bool{}
 
 	actions := make([]models.KillerMoveCombatProfile, 0, len(req.CoreGuInstanceIDs))
@@ -203,6 +205,7 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 			highestRank = gu.Rank
 		}
 		coreGuIDs = append(coreGuIDs, gu.GuID)
+		coreRanks = append(coreRanks, gu.Rank)
 
 		spec, found := models.GetGu(gu.GuID, gu.Rank)
 		if found {
@@ -262,12 +265,47 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 		}
 	}
 
+	houseBudget := composition.GuHousePowerBudget(coreRanks, req.AuxGuCount)
+	opCap := effectcatalog.MaxOpsForRank(highestRank) + len(coreGuIDs)
+	maxActionCost := 0.0
+	maxOpCount := 0
+	minRankReq := 6
+	for _, action := range actions {
+		blocks := []gameplayeffects.Block(action.EffectBlocks)
+		if len(blocks) == 0 && action.EffectOperation != nil {
+			target := gameplayeffects.Target{Selector: gameplayeffects.TargetSingle}
+			if action.EffectTarget != nil {
+				target = *action.EffectTarget
+			}
+			blocks = []gameplayeffects.Block{{
+				ID:         "EFFECT_01",
+				Trigger:    gameplayeffects.TriggerOnAction,
+				Target:     target,
+				Conditions: action.EffectConditions,
+				Operations: []gameplayeffects.Operation{*action.EffectOperation},
+			}}
+		}
+		rep := effectcatalog.EvaluatePowerBudgetWithLimits(highestRank, houseBudget, opCap, composition.ToPowerBlockInputs(blocks))
+		if len(rep.Violations) > 0 {
+			return models.GuHouseCombatProfile{}, 0, fmt.Errorf("Trận Kích [%s]: %s", action.Name, rep.Violations[0].Message)
+		}
+		if rep.PowerCost > maxActionCost {
+			maxActionCost = rep.PowerCost
+		}
+		if rep.OpCount > maxOpCount {
+			maxOpCount = rep.OpCount
+		}
+		if rep.MinRankRequired > minRankReq {
+			minRankReq = rep.MinRankRequired
+		}
+	}
+
 	baseHP := float64(highestRank*500 + len(coreGuIDs)*250 + req.AuxGuCount*35)
 	baseDef := float64(highestRank*40 + len(coreGuIDs)*25 + req.AuxGuCount*4)
 	reduction := math.Min(0.35, 0.10+float64(len(coreGuIDs))*0.05)
 
 	profile := models.GuHouseCombatProfile{
-		ProfileVersion:  2,
+		ProfileVersion:  3,
 		ProductProfile:  guHouseProductProfile.ID,
 		Context:         guHouseProductProfile.Context,
 		Executor:        guHouseProductProfile.Executor,
@@ -281,6 +319,12 @@ func calculateGuHousePreview(tx *sql.Tx, playerID uuid.UUID, req guHouseDraftReq
 		DamageReduction: reduction,
 		ImmuneDebuffs:   true,
 		ZeroBackfire:    true,
+		PowerBudget:     houseBudget,
+		PowerCost:       maxActionCost,
+		OpCount:         maxOpCount,
+		OpCap:           opCap,
+		MinRankRequired: minRankReq,
+		Violations:      []effectcatalog.PowerViolation{},
 		Actions:         actions,
 	}
 	profile.PreviewFingerprint, err = guHousePreviewHash(profile)
@@ -421,56 +465,41 @@ func compileGuHouseAction(gu ownedKillerMoveGu, spec models.Gu, selected killerM
 	if len(command.Operations) != 1 {
 		return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích %q phải tạo đúng một effect command", selected.Label)
 	}
-	if len(command.Operations[0].Conditions) > 0 {
-		return models.KillerMoveCombatProfile{}, fmt.Errorf("Executor Trận Kích chưa hỗ trợ effect có điều kiện")
-	}
-	if command.Operations[0].Value <= 0 {
-		return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích cần giá trị effect lớn hơn 0")
-	}
 	op := selected.Operation
 	target := selected.Target
 	if op.Target != nil {
 		target = *op.Target
 	}
-	targetType := ""
-	switch target.Selector {
-	case gameplayeffects.TargetSingle:
-		targetType = "SINGLE"
-	case gameplayeffects.TargetSelf:
-		targetType = "SELF"
-	default:
-		return models.KillerMoveCombatProfile{}, fmt.Errorf("Executor Trận Kích chưa hỗ trợ mục tiêu %q", target.Selector)
+	if !guHouseActionOperationAllowed(op, target) {
+		return models.KillerMoveCombatProfile{}, fmt.Errorf("Executor Trận Kích chưa hỗ trợ operation %q", command.Operations[0].Type)
 	}
-	if op.SubType != "" && !strings.EqualFold(op.SubType, "FLAT") {
-		return models.KillerMoveCombatProfile{}, fmt.Errorf("Executor Trận Kích chưa hỗ trợ subtype %q", op.SubType)
+	targetType := string(target.Selector)
+	if targetType == "TARGET" {
+		targetType = "SINGLE"
 	}
 	action := models.KillerMoveCombatProfile{
-		ProfileVersion: 2, EffectLabel: selected.Label, EffectKey: selected.Key,
+		ProfileVersion: 3, EffectLabel: selected.Label, EffectKey: selected.Key,
 		EffectContext: guHouseProductProfile.Context, EffectExecutor: guHouseProductProfile.Executor, EffectGuID: gu.GuID,
 		EffectOperation: &op, EffectTarget: &target, EffectConditions: append([]gameplayeffects.Condition(nil), selected.Conditions...),
 		ID: gu.InstanceID, Name: fmt.Sprintf("Trận Kích: %s", spec.Name), Rank: gu.Rank,
 		MainPath: actionPath, AllPaths: []string{actionPath}, TargetType: targetType,
+		Bypass:   target.BypassFrontline,
 		Priority: 1, ManaCost: spec.BaseManaCost * 1.5, SuccessChance: 0.95,
 	}
 	switch command.Operations[0].Type {
 	case gameplayeffects.OpDamage:
-		if targetType != "SINGLE" {
-			return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích damage chỉ hỗ trợ mục tiêu đơn hiện tại")
+		if op.SubType == "" || strings.EqualFold(op.SubType, "FLAT") {
+			action.BaseDamage = command.Operations[0].Value
+			action.DamageMult = 1
 		}
-		action.BaseDamage = command.Operations[0].Value
-		action.DamageMult = 1
 	case gameplayeffects.OpHeal:
-		if targetType != "SELF" {
-			return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích heal chỉ hỗ trợ mục tiêu bản thân hiện tại")
+		if op.SubType == "" || strings.EqualFold(op.SubType, "FLAT") {
+			action.BaseHealing = command.Operations[0].Value
 		}
-		action.BaseHealing = command.Operations[0].Value
 	case gameplayeffects.OpShield, gameplayeffects.OpBarrier:
-		if targetType != "SELF" {
-			return models.KillerMoveCombatProfile{}, fmt.Errorf("Trận Kích shield chỉ hỗ trợ mục tiêu bản thân hiện tại")
+		if op.SubType == "" || strings.EqualFold(op.SubType, "FLAT") {
+			action.BaseShield = command.Operations[0].Value
 		}
-		action.BaseShield = command.Operations[0].Value
-	default:
-		return models.KillerMoveCombatProfile{}, fmt.Errorf("Executor Trận Kích chưa hỗ trợ operation %q", command.Operations[0].Type)
 	}
 	return action, nil
 }

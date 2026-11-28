@@ -223,3 +223,13 @@ Log combat có thể mang thêm `SettlementEffect` (`Code`/`Amount`) cho hình p
 `BONUS_STRIKE` dùng trong combat Gu `ON_ACTION`/`TARGET`; `chance` là xác suất (0,1], `value` là hệ số trên raw damage hiện tại, `min_damage` là mức sàn. Khi proc, operation gây direct HP như hook cũ và log qua `log_action`/`message`; dispatcher chạy tại phase của hook cũ để giữ thứ tự RNG deterministic. `GU_BEAR_STRENGTH` cấu hình 45%, ×0.75, sàn 50. Hook `BEAST_PHANTOM_STRIKE` vẫn được đọc cho definition cũ.
 
 `CHAIN_DAMAGE` dùng trong Gu combat ở `ON_ACTION`/`ALL_ENEMIES`: `value` là phần raw damage của action hiện tại (0–10), `min_damage` là sàn sát thương, `target_count` giới hạn số mục tiêu phụ còn sống (không tính mục tiêu chính). Nó gây direct HP, bỏ qua khiên như hook `CHAIN_LIGHTNING` cũ; phase chạy đúng vị trí hook để giữ thứ tự combat. `GU_BLUE_DRAGON_1` cấu hình 50%, sàn 30, một mục tiêu phụ. Native hook vẫn hỗ trợ definition cũ.
+
+### Bảng Sức Mạnh Effect & Ngân Sách Cân Bằng (`effectcatalog/power_budget.go`)
+
+- **Ngân sách Sức mạnh (Power Budget)**: `PowerBudget(rank) = 100 × RankScale(rank)` (`100` tại Rank 1 → `10,000` tại Rank 5 → `10^6` tại Rank 6 → `10^{12}` tại Rank 9). Giới hạn số lượng operation (`MaxOpsForRank`): R1–2: `2`, R3–4: `3`, R5: `4`, R6–7: `5`, R8–9: `8`.
+- **Chi phí Effect (`EffectCost`)**:
+  - Nhóm chỉ số phẳng chiến đấu (`DAMAGE`/`SHIELD`/`BARRIER`/`HEAL`/`DIRECT_HP`/`STAT_MOD` dạng phẳng): tính trực tiếp theo `Value × ValueWeight` (không nhân `RankScale`), `HP_COST` giảm tối đa `30%` chi phí block.
+  - Nhóm `%`, Status/CC, Phá luật và Phi chiến đấu: nhân `RankScale(rank)` (ví dụ `REVIVE` cơ bản `80 × RankScale`).
+  - Công thức tổng quát: `BaseOrValueCost × TargetMult × TriggerMult × DurationMult × max(0.25, Chance) × ConditionDiscount`.
+- **Ngưỡng Chuyển Tối thiểu (`MinRankGate`)**: Rank 3+ (`DISPLACE`, `DETONATE_STATUS`, AoE `CLEANSE`/`DISPEL`), Rank 5+ (`SUMMON`, `TRANSFER_RESOURCE`, `RESOURCE_CONVERSION`, `TENACITY_MODIFIER`), Rank 6+ (`REVIVE`, `DEFENSE_PENETRATION`, `MITIGATE_DAMAGE`, `GU_SEAL`, `TARGET_REDIRECTION`, `STATUS_IMMUNITY`, `GRANT_BODY_MOD`, `ADVANCE_MAJOR_REALM`, `MODIFY_APERTURE`), Rank 8+ (`SLOT_INTERACTION`, `TURN_ORDER_RULE`, `RANK_SCALED_DEBUFF`), Rank 9+ (`END_BATTLE`, `EFFECT_IMMUNITY`, `SET_RULE IMMORTAL`).
+- **Audit**: `ValidateGuCatalog` ghi nhận cảnh báo (`SeverityWarning`) cho Cổ vượt ngân sách hoặc vi phạm `MinRankGate`/`OpCap` mà không chặn import `Gu.csv`.

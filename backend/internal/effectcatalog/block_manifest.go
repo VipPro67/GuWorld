@@ -1733,6 +1733,8 @@ type OperationMetadata struct {
 	Targets        []string `json:"targets"`
 	AllowedFields  []string `json:"allowed_fields"`
 	RequiredFields []string `json:"required_fields"`
+	CostGroup      string   `json:"cost_group"`
+	MinRankGate    int      `json:"min_rank_gate"`
 }
 type NativeHookMetadata struct {
 	Code     string               `json:"code"`
@@ -1753,7 +1755,8 @@ func CatalogMetadata() Metadata {
 	ops := make([]OperationMetadata, 0, len(OperationCatalog))
 	for _, name := range sortedKeys(OperationCatalog) {
 		d := OperationCatalog[name]
-		ops = append(ops, OperationMetadata{name, sortedKeys(d.SubTypes), sortedKeys(d.Triggers), sortedKeys(d.Targets), sortedKeys(d.Allowed), append([]string(nil), d.Required...)})
+		p := PowerCostCatalog[name]
+		ops = append(ops, OperationMetadata{name, sortedKeys(d.SubTypes), sortedKeys(d.Triggers), sortedKeys(d.Targets), sortedKeys(d.Allowed), append([]string(nil), d.Required...), string(p.Group), p.MinRankGate})
 	}
 	hooks := make([]NativeHookMetadata, 0, len(NativeHooks))
 	for _, code := range sortedKeys(NativeHooks) {

@@ -100,6 +100,14 @@ func ValidateGuCatalog(entries []GuEntry, persistentStatusKeys ...map[string]boo
 				}
 				if validation.HasErrors() {
 					err = validation
+				} else if powerReport, powerErr := EvaluatePowerBudgetJSON(entry.Rank, trimmed); powerErr == nil {
+					for _, v := range powerReport.Violations {
+						path := "$"
+						if v.BlockID != "" {
+							path = "$." + v.BlockID
+						}
+						validation.add(SeverityWarning, v.Code, path, v.Message)
+					}
 				}
 			} else {
 				_, validation, err = NormalizeAndValidate(entry.Effects)
